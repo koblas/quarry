@@ -12,50 +12,6 @@ import (
 
 const catSearchFuel = "cat-search-fuel"
 
-// searchPart is one split of a searchSpec; sourceID orders the splits of one transaction and nil
-// category, memo or transferTo mean none.
-type searchPart struct {
-	category, memo, transferTo *string
-	sourceID                   int64
-	cents                      int64
-}
-
-// searchSpec is one transaction of any number of splits; account defaults to acctInReports, date to 2026-03-15
-// and the currency to CAD. Its splits are named "<id>-<index>".
-type searchSpec struct {
-	id       string
-	sourceID int64
-	account  string
-	date     time.Time
-	payee    *string
-	memo     *string
-	excluded bool
-	parts    []searchPart
-}
-
-// addSearch appends spec's transaction and its splits to rows.
-func addSearch(rows *store.Rows, spec searchSpec) {
-	account, date := spec.account, spec.date
-	if account == "" {
-		account = acctInReports
-	}
-	if date.IsZero() {
-		date = day(2026, time.March, 15)
-	}
-	var amount int64
-	for i, part := range spec.parts {
-		amount += part.cents
-		rows.Splits = append(rows.Splits, store.Split{
-			ID: spec.id + "-" + string(rune('0'+i)), SourceID: part.sourceID, TransactionID: "txn-" + spec.id,
-			CategoryID: part.category, Memo: part.memo, Amount: part.cents, TransferAccountID: part.transferTo,
-		})
-	}
-	rows.Transactions = append(rows.Transactions, store.Transaction{
-		ID: "txn-" + spec.id, SourceID: spec.sourceID, AccountID: account, Date: date, PayeeID: spec.payee,
-		Memo: spec.memo, Amount: amount, Currency: "CAD", Status: "uncleared", ExcludedFromReports: spec.excluded,
-	})
-}
-
 // searchRowsFor is accountRows (four reported accounts, one not in reports, one linked) with a fuel
 // category and the payees "payee-gym" and "payee-bakery".
 func searchRowsFor() store.Rows {
@@ -63,11 +19,6 @@ func searchRowsFor() store.Rows {
 	rows.Categories = append(rows.Categories, expenseCategory(catSearchFuel, "Auto:Fuel"))
 	rows.Payees = []store.Payee{{ID: payeeGym, SourceID: 1, Name: nameGym}, {ID: "payee-bakery", SourceID: 2, Name: "Bakery"}}
 	return rows
-}
-
-// spend is the one-split spec of an expense of cents in catExpense.
-func spend(id string, sourceID, cents int64) searchSpec {
-	return searchSpec{id: id, sourceID: sourceID, parts: []searchPart{{category: new(catExpense), sourceID: 1, cents: -cents}}}
 }
 
 func searchOf(t *testing.T, rows store.Rows, params store.SearchParams) store.Search {
@@ -702,11 +653,6 @@ func categoryRows() store.Rows {
 		addSearch(&rows, categorized(t.name, int64(i+1), t.category))
 	}
 	return rows
-}
-
-// categorized is a one-split transaction in category id.
-func categorized(name string, sourceID int64, id string) searchSpec {
-	return searchSpec{id: name, sourceID: sourceID, parts: []searchPart{{category: new(id), sourceID: 1, cents: -100}}}
 }
 
 func Test_search_category_matches_the_category_and_everything_under_it(t *testing.T) {

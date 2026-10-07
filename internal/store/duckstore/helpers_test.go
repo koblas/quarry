@@ -586,3 +586,159 @@ func otherFaults(query string, passQueries int) []otherFault {
 		{name: "scan_fault", spy: &spyReadDB{passQueries: passQueries, scanFault: errScanFailed}, reason: errScanFailed.Error(), fault: errScanFailed},
 	}
 }
+
+var (
+	windowSince = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	windowUntil = time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+)
+
+// spendRows is reportRows without its `keep` split, so a test's splits are the only spending.
+func spendRows(categories ...store.Category) store.Rows {
+	rows := reportRows()
+	rows.Transactions, rows.Splits = nil, nil
+	rows.Categories = append(rows.Categories, categories...)
+	return rows
+}
+
+func expenseCategory(id, path string) store.Category {
+	return store.Category{ID: id, SourceID: int64(len(id)), Name: path, FullPath: path, Kind: "expense"}
+}
+
+func spendingParams() store.SpendingParams {
+	return store.SpendingParams{Window: store.Window{Since: windowSince, Until: windowUntil}, By: store.SpendByCategory}
+}
+
+const (
+	acctSecond = "acct-second"
+	acctThird  = "acct-o'brien"
+	acctFourth = "acct-fourth"
+)
+
+// accountRows is spendRows plus three more in-report accounts, so four accounts can each spend.
+func accountRows() store.Rows {
+	rows := spendRows()
+	rows.Accounts = append(rows.Accounts,
+		store.Account{ID: acctSecond, SourceID: 3, Name: "Savings", Type: "chequing", Currency: "CAD", Active: true},
+		store.Account{ID: acctThird, SourceID: 4, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
+		store.Account{ID: acctFourth, SourceID: 5, Name: "Cash", Type: "cash", Currency: "CAD", Active: true})
+	return rows
+}
+
+func namedAccounts(params store.SpendingParams, ids ...string) store.SpendingParams {
+	params.AccountIDs = ids
+	return params
+}
+
+// fxSpendRows is fxRows with no splits, so a test's splits are the only spending.
+func fxSpendRows() store.Rows {
+	rows := fxRows()
+	rows.Transactions, rows.Splits = nil, nil
+	return rows
+}
+
+func spendingIn(currency money.Currency, by store.SpendingGroup) store.SpendingParams {
+	params := spendingParams()
+	params.By = by
+	params.Currency = currency
+	return params
+}
+
+// emptyWindowParams is a window before any transaction of minimalRows.
+func emptyWindowParams() store.SpendingParams {
+	return store.SpendingParams{Window: store.Window{Since: day(1990, 1, 1), Until: day(1990, 1, 31)}}
+}
+
+func addTag(rows *store.Rows, id, name string) {
+	rows.Tags = append(rows.Tags, store.Tag{ID: id, SourceID: int64(len(rows.Tags) + 1), Name: name})
+}
+
+// searchPart is one split of a searchSpec; sourceID orders the splits of one transaction and nil
+// category, memo or transferTo mean none.
+type searchPart struct {
+	category, memo, transferTo *string
+	sourceID                   int64
+	cents                      int64
+}
+
+// searchSpec is one transaction of any number of splits; account defaults to acctInReports, date to 2026-03-15
+// and the currency to CAD. Its splits are named "<id>-<index>".
+type searchSpec struct {
+	id       string
+	sourceID int64
+	account  string
+	date     time.Time
+	payee    *string
+	memo     *string
+	excluded bool
+	parts    []searchPart
+}
+
+// addSearch appends spec's transaction and its splits to rows.
+func addSearch(rows *store.Rows, spec searchSpec) {
+	account, date := spec.account, spec.date
+	if account == "" {
+		account = acctInReports
+	}
+	if date.IsZero() {
+		date = day(2026, time.March, 15)
+	}
+	var amount int64
+	for i, part := range spec.parts {
+		amount += part.cents
+		rows.Splits = append(rows.Splits, store.Split{
+			ID: spec.id + "-" + string(rune('0'+i)), SourceID: part.sourceID, TransactionID: "txn-" + spec.id,
+			CategoryID: part.category, Memo: part.memo, Amount: part.cents, TransferAccountID: part.transferTo,
+		})
+	}
+	rows.Transactions = append(rows.Transactions, store.Transaction{
+		ID: "txn-" + spec.id, SourceID: spec.sourceID, AccountID: account, Date: date, PayeeID: spec.payee,
+		Memo: spec.memo, Amount: amount, Currency: "CAD", Status: "uncleared", ExcludedFromReports: spec.excluded,
+	})
+}
+
+// spend is the one-split spec of an expense of cents in catExpense.
+func spend(id string, sourceID, cents int64) searchSpec {
+	return searchSpec{id: id, sourceID: sourceID, parts: []searchPart{{category: new(catExpense), sourceID: 1, cents: -cents}}}
+}
+
+// categorized is a one-split transaction in category id.
+func categorized(name string, sourceID int64, id string) searchSpec {
+	return searchSpec{id: name, sourceID: sourceID, parts: []searchPart{{category: new(id), sourceID: 1, cents: -100}}}
+}
+
+const (
+	acctInvestment = "acct-brokerage"
+	fridayRate     = 1_250_000
+	mondayRate     = 1_300_000
+)
+
+// fxRows is reportRows with a USD account that Quicken's reports count.
+func fxRows() store.Rows {
+	rows := reportRows()
+	rows.Accounts = append(rows.Accounts,
+		store.Account{ID: acctUSD, SourceID: 3, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true},
+		store.Account{ID: acctInvestment, SourceID: 4, Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true})
+	return rows
+}
+
+// expense adds an expense split of cents in currency on date, on the account of that currency.
+func expense(rows *store.Rows, id, currency string, date time.Time, cents int64) {
+	account := acctInReports
+	if currency == "USD" {
+		account = acctUSD
+	}
+	addSplit(rows, splitSpec{id: id, account: account, currency: currency, date: date, category: new(catExpense), amount: cents})
+}
+
+// addImportRun copies the store's first run as a run of its own id, snapshot path and accounts count,
+// through a writable connection closed before any read.
+func addImportRun(t *testing.T, st *duckstore.Store, id int, snapshotPath string, accounts int) {
+	t.Helper()
+	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
+	require.NoError(t, err)
+	const clone = "INSERT INTO import_runs SELECT * REPLACE (? AS id, ? AS snapshot_path, ? AS accounts_rows) " + //nolint:unqueryvet // a copy of the row is the point
+		"FROM import_runs WHERE id = (SELECT min(id) FROM import_runs)"
+	_, err = conn.Exec(t.Context(), clone, id, snapshotPath, accounts)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+}

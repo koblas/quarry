@@ -306,30 +306,6 @@ func Test_spending_holds_exactly_the_cash_flow_expense_rows(t *testing.T) {
 	assert.Equal(t, cashFlowExpense, spending)
 }
 
-const (
-	acctInvestment = "acct-brokerage"
-	fridayRate     = 1_250_000
-	mondayRate     = 1_300_000
-)
-
-// fxRows is reportRows with a USD account that Quicken's reports count.
-func fxRows() store.Rows {
-	rows := reportRows()
-	rows.Accounts = append(rows.Accounts,
-		store.Account{ID: acctUSD, SourceID: 3, Name: "US Chequing", Type: "chequing", Currency: "USD", Active: true},
-		store.Account{ID: acctInvestment, SourceID: 4, Name: "Brokerage", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true})
-	return rows
-}
-
-// expense adds an expense split of cents in currency on date, on the account of that currency.
-func expense(rows *store.Rows, id, currency string, date time.Time, cents int64) {
-	account := acctInReports
-	if currency == "USD" {
-		account = acctUSD
-	}
-	addSplit(rows, splitSpec{id: id, account: account, currency: currency, date: date, category: new(catExpense), amount: cents})
-}
-
 const convertedAmounts = "SELECT amount_cad, amount_usd FROM v_cash_flow WHERE split_id = 'x'"
 
 func Test_cash_flow_converts_a_weekend_split_at_the_fridays_rate(t *testing.T) {

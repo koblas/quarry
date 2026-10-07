@@ -12,27 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	windowSince = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	windowUntil = time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
-)
-
-// spendRows is reportRows without its `keep` split, so a test's splits are the only spending.
-func spendRows(categories ...store.Category) store.Rows {
-	rows := reportRows()
-	rows.Transactions, rows.Splits = nil, nil
-	rows.Categories = append(rows.Categories, categories...)
-	return rows
-}
-
-func expenseCategory(id, path string) store.Category {
-	return store.Category{ID: id, SourceID: int64(len(id)), Name: path, FullPath: path, Kind: "expense"}
-}
-
-func spendingParams() store.SpendingParams {
-	return store.SpendingParams{Window: store.Window{Since: windowSince, Until: windowUntil}, By: store.SpendByCategory}
-}
-
 func Test_spending_counts_the_windows_first_and_last_day_only(t *testing.T) {
 	t.Parallel()
 	rows := spendRows()
@@ -261,27 +240,6 @@ func Test_spending_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-const (
-	acctSecond = "acct-second"
-	acctThird  = "acct-o'brien"
-	acctFourth = "acct-fourth"
-)
-
-// accountRows is spendRows plus three more in-report accounts, so four accounts can each spend.
-func accountRows() store.Rows {
-	rows := spendRows()
-	rows.Accounts = append(rows.Accounts,
-		store.Account{ID: acctSecond, SourceID: 3, Name: "Savings", Type: "chequing", Currency: "CAD", Active: true},
-		store.Account{ID: acctThird, SourceID: 4, Name: "Visa", Type: "credit_card", Currency: "CAD", Active: true},
-		store.Account{ID: acctFourth, SourceID: 5, Name: "Cash", Type: "cash", Currency: "CAD", Active: true})
-	return rows
-}
-
-func namedAccounts(params store.SpendingParams, ids ...string) store.SpendingParams {
-	params.AccountIDs = ids
-	return params
-}
-
 func Test_spending_counts_only_the_named_accounts(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
@@ -427,20 +385,6 @@ func Test_spending_counts_a_named_accounts_splits_inside_the_window_only(t *test
 
 // Rates: Friday 2026-03-13 at 1.25 and Monday 2026-03-16 at 1.30 CAD per USD; 2026-03-10
 // is before the first rate.
-
-// fxSpendRows is fxRows with no splits, so a test's splits are the only spending.
-func fxSpendRows() store.Rows {
-	rows := fxRows()
-	rows.Transactions, rows.Splits = nil, nil
-	return rows
-}
-
-func spendingIn(currency money.Currency, by store.SpendingGroup) store.SpendingParams {
-	params := spendingParams()
-	params.By = by
-	params.Currency = currency
-	return params
-}
 
 func spendingRowsOf(rows ...store.SpendingRow) []store.SpendingRow { return rows }
 
@@ -943,11 +887,6 @@ func Test_spending_by_payee_drops_a_payee_that_nets_to_zero(t *testing.T) {
 	assert.Equal(t, []store.SpendingTotal{{Currency: "CAD", Spent: 300}}, got.Totals)
 }
 
-// emptyWindowParams is a window before any transaction of minimalRows.
-func emptyWindowParams() store.SpendingParams {
-	return store.SpendingParams{Window: store.Window{Since: day(1990, 1, 1), Until: day(1990, 1, 31)}}
-}
-
 func Test_spending_gives_the_store_transaction_range_when_the_window_holds_no_spending(t *testing.T) {
 	t.Parallel()
 	rows := accountRows()
@@ -1054,10 +993,6 @@ func tagParams() store.SpendingParams {
 	params := spendingParams()
 	params.By = store.SpendByTag
 	return params
-}
-
-func addTag(rows *store.Rows, id, name string) {
-	rows.Tags = append(rows.Tags, store.Tag{ID: id, SourceID: int64(len(rows.Tags) + 1), Name: name})
 }
 
 func Test_spending_by_tag_counts_a_two_tag_split_under_both_tags_and_once_in_the_total(t *testing.T) {

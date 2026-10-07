@@ -115,19 +115,6 @@ func Test_status_reports_no_dates_for_a_store_without_transactions(t *testing.T)
 	assert.True(t, got.LastDate.IsZero())
 }
 
-// addImportRun copies the store's first run as a run of its own id, snapshot path and accounts count,
-// through a writable connection closed before any read.
-func addImportRun(t *testing.T, st *duckstore.Store, id int, snapshotPath string, accounts int) {
-	t.Helper()
-	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
-	require.NoError(t, err)
-	const clone = "INSERT INTO import_runs SELECT * REPLACE (? AS id, ? AS snapshot_path, ? AS accounts_rows) " + //nolint:unqueryvet // a copy of the row is the point
-		"FROM import_runs WHERE id = (SELECT min(id) FROM import_runs)"
-	_, err = conn.Exec(t.Context(), clone, id, snapshotPath, accounts)
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-}
-
 func Test_status_reads_the_latest_import_run(t *testing.T) {
 	t.Parallel()
 	st := duckstore.New(t.TempDir())
