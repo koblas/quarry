@@ -406,21 +406,21 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 
 ## BDD Acceptance Progress
 
-- [x] SCENARIO-01: Sync records each holding's share count over time — `cmd/quarry/run_holding_shares_test.go` `Test_run_sync_records_each_holdings_share_count_over_time`
+- [x] SCENARIO-01: Sync records each holding's share count over time — `cmd/quarry/run_investments_test.go` `Test_run_sync_records_each_holdings_share_count_over_time`
 - [x] SCENARIO-14: Sync fetches exchange rates back to the earliest investment transaction — delivered by SCENARIO-01 — `internal/store/duckstore/rates_test.go` `Test_replace_asks_for_rates_from_the_earliest_investment_transaction`
-- [x] SCENARIO-02: v_holdings values each holding on each day held — `cmd/quarry/run_holdings_view_test.go` `Test_run_sql_values_each_holding_on_a_date_from_v_holdings`
+- [x] SCENARIO-02: v_holdings values each holding on each day held — `cmd/quarry/run_holdings_test.go` `Test_run_sql_values_each_holding_on_a_date_from_v_holdings`
 - [x] SCENARIO-03: quarry holdings lists today's holdings in the reporting currency — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_lists_todays_holdings_in_the_reporting_currency`
 - [x] SCENARIO-04: Native currency lists each currency's own total — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_native_lists_each_currencys_own_total`
-- [x] SCENARIO-05: Holdings on a past date — `cmd/quarry/run_holdings_as_of_test.go` `Test_run_holdings_as_of_a_year_lists_the_shares_after_a_split_before_it`
-- [x] SCENARIO-11: quarry holdings refuses a date it cannot use — delivered by SCENARIO-05 — `cmd/quarry/run_holdings_as_of_test.go` `Test_run_holdings_refuses_a_date_it_cannot_use`
-- [x] SCENARIO-06: A holding with no price is listed without value — `cmd/quarry/run_holdings_no_price_test.go` `Test_run_holdings_lists_a_holding_with_no_price_without_value`
-- [x] SCENARIO-12: Holdings as JSON — delivered by SCENARIO-06 — `cmd/quarry/run_holdings_no_price_test.go` `Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning`
-- [x] SCENARIO-07: A security quarry cannot convert is left out of the total — `cmd/quarry/run_holdings_not_converted_test.go` `Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total`
-- [x] SCENARIO-08: A day with no exchange rate totals each currency separately — `cmd/quarry/run_holdings_no_rate_test.go` `Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately`
-- [x] SCENARIO-10: Filtering by account — `cmd/quarry/run_holdings_account_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing`
-- [x] SCENARIO-09: Nothing held on the day — `cmd/quarry/run_holdings_empty_test.go` `Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total`
+- [x] SCENARIO-05: Holdings on a past date — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_as_of_a_year_lists_the_shares_after_a_split_before_it`
+- [x] SCENARIO-11: quarry holdings refuses a date it cannot use — delivered by SCENARIO-05 — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_refuses_a_date_it_cannot_use`
+- [x] SCENARIO-06: A holding with no price is listed without value — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_lists_a_holding_with_no_price_without_value`
+- [x] SCENARIO-12: Holdings as JSON — delivered by SCENARIO-06 — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning`
+- [x] SCENARIO-07: A security quarry cannot convert is left out of the total — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total`
+- [x] SCENARIO-08: A day with no exchange rate totals each currency separately — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately`
+- [x] SCENARIO-10: Filtering by account — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing`
+- [x] SCENARIO-09: Nothing held on the day — `cmd/quarry/run_holdings_test.go` `Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total`
 - [x] SCENARIO-13: MCP holdings tool — `cmd/quarry/run_mcp_investments_test.go` `Test_run_mcp_holdings_returns_the_holdings_json_document`
-- [x] SCENARIO-15: Existing surfaces describe holdings — `cmd/quarry/run_holdings_surfaces_test.go` `Test_run_accounts_and_sql_help_carry_the_holdings_copy`
+- [x] SCENARIO-15: Existing surfaces describe holdings — `cmd/quarry/run_holdings_test.go` `Test_run_accounts_and_sql_help_carry_the_holdings_copy`
 
 ## Reference check
 

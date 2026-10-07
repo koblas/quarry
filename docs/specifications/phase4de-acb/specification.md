@@ -587,21 +587,21 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-04: Unclassified investment accounts are findings — `cmd/quarry/run_findings_unclassified_test.go` `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it`
 - [x] SCENARIO-05: Finding counts include unclassified accounts — `cmd/quarry/run_status_unclassified_test.go` `Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it`
 - [x] SCENARIO-03: An id that names no account is warned — delivered by SCENARIO-05 — `cmd/quarry/run_accounts_unmatched_test.go` `Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account`
-- [x] SCENARIO-06: Sync imports Quicken's cost basis — `cmd/quarry/run_cost_basis_test.go` `Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none`
+- [x] SCENARIO-06: Sync imports Quicken's cost basis — `cmd/quarry/run_investments_test.go` `Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none`
 - [x] SCENARIO-07: ACB adjustments are read from config — `internal/config/adjustment_test.go` `Test_load_reads_acb_adjustments_as_exact_cents`
 - [x] SCENARIO-08a: ACB is pooled per security across non-registered accounts — `internal/report/acb_test.go` `Test_acb_pools_each_security_across_non_registered_accounts`
 - [x] SCENARIO-09: Reinvested dividends and splits — delivered by SCENARIO-08a — `internal/report/acb_test.go` `Test_acb_adds_a_reinvested_dividends_cost_and_splits_shares_once`
 - [x] SCENARIO-08b: ACB and gains per tax year — `cmd/quarry/run_acb_test.go` `Test_run_acb_prints_gains_per_tax_year_and_todays_acb_pooled_across_the_accounts`
-- [x] SCENARIO-10: Shares added or removed without a trade — `cmd/quarry/run_acb_shares_test.go` `Test_run_acb_takes_removed_shares_out_of_the_acb_and_adds_added_shares_at_their_cost`
-- [x] SCENARIO-11: Return of capital and reinvested distributions — `cmd/quarry/run_acb_adjustments_test.go` `Test_run_acb_lowers_and_raises_the_acb_by_the_adjustments_and_counts_return_of_capital_above_it_as_a_gain`
-- [x] SCENARIO-12: Possible superficial losses are marked — `cmd/quarry/run_acb_superficial_test.go` `Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_days`
-- [x] SCENARIO-13a: Shares added with no cost leave ACB incomplete — `cmd/quarry/run_acb_unknown_cost_test.go` `Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_with_no_cost`
+- [x] SCENARIO-10: Shares added or removed without a trade — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_takes_removed_shares_out_of_the_acb_and_adds_added_shares_at_their_cost`
+- [x] SCENARIO-11: Return of capital and reinvested distributions — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_lowers_and_raises_the_acb_by_the_adjustments_and_counts_return_of_capital_above_it_as_a_gain`
+- [x] SCENARIO-12: Possible superficial losses are marked — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_days`
+- [x] SCENARIO-13a: Shares added with no cost leave ACB incomplete — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_with_no_cost`
 - [x] SCENARIO-13b: Shares added with no cost are findings — `cmd/quarry/run_findings_shares_without_cost_test.go` `Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them`
-- [x] SCENARIO-14: ACB data-quality warnings — `cmd/quarry/run_acb_warnings_test.go` `Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale`
-- [x] SCENARIO-15: Sales of one tax year — `cmd/quarry/run_acb_year_test.go` `Test_run_acb_year_lists_that_years_sales_one_by_one_with_a_total`
-- [x] SCENARIO-18: Nothing to show — delivered by SCENARIO-15 — `cmd/quarry/run_acb_year_test.go` `Test_run_acb_warns_when_no_non_registered_account_has_traded`
-- [x] SCENARIO-16: One security's history — `cmd/quarry/run_acb_security_test.go` `Test_run_acb_security_prints_every_event_of_the_named_security_with_shares_held_acb_and_gain`
-- [x] SCENARIO-17: ACB refuses what it cannot answer — `cmd/quarry/run_acb_refusals_test.go` `Test_run_acb_refuses_an_unclassified_account_and_a_currency_other_than_cad`
+- [x] SCENARIO-14: ACB data-quality warnings — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale`
+- [x] SCENARIO-15: Sales of one tax year — `cmd/quarry/run_acb_test.go` `Test_run_acb_year_lists_that_years_sales_one_by_one_with_a_total`
+- [x] SCENARIO-18: Nothing to show — delivered by SCENARIO-15 — `cmd/quarry/run_acb_test.go` `Test_run_acb_warns_when_no_non_registered_account_has_traded`
+- [x] SCENARIO-16: One security's history — `cmd/quarry/run_acb_test.go` `Test_run_acb_security_prints_every_event_of_the_named_security_with_shares_held_acb_and_gain`
+- [x] SCENARIO-17: ACB refuses what it cannot answer — `cmd/quarry/run_acb_test.go` `Test_run_acb_refuses_an_unclassified_account_and_a_currency_other_than_cad`
 - [x] SCENARIO-20: Docs carry the new surface — delivered by SCENARIO-17 — `cmd/quarry/run_skill_test.go` `Test_skill_has_claude_classify_accounts_before_the_first_acb`
 - [x] SCENARIO-19: MCP acb — `cmd/quarry/run_mcp_investments_test.go` `Test_run_mcp_acb_returns_the_acb_json_document`
 
@@ -610,4 +610,4 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 SCENARIO-21 is run by the orchestrator after SCENARIO-19 and before the gate, on a scratch HOME holding copies of the newest snapshot and the store, with the accounts classified. Results go in `REFERENCE-CHECK.md`.
 
 - [x] SCENARIO-21: Reference check on the real Quicken file — orchestrator run, results in `REFERENCE-CHECK.md`; rule gap found → SCENARIO-22
-- [x] SCENARIO-22: A sale of more shares than the accounts held leaves a short the next buy covers — `cmd/quarry/run_acb_short_test.go` `Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short`
+- [x] SCENARIO-22: A sale of more shares than the accounts held leaves a short the next buy covers — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short`
