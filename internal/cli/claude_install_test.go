@@ -32,6 +32,7 @@ const (
 	foreignMarketplace = `[{"name":"quarry","source":"github","repo":"someone/quarry"}]`
 	userPluginOn       = `[{"id":"quarry@quarry","scope":"user","enabled":true}]`
 	userPluginOff      = `[{"id":"quarry@quarry","scope":"user","enabled":false}]`
+	projectPlugin      = `{"id":"quarry@quarry","scope":"project","enabled":true,"projectPath":"/home/ada/repos/foo"}`
 
 	marketplaceAddedLine   = "Added the quarry marketplace to Claude Code.\n"
 	marketplacePresentLine = "The quarry marketplace is already in Claude Code.\n"

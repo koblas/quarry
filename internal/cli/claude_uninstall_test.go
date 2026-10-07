@@ -18,6 +18,7 @@ const (
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
 	marketplaceRemovedLine = "Removed the quarry marketplace from Claude Code.\n"
 	marketplaceAbsentLine  = "The quarry marketplace is not in Claude Code.\n"
+	marketplaceKeptLine    = "Kept the quarry marketplace: the quarry plugin is still installed for a single project.\n"
 	uninstallRestartLine   = "Restart Claude Code to unload it.\n"
 )
 
@@ -32,6 +33,151 @@ func Test_claude_uninstall_runs_both_steps_when_both_are_present(t *testing.T) {
 		"Removed the quarry marketplace from Claude Code.\n"+
 		"Restart Claude Code to unload it.\n", stdout)
 	assert.Empty(t, stderr)
+}
+
+func Test_claude_uninstall_keeps_the_marketplace_for_a_project_copy(t *testing.T) {
+	tool := (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"user","enabled":true},`+projectPlugin+`]`)
+
+	stdout, stderr, err := runClaudeAt(t, tool, nil, "/home/ada", "claude", "uninstall")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, uninstallPluginArgv}, tool.argv)
+	assert.Equal(t, pluginUninstalledLine+marketplaceKeptLine+uninstallRestartLine, stdout)
+	assert.Equal(t, `quarry: claude uninstall: the quarry plugin is still installed for project "~/repos/foo"; `+
+		"to remove it, run claude plugin uninstall --scope project quarry@quarry in that directory\n", stderr)
+}
+
+func Test_claude_uninstall_shows_a_project_path_outside_home_unabbreviated(t *testing.T) {
+	tool := (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"project","projectPath":"/srv/x"}]`)
+
+	_, stderr, err := runClaudeAt(t, tool, nil, "", "claude", "uninstall")
+
+	require.NoError(t, err)
+	assert.Equal(t, `quarry: claude uninstall: the quarry plugin is still installed for project "/srv/x"; `+
+		"to remove it, run claude plugin uninstall --scope project quarry@quarry in that directory\n", stderr)
+}
+
+func Test_claude_uninstall_hints_each_remaining_copy(t *testing.T) {
+	namedHint := func(quotedPath, scope string) string {
+		return "quarry: claude uninstall: the quarry plugin is still installed for project " + quotedPath +
+			"; to remove it, run claude plugin uninstall --scope " + scope + " quarry@quarry in that directory\n"
+	}
+	unnamedHint := func(scope string) string {
+		return "quarry: claude uninstall: the quarry plugin is still installed for a project Claude Code did not name; " +
+			"to remove it, run claude plugin uninstall --scope " + scope + " quarry@quarry in that project's directory\n"
+	}
+	cases := []struct {
+		name       string
+		tool       *toolCalls
+		home       string
+		wantArgv   []string
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:       "project copy alone keeps the marketplace and prints no restart line",
+			tool:       (&toolCalls{}).lists(ourMarketplace, "["+projectPlugin+"]"),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"~/repos/foo"`, "project"),
+		},
+		{
+			name:       "project copy without our marketplace prints no kept line",
+			tool:       (&toolCalls{}).lists("[]", "["+projectPlugin+"]"),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceAbsentLine,
+			wantStderr: namedHint(`"~/repos/foo"`, "project"),
+		},
+		{
+			name: "a user copy beside a project copy without our marketplace uninstalls the plugin and prints no kept line",
+			tool: (&toolCalls{}).lists("[]",
+				`[{"id":"quarry@quarry","scope":"user","enabled":true},`+projectPlugin+`]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv, uninstallPluginArgv},
+			wantStdout: pluginUninstalledLine + marketplaceAbsentLine + uninstallRestartLine,
+			wantStderr: namedHint(`"~/repos/foo"`, "project"),
+		},
+		{
+			name: "copies are named in the order claude listed them",
+			tool: (&toolCalls{}).lists(ourMarketplace, `[`+
+				`{"id":"quarry@quarry","scope":"project","projectPath":"/home/ada/b"},`+
+				`{"id":"quarry@quarry","scope":"local"},`+
+				`{"id":"quarry@quarry","scope":"project","projectPath":"/home/ada/a"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"~/b"`, "project") + unnamedHint("local") + namedHint(`"~/a"`, "project"),
+		},
+		{
+			name:       "a copy with no projectPath key is a project claude did not name",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"local"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: unnamedHint("local"),
+		},
+		{
+			name:       "a copy with an empty projectPath is a project claude did not name",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"project","projectPath":""}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: unnamedHint("project"),
+		},
+		{
+			name:       "the scope claude reported is printed verbatim",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"local","projectPath":"/home/ada/x"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"~/x"`, "local"),
+		},
+		{
+			name:       "a project at home itself is shown as ~",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"project","projectPath":"/home/ada"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"~"`, "project"),
+		},
+		{
+			name:       "a project outside home is shown as claude printed it",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"project","projectPath":"/srv/x"}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"/srv/x"`, "project"),
+		},
+		{
+			name:       "an unset home shows a project under it unabbreviated",
+			tool:       (&toolCalls{}).lists(ourMarketplace, "["+projectPlugin+"]"),
+			home:       "",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"/home/ada/repos/foo"`, "project"),
+		},
+		{
+			name:       "a path with quotes is abbreviated, then quoted",
+			tool:       (&toolCalls{}).lists(ourMarketplace, `[{"id":"quarry@quarry","scope":"project","projectPath":"/home/ada/my \"dir\""}]`),
+			home:       "/home/ada",
+			wantArgv:   []string{marketplaceListArgv, pluginListArgv},
+			wantStdout: pluginAbsentLine + marketplaceKeptLine,
+			wantStderr: namedHint(`"~/my \"dir\""`, "project"),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runClaudeAt(t, c.tool, nil, c.home, "claude", "uninstall")
+
+			require.NoError(t, err)
+			assert.Equal(t, c.wantArgv, c.tool.argv)
+			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
 }
 
 func Test_claude_uninstall_skips_both_steps_when_nothing_is_installed(t *testing.T) {

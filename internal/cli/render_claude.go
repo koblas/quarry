@@ -33,6 +33,7 @@ const (
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
 	marketplaceRemovedLine = "Removed the quarry marketplace from Claude Code.\n"
 	marketplaceAbsentLine  = "The quarry marketplace is not in Claude Code.\n"
+	marketplaceKeptLine    = "Kept the quarry marketplace: the quarry plugin is still installed for a single project.\n"
 	uninstallRestartLine   = "Restart Claude Code to unload it.\n"
 
 	uninstallForeignRefusal = `Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub, ` +
@@ -96,7 +97,10 @@ func renderUninstalled(res claudeplugin.UninstallResult) string {
 	if res.PluginUninstalled {
 		plugin = pluginUninstalledLine
 	}
-	if res.MarketplaceRemoved {
+	switch {
+	case res.MarketplaceKept:
+		marketplace = marketplaceKeptLine
+	case res.MarketplaceRemoved:
 		marketplace = marketplaceRemovedLine
 	}
 	out := plugin + marketplace
@@ -104,6 +108,25 @@ func renderUninstalled(res claudeplugin.UninstallResult) string {
 		out += uninstallRestartLine
 	}
 	return out
+}
+
+// uninstallRemainingHints returns one stderr hint per copy the uninstall left, in list order.
+func uninstallRemainingHints(home string, res claudeplugin.UninstallResult) []string {
+	hints := make([]string, 0, len(res.Remaining))
+	for _, c := range res.Remaining {
+		hints = append(hints, remainingCopyHint(home, c))
+	}
+	return hints
+}
+
+// remainingCopyHint returns the hint for one copy: the scope claude reported verbatim, and the
+// project path as claudePath prints it when claude named one.
+func remainingCopyHint(home string, c claudeplugin.Copy) string {
+	remove := "to remove it, run claude plugin uninstall --scope " + c.Scope + " quarry@quarry"
+	if c.ProjectPath == "" {
+		return "the quarry plugin is still installed for a project Claude Code did not name; " + remove + " in that project's directory"
+	}
+	return fmt.Sprintf("the quarry plugin is still installed for project %q; %s in that directory", claudePath(home, c.ProjectPath), remove)
 }
 
 // renderUninstallDone returns the line for the step a failed uninstall had already run: only the

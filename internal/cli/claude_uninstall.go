@@ -38,7 +38,13 @@ store and snapshots are not touched.`,
 			if err != nil {
 				return reportClaudeFailure(cmd, uninstallCommand, home, uninstallDoneLead(res), renderUninstallDone(res), err)
 			}
-			return writeResult(cmd, []byte(renderUninstalled(res)))
+			if err := writeResult(cmd, []byte(renderUninstalled(res))); err != nil {
+				return err
+			}
+			for _, hint := range uninstallRemainingHints(home, res) {
+				writeClaudeLine(cmd, uninstallCommand, hint)
+			}
+			return nil
 		},
 	}
 }

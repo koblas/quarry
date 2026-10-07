@@ -95,10 +95,18 @@ func (s *Server) Install(ctx context.Context) (Result, error) {
 	return res, nil
 }
 
+// Copy is a quarry plugin install at a scope other than user.
+type Copy struct {
+	Scope       string // the scope claude reported, verbatim
+	ProjectPath string // the project it belongs to; empty when claude gave none
+}
+
 // UninstallResult reports what an Uninstall did.
 type UninstallResult struct {
-	PluginUninstalled  bool // the plugin uninstall step ran
-	MarketplaceRemoved bool // the marketplace remove step ran
+	PluginUninstalled  bool   // the plugin uninstall step ran
+	MarketplaceRemoved bool   // the marketplace remove step ran
+	MarketplaceKept    bool   // our marketplace was left because a non-user copy remains
+	Remaining          []Copy // every non-user copy the list showed; nil when none
 }
 
 // Ran reports whether any claude step changed something.
@@ -106,9 +114,9 @@ func (r UninstallResult) Ran() bool {
 	return r.PluginUninstalled || r.MarketplaceRemoved
 }
 
-// Uninstall removes quarry's plugin from user scope, then quarry's marketplace, skipping
-// each step the lists show absent, and returns the steps completed even on failure.
-// Errors: ErrClaudeNotFound, ErrForeignMarketplace, *ListUnreadableError, *ExitError,
+// Uninstall removes quarry's user-scope plugin, then its marketplace unless a copy at another
+// scope remains, skipping each step the lists show absent; it returns the steps done even on
+// failure. Errors: ErrClaudeNotFound, ErrForeignMarketplace, *ListUnreadableError, *ExitError,
 // *InterruptedError, or the Runner's own.
 func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 	claude, err := s.findClaude()
@@ -127,12 +135,18 @@ func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 		}
 		res.PluginUninstalled = true
 	}
-	if st.marketplaceOurs {
-		if _, err := s.run(ctx, claude, removeMarketplaceArgs); err != nil {
-			return res, err
-		}
-		res.MarketplaceRemoved = true
+	res.Remaining = st.others
+	if !st.marketplaceOurs {
+		return res, nil
 	}
+	if len(st.others) > 0 {
+		res.MarketplaceKept = true
+		return res, nil
+	}
+	if _, err := s.run(ctx, claude, removeMarketplaceArgs); err != nil {
+		return res, err
+	}
+	res.MarketplaceRemoved = true
 	return res, nil
 }
 

@@ -7,6 +7,7 @@
 | SCENARIO-04 | code-first | A, B1, B2, V | 0/3/5/0 | folded into V |
 | SCENARIO-06 | code-first | A, B1, V | 0/1/2/0 | folded into V |
 | SCENARIO-10 | test-first (deletion guard) | A, B1, V | 0/1/4/0 | folded into V |
+| SCENARIO-12 | test-first (deletion guard) | A, B1, B2, V | 0/1/2/0 | folded into V |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |

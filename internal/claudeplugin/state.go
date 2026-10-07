@@ -77,9 +77,10 @@ func (e *ListUnreadableError) Error() string {
 
 // state is what claude's two lists say about quarry.
 type state struct {
-	marketplaceOurs bool // our marketplace is present
-	userCopy        bool // quarry@quarry is installed at user scope
-	userCopyOff     bool // that copy is explicitly turned off
+	marketplaceOurs bool   // our marketplace is present
+	userCopy        bool   // quarry@quarry is installed at user scope
+	userCopyOff     bool   // that copy is explicitly turned off
+	others          []Copy // quarry@quarry installs at any other scope, in list order
 }
 
 // readState runs the marketplace list, then the plugin list, and classifies them.
@@ -110,11 +111,19 @@ func (s *Server) readState(ctx context.Context, claude string) (state, error) {
 		return state{}, ErrForeignMarketplace
 	}
 	for _, p := range plugins {
-		if p["id"] == pluginID && p["scope"] == userScope {
-			st.userCopy = true
-			// Only an explicit false turns the copy off; a missing or odd value counts as on.
-			st.userCopyOff = p["enabled"] == false
+		if p["id"] != pluginID {
+			continue
 		}
+		if p["scope"] != userScope {
+			// scope is a string: list requires it.
+			scope, _ := p["scope"].(string)
+			path, _ := p["projectPath"].(string)
+			st.others = append(st.others, Copy{Scope: scope, ProjectPath: path})
+			continue
+		}
+		st.userCopy = true
+		// Only an explicit false turns the copy off; a missing or odd value counts as on.
+		st.userCopyOff = p["enabled"] == false
 	}
 	return st, nil
 }

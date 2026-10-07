@@ -108,6 +108,9 @@ func Test_uninstall_reports_that_a_step_ran_only_when_one_did(t *testing.T) {
 		{"no step", claudeplugin.UninstallResult{}, false},
 		{"the uninstall step", claudeplugin.UninstallResult{PluginUninstalled: true}, true},
 		{"the remove step", claudeplugin.UninstallResult{MarketplaceRemoved: true}, true},
+		{"a kept marketplace with a remaining copy", claudeplugin.UninstallResult{
+			MarketplaceKept: true, Remaining: []claudeplugin.Copy{{Scope: "project"}},
+		}, false},
 	}
 
 	for _, c := range cases {
@@ -297,4 +300,179 @@ func Test_uninstall_reports_a_signal_that_stopped_a_step(t *testing.T) {
 	require.ErrorAs(t, err, &exit)
 	assert.Equal(t, syscall.SIGKILL, exit.Signal)
 	assert.Equal(t, claudeplugin.UninstallResult{PluginUninstalled: true}, res)
+}
+
+func Test_uninstall_keeps_the_marketplace_while_a_non_user_copy_remains(t *testing.T) {
+	const user = `{"id":"quarry@quarry","scope":"user","enabled":true}`
+	scoped := func(scope string) string {
+		return `{"id":"quarry@quarry","scope":"` + scope + `","projectPath":"/src/foo"}`
+	}
+	withUser := []string{marketplaceList, pluginList, uninstallPlugin}
+	cases := []struct {
+		name      string
+		plugins   string
+		wantCalls []string
+		want      claudeplugin.UninstallResult
+	}{
+		{
+			name:      "a project copy beside the user copy",
+			plugins:   "[" + user + "," + scoped("project") + "]",
+			wantCalls: withUser,
+			want: claudeplugin.UninstallResult{
+				PluginUninstalled: true, MarketplaceKept: true,
+				Remaining: []claudeplugin.Copy{{Scope: "project", ProjectPath: "/src/foo"}},
+			},
+		},
+		{
+			name:      "a local copy beside the user copy",
+			plugins:   "[" + user + "," + scoped("local") + "]",
+			wantCalls: withUser,
+			want: claudeplugin.UninstallResult{
+				PluginUninstalled: true, MarketplaceKept: true,
+				Remaining: []claudeplugin.Copy{{Scope: "local", ProjectPath: "/src/foo"}},
+			},
+		},
+		{
+			name:      "a managed copy beside the user copy",
+			plugins:   "[" + user + "," + scoped("managed") + "]",
+			wantCalls: withUser,
+			want: claudeplugin.UninstallResult{
+				PluginUninstalled: true, MarketplaceKept: true,
+				Remaining: []claudeplugin.Copy{{Scope: "managed", ProjectPath: "/src/foo"}},
+			},
+		},
+		{
+			name:      "a scope claude has not documented counts as a copy",
+			plugins:   "[" + user + "," + scoped("enterprise") + "]",
+			wantCalls: withUser,
+			want: claudeplugin.UninstallResult{
+				PluginUninstalled: true, MarketplaceKept: true,
+				Remaining: []claudeplugin.Copy{{Scope: "enterprise", ProjectPath: "/src/foo"}},
+			},
+		},
+		{
+			name:      "a project copy alone runs no step",
+			plugins:   "[" + scoped("project") + "]",
+			wantCalls: []string{marketplaceList, pluginList},
+			want: claudeplugin.UninstallResult{
+				MarketplaceKept: true,
+				Remaining:       []claudeplugin.Copy{{Scope: "project", ProjectPath: "/src/foo"}},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := newFakeClaude(oursMarketplace, c.plugins)
+
+			res, err := newServer(t, fake).Uninstall(t.Context())
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, res)
+			assert.Equal(t, c.wantCalls, fake.calls)
+		})
+	}
+}
+
+func Test_uninstall_reports_a_non_user_copy_without_a_marketplace_to_keep(t *testing.T) {
+	fake := newFakeClaude("[]", `[{"id":"quarry@quarry","scope":"project","projectPath":"/src/foo"}]`)
+
+	res, err := newServer(t, fake).Uninstall(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, claudeplugin.UninstallResult{
+		Remaining: []claudeplugin.Copy{{Scope: "project", ProjectPath: "/src/foo"}},
+	}, res)
+	assert.Equal(t, []string{marketplaceList, pluginList}, fake.calls)
+}
+
+func Test_uninstall_reports_a_non_user_copy_beside_a_user_copy_without_a_marketplace_to_keep(t *testing.T) {
+	fake := newFakeClaude("[]", `[{"id":"quarry@quarry","scope":"user","enabled":true},`+
+		`{"id":"quarry@quarry","scope":"project","projectPath":"/src/foo"}]`)
+
+	res, err := newServer(t, fake).Uninstall(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, claudeplugin.UninstallResult{
+		PluginUninstalled: true,
+		Remaining:         []claudeplugin.Copy{{Scope: "project", ProjectPath: "/src/foo"}},
+	}, res)
+	assert.Equal(t, []string{marketplaceList, pluginList, uninstallPlugin}, fake.calls)
+}
+
+func Test_uninstall_does_not_count_another_plugins_copy_as_ours(t *testing.T) {
+	cases := []struct {
+		name  string
+		scope string
+	}{
+		{"another plugin at project scope", "project"},
+		{"another plugin at local scope", "local"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			plugins := `[{"id":"quarry@quarry","scope":"user"},` +
+				`{"id":"quarry@other","scope":"` + c.scope + `","projectPath":"/src/foo"}]`
+			fake := newFakeClaude(oursMarketplace, plugins)
+
+			res, err := newServer(t, fake).Uninstall(t.Context())
+
+			require.NoError(t, err)
+			assert.Equal(t, claudeplugin.UninstallResult{PluginUninstalled: true, MarketplaceRemoved: true}, res)
+			assert.Equal(t, []string{marketplaceList, pluginList, uninstallPlugin, removeMarketplace}, fake.calls)
+		})
+	}
+}
+
+func Test_uninstall_records_an_empty_project_path_when_claude_gave_no_usable_one(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry string
+	}{
+		{"the key is absent", `{"id":"quarry@quarry","scope":"project"}`},
+		{"the value is a number", `{"id":"quarry@quarry","scope":"project","projectPath":7}`},
+		{"the value is null", `{"id":"quarry@quarry","scope":"project","projectPath":null}`},
+		{"the value is empty", `{"id":"quarry@quarry","scope":"project","projectPath":""}`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := newFakeClaude(oursMarketplace, "["+c.entry+"]")
+
+			res, err := newServer(t, fake).Uninstall(t.Context())
+
+			require.NoError(t, err)
+			assert.Equal(t, []claudeplugin.Copy{{Scope: "project"}}, res.Remaining)
+			assert.True(t, res.MarketplaceKept)
+		})
+	}
+}
+
+func Test_uninstall_lists_the_remaining_copies_in_the_order_claude_listed_them(t *testing.T) {
+	plugins := `[` +
+		`{"id":"quarry@quarry","scope":"project","projectPath":"/src/b"},` +
+		`{"id":"quarry@quarry","scope":"local"},` +
+		`{"id":"quarry@quarry","scope":"project","projectPath":"/src/a"}]`
+	fake := newFakeClaude(oursMarketplace, plugins)
+
+	res, err := newServer(t, fake).Uninstall(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []claudeplugin.Copy{
+		{Scope: "project", ProjectPath: "/src/b"},
+		{Scope: "local"},
+		{Scope: "project", ProjectPath: "/src/a"},
+	}, res.Remaining)
+}
+
+func Test_uninstall_reports_no_kept_marketplace_when_the_plugin_step_fails_beside_a_project_copy(t *testing.T) {
+	plugins := `[{"id":"quarry@quarry","scope":"user"},{"id":"quarry@quarry","scope":"project","projectPath":"/src/foo"}]`
+	fake := newFakeClaude(oursMarketplace, plugins)
+	fake.answer(uninstallPlugin, reply{output: "uninstall failed", status: 1})
+
+	res, err := newServer(t, fake).Uninstall(t.Context())
+
+	require.ErrorAs(t, err, new(*claudeplugin.ExitError))
+	assert.Equal(t, claudeplugin.UninstallResult{}, res)
+	assert.Equal(t, []string{marketplaceList, pluginList, uninstallPlugin}, fake.calls)
 }
