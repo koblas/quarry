@@ -115,7 +115,7 @@ store and snapshots are not touched.
 
 Trailing line (BR-7): install `Restart Claude Code to load it.`; uninstall `Restart Claude Code to unload it.`; none when no step ran.
 
-Composition examples (R8): plugin absent + marketplace ours → `not installed` / `Removed` / restart. Plugin present + marketplace absent → `Uninstalled` / `not in Claude Code` / restart. Project copies only → `not installed` / `Kept` / R6 hints on stderr / no restart / exit 0. Install with user copy present, marketplace absent → `Added` / `already installed` / restart.
+Composition examples (R8): plugin absent + marketplace ours → `not installed` / `Removed` / restart. Plugin present + marketplace absent → `Uninstalled` / `not in Claude Code` / restart. Project copies only → `not installed` / `Kept` / R6 hints on stderr / no restart / exit 0. Install with user copy present, marketplace absent → `Added` / `already installed` / restart. Marketplace absent + project copies only → `not installed` / `not in Claude Code` (no Kept line: nothing to keep) / R6 hints / no restart (orchestrator, derived from R8 per-step composition, 2026-10-07).
 
 ### stderr hints and warnings (exit stays 0; printed after stdout lines)
 
