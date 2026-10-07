@@ -450,9 +450,9 @@ func totalsColumn(out string, column int) map[string]string {
 	return totals
 }
 
-// mustRunSpendAndCashFlow runs spend, then cashflow, with args, requiring both to exit 0, and returns their
-// stdout and the stderr they shared.
-func mustRunSpendAndCashFlow(tb testing.TB, args ...string) (spendOut, cashFlowOut, stderr string) {
+// mustRunSpendAndCashFlow runs spend, then cashflow, with args, requiring both to exit 0, and returns spend's
+// stdout, cashflow's stdout and the stderr they shared.
+func mustRunSpendAndCashFlow(tb testing.TB, args ...string) (string, string, string) {
 	tb.Helper()
 	var spendBuf, cashFlowBuf, errBuf bytes.Buffer
 	spendExit := runWith(context.Background(), append([]string{"spend"}, args...), spendEnv(&spendBuf, &errBuf))
