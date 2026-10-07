@@ -138,25 +138,19 @@ func Test_net_worth_gives_no_first_rate_date_for_a_store_without_rates(t *testin
 	assert.Len(t, got.Rows, 1)
 }
 
-func Test_net_worth_returns_the_first_rate_query_fault_as_another_fault(t *testing.T) {
+func Test_net_worth_returns_a_first_rate_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min", 2) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
+			_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_net_worth_returns_a_first_rate_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, scanFault: errScanFailed}))
-
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_net_worth_for_no_dates_still_refuses_a_missing_store(t *testing.T) {
@@ -251,25 +245,19 @@ func Test_net_worth_first_balance_ignores_a_holding_of_an_account_left_out_of_re
 	assert.True(t, firstBalanceOn(t, st).IsZero())
 }
 
-func Test_net_worth_returns_the_first_balance_query_fault_as_another_fault(t *testing.T) {
+func Test_net_worth_returns_a_first_balance_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 3, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min", 3) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
+			_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_net_worth_returns_a_first_balance_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 3, scanFault: errScanFailed}))
-
-	_, err := st.NetWorth(t.Context(), store.NetWorthParams{Dates: []time.Time{march(5)}})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 // netWorthRows is cashRows with accounts joining the base CAD chequing account acct-1.
@@ -289,37 +277,47 @@ func netWorthConvertedQuery(day int) string {
 	return fmt.Sprintf("SELECT currency, balance_cad, balance_usd FROM v_net_worth WHERE date = '2026-03-%02d' ORDER BY currency", day)
 }
 
-func Test_net_worth_sums_accounts_of_one_type_and_currency_into_one_row(t *testing.T) {
+func Test_net_worth_groups_accounts_by_type_and_currency(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, netWorthRows(
-		[]store.Account{account(acctTwo, 2, "Second", "chequing", "CAD")},
-		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)))
+	cases := []struct {
+		name   string
+		second store.Account
+		cents  int64
+		want   [][]string
+	}{
+		{
+			name:   "sums_accounts_of_one_type_and_currency_into_one_row",
+			second: account(acctTwo, 2, "Second", "chequing", "CAD"), cents: 5_000,
+			want: [][]string{{"chequing", "CAD", "2", "150.00"}},
+		},
+		{
+			name:   "keeps_a_type_in_another_currency_in_its_own_row",
+			second: account(acctTwo, 2, "US", "chequing", "USD"), cents: 5_000,
+			want: [][]string{{"chequing", "CAD", "1", "100.00"}, {"chequing", "USD", "1", "50.00"}},
+		},
+		{
+			name:   "keeps_a_currency_in_another_type_in_its_own_row",
+			second: account(acctTwo, 2, "Savings", "savings", "CAD"), cents: 5_000,
+			want: [][]string{{"chequing", "CAD", "1", "100.00"}, {"savings", "CAD", "1", "50.00"}},
+		},
+		{
+			name:   "keeps_the_sign_of_a_negative_balance",
+			second: account(acctTwo, 2, "Card", "credit", "CAD"), cents: -30_000,
+			want: [][]string{{"chequing", "CAD", "1", "100.00"}, {"credit", "CAD", "1", "-300.00"}},
+		},
+	}
 
-	got := queryTexts(t, st, netWorthQuery(1))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWith(t, netWorthRows([]store.Account{c.second},
+				transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), c.cents)))
 
-	assert.Equal(t, [][]string{{"chequing", "CAD", "2", "150.00"}}, got)
-}
+			got := queryTexts(t, st, netWorthQuery(1))
 
-func Test_net_worth_keeps_a_type_in_another_currency_in_its_own_row(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, netWorthRows(
-		[]store.Account{account(acctTwo, 2, "US", "chequing", "USD")},
-		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)))
-
-	got := queryTexts(t, st, netWorthQuery(1))
-
-	assert.Equal(t, [][]string{{"chequing", "CAD", "1", "100.00"}, {"chequing", "USD", "1", "50.00"}}, got)
-}
-
-func Test_net_worth_keeps_a_currency_in_another_type_in_its_own_row(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, netWorthRows(
-		[]store.Account{account(acctTwo, 2, "Savings", "savings", "CAD")},
-		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), 5_000)))
-
-	got := queryTexts(t, st, netWorthQuery(1))
-
-	assert.Equal(t, [][]string{{"chequing", "CAD", "1", "100.00"}, {"savings", "CAD", "1", "50.00"}}, got)
+			assert.Equal(t, c.want, got)
+		})
+	}
 }
 
 func Test_net_worth_counts_a_closed_account_on_the_days_after_it_closed(t *testing.T) {
@@ -407,17 +405,6 @@ func Test_net_worth_adds_an_account_on_the_day_of_its_first_transaction_not_befo
 	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), accounts, balance FROM v_net_worth WHERE date IN ('2026-03-04', '2026-03-05') ORDER BY date")
 
 	assert.Equal(t, [][]string{{"2026-03-04", "1", "100.00"}, {"2026-03-05", "2", "150.00"}}, got)
-}
-
-func Test_net_worth_keeps_the_sign_of_a_negative_balance(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, netWorthRows(
-		[]store.Account{account(acctTwo, 2, "Card", "credit", "CAD")},
-		transaction("t1", acctOne, march(1), 10_000), transaction("t2", acctTwo, march(1), -30_000)))
-
-	got := queryTexts(t, st, netWorthQuery(1))
-
-	assert.Equal(t, [][]string{{"chequing", "CAD", "1", "100.00"}, {"credit", "CAD", "1", "-300.00"}}, got)
 }
 
 func Test_net_worth_converts_the_sum_of_each_accounts_rounded_conversion(t *testing.T) {

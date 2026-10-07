@@ -236,33 +236,19 @@ func Test_net_worth_for_no_dates_runs_no_query(t *testing.T) {
 	assert.Equal(t, 4, spy.queries)
 }
 
-func Test_net_worth_and_accounts_return_the_unvalued_holdings_query_fault_as_another_fault(t *testing.T) {
+func Test_net_worth_and_accounts_return_the_unvalued_holdings_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
 	for _, op := range unvaluedReads() {
-		t.Run(op.name, func(t *testing.T) {
-			t.Parallel()
-			fault := ioFault(`query rows "SELECT"`)
-			st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+		for _, c := range otherFaults("SELECT", 1) {
+			t.Run(op.name+" "+c.name, func(t *testing.T) {
+				t.Parallel()
+				st := newBuiltStore(t, spyOpener(c.spy))
 
-			err := op.call(t.Context(), st)
+				err := op.call(t.Context(), st)
 
-			assertOtherFault(t, err, "disk read failed")
-			assert.ErrorIs(t, err, fault)
-		})
-	}
-}
-
-func Test_net_worth_and_accounts_return_the_unvalued_holdings_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	for _, op := range unvaluedReads() {
-		t.Run(op.name, func(t *testing.T) {
-			t.Parallel()
-			st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-			err := op.call(t.Context(), st)
-
-			assertOtherFault(t, err, errScanFailed.Error())
-			assert.ErrorIs(t, err, errScanFailed)
-		})
+				assertOtherFault(t, err, c.reason)
+				assert.ErrorIs(t, err, c.fault)
+			})
+		}
 	}
 }

@@ -30,51 +30,64 @@ func checkShares(t *testing.T, txns []store.InvestmentTransaction, quicken []sto
 	return result
 }
 
-func Test_check_shares_walks_a_holding_in_date_order_not_source_id_order(t *testing.T) {
+func Test_check_shares_walks_a_holding_to_the_count_quicken_holds(t *testing.T) {
 	t.Parallel()
-	txns := []store.InvestmentTransaction{
-		buy(acctOne, secAcme, 2, march(1), 12*oneShare),
-		splitOf(acctOne, secAcme, 1, march(2), 1, 12),
+	splitWithShares := splitOf(acctOne, secAcme, 2, march(2), 1, 12)
+	splitWithShares.Shares = new(int64(5 * oneShare))
+	cases := []struct {
+		name    string
+		txns    []store.InvestmentTransaction
+		quicken int64
+	}{
+		{
+			name: "in_date_order_not_source_id_order",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 2, march(1), 12*oneShare),
+				splitOf(acctOne, secAcme, 1, march(2), 1, 12),
+			},
+			quicken: oneShare,
+		},
+		{
+			name: "breaking_a_same_date_tie_by_numeric_source_id",
+			txns: []store.InvestmentTransaction{
+				splitOf(acctOne, secAcme, 10, march(1), 1, 12),
+				buy(acctOne, secAcme, 9, march(1), 12*oneShare),
+			},
+			quicken: oneShare,
+		},
+		{
+			name: "multiplying_the_running_count_by_the_split_ratio",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, march(1), 120*oneShare),
+				splitOf(acctOne, secAcme, 2, march(2), 1, 12),
+			},
+			quicken: 10 * oneShare,
+		},
+		{
+			name:    "adding_nothing_at_a_split_row_that_carries_shares",
+			txns:    []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), 120*oneShare), splitWithShares},
+			quicken: 10 * oneShare,
+		},
+		{
+			name: "counting_rows_of_every_date_including_future_and_before_2001",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC), 3*oneShare),
+				buy(acctOne, secAcme, 2, march(1), 5*oneShare),
+				buy(acctOne, secAcme, 3, time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC), 7*oneShare),
+			},
+			quicken: 15 * oneShare,
+		},
 	}
 
-	result := checkShares(t, txns, []store.QuickenShare{quickenCount(acctOne, secAcme, oneShare)})
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 
-	assert.Equal(t, store.ShareCheck{Checked: 1}, result)
-}
+			result := checkShares(t, c.txns, []store.QuickenShare{quickenCount(acctOne, secAcme, c.quicken)})
 
-func Test_check_shares_breaks_a_same_date_tie_by_numeric_source_id(t *testing.T) {
-	t.Parallel()
-	txns := []store.InvestmentTransaction{
-		splitOf(acctOne, secAcme, 10, march(1), 1, 12),
-		buy(acctOne, secAcme, 9, march(1), 12*oneShare),
+			assert.Equal(t, store.ShareCheck{Checked: 1}, result)
+		})
 	}
-
-	result := checkShares(t, txns, []store.QuickenShare{quickenCount(acctOne, secAcme, oneShare)})
-
-	assert.Equal(t, store.ShareCheck{Checked: 1}, result)
-}
-
-func Test_check_shares_multiplies_the_running_count_by_the_split_ratio(t *testing.T) {
-	t.Parallel()
-	txns := []store.InvestmentTransaction{
-		buy(acctOne, secAcme, 1, march(1), 120*oneShare),
-		splitOf(acctOne, secAcme, 2, march(2), 1, 12),
-	}
-
-	result := checkShares(t, txns, []store.QuickenShare{quickenCount(acctOne, secAcme, 10*oneShare)})
-
-	assert.Equal(t, store.ShareCheck{Checked: 1}, result)
-}
-
-func Test_check_shares_adds_nothing_at_a_split_row_that_carries_shares(t *testing.T) {
-	t.Parallel()
-	split := splitOf(acctOne, secAcme, 2, march(2), 1, 12)
-	split.Shares = new(int64(5 * oneShare))
-	txns := []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), 120*oneShare), split}
-
-	result := checkShares(t, txns, []store.QuickenShare{quickenCount(acctOne, secAcme, 10*oneShare)})
-
-	assert.Equal(t, store.ShareCheck{Checked: 1}, result)
 }
 
 func Test_check_shares_matches_within_one_millionth(t *testing.T) {
@@ -125,19 +138,6 @@ func Test_check_shares_counts_a_fully_sold_holding_as_zero(t *testing.T) {
 	assert.EqualValues(t, oneShare, result.Mismatched[0].Quicken)
 }
 
-func Test_check_shares_counts_rows_of_every_date_including_future_and_before_2001(t *testing.T) {
-	t.Parallel()
-	txns := []store.InvestmentTransaction{
-		buy(acctOne, secAcme, 1, time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC), 3*oneShare),
-		buy(acctOne, secAcme, 2, march(1), 5*oneShare),
-		buy(acctOne, secAcme, 3, time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC), 7*oneShare),
-	}
-
-	result := checkShares(t, txns, []store.QuickenShare{quickenCount(acctOne, secAcme, 15*oneShare)})
-
-	assert.Equal(t, store.ShareCheck{Checked: 1}, result)
-}
-
 func Test_check_shares_counts_the_holdings_it_compares(t *testing.T) {
 	t.Parallel()
 	cashOnly := buy(acctOne, secAcme, 3, march(1), 0)
@@ -183,20 +183,35 @@ func Test_check_shares_counts_the_holdings_it_compares(t *testing.T) {
 	}
 }
 
-func Test_check_shares_reports_a_holding_with_transactions_and_no_lot_against_zero(t *testing.T) {
+func Test_check_shares_reports_a_holding_missing_from_one_side_against_zero(t *testing.T) {
 	t.Parallel()
+	cases := []struct {
+		name    string
+		txns    []store.InvestmentTransaction
+		quicken []store.QuickenShare
+		want    []store.ShareMismatch
+	}{
+		{
+			name: "transactions_and_no_lot",
+			txns: []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), 5*oneShare)},
+			want: []store.ShareMismatch{{AccountID: acctOne, SecurityID: secAcme, Quarry: 5 * oneShare, Quicken: 0}},
+		},
+		{
+			name:    "a_lot_and_no_transactions",
+			quicken: []store.QuickenShare{quickenCount(acctOne, secAcme, 3*oneShare)},
+			want:    []store.ShareMismatch{{AccountID: acctOne, SecurityID: secAcme, Quarry: 0, Quicken: 3 * oneShare}},
+		},
+	}
 
-	result := checkShares(t, []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), 5*oneShare)}, nil)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 
-	assert.Equal(t, []store.ShareMismatch{{AccountID: acctOne, SecurityID: secAcme, Quarry: 5 * oneShare, Quicken: 0}}, result.Mismatched)
-}
+			result := checkShares(t, c.txns, c.quicken)
 
-func Test_check_shares_reports_a_holding_with_a_lot_and_no_transactions_against_zero(t *testing.T) {
-	t.Parallel()
-
-	result := checkShares(t, nil, []store.QuickenShare{quickenCount(acctOne, secAcme, 3*oneShare)})
-
-	assert.Equal(t, []store.ShareMismatch{{AccountID: acctOne, SecurityID: secAcme, Quarry: 0, Quicken: 3 * oneShare}}, result.Mismatched)
+			assert.Equal(t, c.want, result.Mismatched)
+		})
+	}
 }
 
 func Test_check_shares_reports_only_the_holdings_that_differ_in_account_then_security_order(t *testing.T) {
@@ -636,30 +651,30 @@ func Test_replace_keeps_the_previous_store_when_holding_shares_cannot_be_loaded(
 	}
 }
 
-func Test_replace_stores_a_share_count_at_the_column_maximum(t *testing.T) {
+func Test_replace_stores_a_share_count_at_the_column_limit(t *testing.T) {
 	t.Parallel()
-	rows := minimalRows()
-	rows.InvestmentTransactions = []store.InvestmentTransaction{
-		buy(acctOne, secAcme, 1, march(1), 333_333_333_333_333_333), splitOf(acctOne, secAcme, 2, march(2), 3*oneShare, oneShare),
+	cases := []struct {
+		name   string
+		bought int64
+		want   string
+	}{
+		{name: "maximum", bought: 333_333_333_333_333_333, want: "999999999999.999999"},
+		{name: "minimum_for_a_short_count", bought: -333_333_333_333_333_333, want: "-999999999999.999999"},
 	}
 
-	replaced, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := minimalRows()
+			rows.InvestmentTransactions = []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, march(1), c.bought), splitOf(acctOne, secAcme, 2, march(2), 3*oneShare, oneShare),
+			}
 
-	require.NoError(t, err)
-	db := openReadOnly(t, replaced.Path)
-	assertScalar(t, db, "SELECT CAST(shares AS VARCHAR) FROM holding_shares WHERE to_date IS NULL", "999999999999.999999")
-}
+			replaced, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
 
-func Test_replace_stores_a_short_share_count_at_the_column_minimum(t *testing.T) {
-	t.Parallel()
-	rows := minimalRows()
-	rows.InvestmentTransactions = []store.InvestmentTransaction{
-		buy(acctOne, secAcme, 1, march(1), -333_333_333_333_333_333), splitOf(acctOne, secAcme, 2, march(2), 3*oneShare, oneShare),
+			require.NoError(t, err)
+			db := openReadOnly(t, replaced.Path)
+			assertScalar(t, db, "SELECT CAST(shares AS VARCHAR) FROM holding_shares WHERE to_date IS NULL", c.want)
+		})
 	}
-
-	replaced, err := duckstore.New(t.TempDir()).Replace(t.Context(), rows)
-
-	require.NoError(t, err)
-	db := openReadOnly(t, replaced.Path)
-	assertScalar(t, db, "SELECT CAST(shares AS VARCHAR) FROM holding_shares WHERE to_date IS NULL", "-999999999999.999999")
 }

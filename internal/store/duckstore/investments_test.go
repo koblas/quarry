@@ -105,75 +105,59 @@ func investmentHistoryRows() (store.Rows, store.InvestmentTransaction, store.Inv
 	return holdingRows(add, earlier, cashOnly), add, earlier
 }
 
-func Test_findings_reads_every_security_and_every_investment_transaction_with_a_security(t *testing.T) {
+func Test_findings_and_status_read_every_security_and_every_investment_transaction_with_a_security(t *testing.T) {
 	t.Parallel()
 	rows, add, earlier := investmentHistoryRows()
 	st := newStoreWith(t, rows)
+	cases := []struct {
+		name string
+		read func(context.Context, *duckstore.Store) (store.Investments, error)
+	}{
+		{name: "findings", read: func(ctx context.Context, st *duckstore.Store) (store.Investments, error) {
+			list, err := st.Findings(ctx)
+			return list.Investments, err
+		}},
+		{name: "status", read: func(ctx context.Context, st *duckstore.Store) (store.Investments, error) {
+			got, err := st.Status(ctx)
+			return got.Investments, err
+		}},
+	}
 
-	list, err := st.Findings(t.Context())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 
-	require.NoError(t, err)
-	assert.Equal(t, store.Investments{
-		Securities: []store.Security{
-			{ID: secAcme, SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")},
-			{ID: secEUR, SourceID: 3, Name: "Euro Fund", Ticker: new("EURF"), Currency: new("EUR")},
-			{ID: secNoCurrency, SourceID: 4, Name: "Plain Fund"},
-			{ID: secUSD, SourceID: 2, Name: "Globex Inc", Ticker: new("GLBX"), Currency: new("USD")},
-		},
-		Transactions: []store.InvestmentTransaction{earlier, add},
-	}, list.Investments)
-}
+			got, err := c.read(t.Context(), st)
 
-func Test_status_reads_every_security_and_every_investment_transaction_with_a_security(t *testing.T) {
-	t.Parallel()
-	rows, add, earlier := investmentHistoryRows()
-	st := newStoreWith(t, rows)
-
-	got, err := st.Status(t.Context())
-
-	require.NoError(t, err)
-	assert.Equal(t, store.Investments{
-		Securities: []store.Security{
-			{ID: secAcme, SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")},
-			{ID: secEUR, SourceID: 3, Name: "Euro Fund", Ticker: new("EURF"), Currency: new("EUR")},
-			{ID: secNoCurrency, SourceID: 4, Name: "Plain Fund"},
-			{ID: secUSD, SourceID: 2, Name: "Globex Inc", Ticker: new("GLBX"), Currency: new("USD")},
-		},
-		Transactions: []store.InvestmentTransaction{earlier, add},
-	}, got.Investments)
-}
-
-func Test_findings_and_status_return_an_investment_query_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	for _, read := range investmentReads {
-		for _, stage := range investmentFaultStages {
-			t.Run(read.name+" "+stage.name, func(t *testing.T) {
-				t.Parallel()
-				fault := ioFault(`query rows "SELECT id"`)
-				st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: read.queriesBefore + stage.extraPasses, queryFault: fault}))
-
-				err := read.read(t.Context(), st)
-
-				assertOtherFault(t, err, "disk read failed")
-				assert.ErrorIs(t, err, fault)
-			})
-		}
+			require.NoError(t, err)
+			assert.Equal(t, store.Investments{
+				Securities: []store.Security{
+					{ID: secAcme, SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")},
+					{ID: secEUR, SourceID: 3, Name: "Euro Fund", Ticker: new("EURF"), Currency: new("EUR")},
+					{ID: secNoCurrency, SourceID: 4, Name: "Plain Fund"},
+					{ID: secUSD, SourceID: 2, Name: "Globex Inc", Ticker: new("GLBX"), Currency: new("USD")},
+				},
+				Transactions: []store.InvestmentTransaction{earlier, add},
+			}, got)
+		})
 	}
 }
 
-func Test_findings_and_status_return_an_investment_scan_fault_as_another_fault(t *testing.T) {
+func Test_findings_and_status_return_an_investment_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
 	for _, read := range investmentReads {
 		for _, stage := range investmentFaultStages {
-			t.Run(read.name+" "+stage.name, func(t *testing.T) {
-				t.Parallel()
-				st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: read.queriesBefore + stage.extraPasses, scanFault: errScanFailed}))
+			for _, c := range otherFaults("SELECT id", read.queriesBefore+stage.extraPasses) {
+				t.Run(read.name+" "+stage.name+" "+c.name, func(t *testing.T) {
+					t.Parallel()
+					st := newBuiltStore(t, spyOpener(c.spy))
 
-				err := read.read(t.Context(), st)
+					err := read.read(t.Context(), st)
 
-				assertOtherFault(t, err, errScanFailed.Error())
-				assert.ErrorIs(t, err, errScanFailed)
-			})
+					assertOtherFault(t, err, c.reason)
+					assert.ErrorIs(t, err, c.fault)
+				})
+			}
 		}
 	}
 }

@@ -567,3 +567,22 @@ func netWorthRead(t *testing.T, st *duckstore.Store, dates ...time.Time) store.N
 	require.NoError(t, err)
 	return got
 }
+
+// otherFault is one way a read's query fails once passQueries earlier read queries have run, with the reason
+// assertOtherFault expects and the error the read must wrap.
+type otherFault struct {
+	name   string
+	spy    *spyReadDB
+	reason string
+	fault  error
+}
+
+// otherFaults are the query fault and the scan fault of the read query that follows passQueries passing ones;
+// query is the statement the query fault names.
+func otherFaults(query string, passQueries int) []otherFault {
+	disk := ioFault(`query rows "` + query + `"`)
+	return []otherFault{
+		{name: "query_fault", spy: &spyReadDB{passQueries: passQueries, queryFault: disk}, reason: "disk read failed", fault: disk},
+		{name: "scan_fault", spy: &spyReadDB{passQueries: passQueries, scanFault: errScanFailed}, reason: errScanFailed.Error(), fault: errScanFailed},
+	}
+}

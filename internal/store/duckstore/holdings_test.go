@@ -273,25 +273,19 @@ func Test_holdings_gives_no_first_rate_date_for_a_store_without_rates(t *testing
 	assert.Len(t, got.Holdings, 1)
 }
 
-func Test_holdings_returns_the_first_rate_query_fault_as_another_fault(t *testing.T) {
+func Test_holdings_returns_a_first_rate_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: march(2)})
+			_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: march(2)})
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_holdings_returns_a_first_rate_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: march(2)})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_holdings_lists_accounts_quicken_leaves_out_of_its_reports(t *testing.T) {
@@ -335,39 +329,36 @@ func heldIn(t *testing.T, st *duckstore.Store, ids ...string) []string {
 	return order
 }
 
-func Test_holdings_reads_only_the_named_accounts(t *testing.T) {
+func Test_holdings_reads_the_named_accounts_in_table_order(t *testing.T) {
 	t.Parallel()
 	st := accountHoldingsStore(t, nil)
+	cases := []struct {
+		name string
+		ids  []string
+		want []string
+	}{
+		{name: "one_account", ids: []string{acctOne}, want: []string{acctOne + "/" + secAcme, acctOne + "/" + secUSD}},
+		{name: "another_account", ids: []string{acctTwo}, want: []string{acctTwo + "/" + secUSD}},
+		{
+			name: "every_account_when_none_is_named", ids: nil,
+			want: []string{acctTwo + "/" + secUSD, acctOne + "/" + secAcme, acctOne + "/" + secUSD},
+		},
+		{
+			name: "two_accounts_whatever_order_they_are_named", ids: []string{acctOne, acctTwo},
+			want: []string{acctTwo + "/" + secUSD, acctOne + "/" + secAcme, acctOne + "/" + secUSD},
+		},
+		{name: "nothing_for_an_id_that_names_no_account", ids: []string{acctNone}, want: []string{}},
+	}
 
-	assert.Equal(t, []string{acctOne + "/" + secAcme, acctOne + "/" + secUSD}, heldIn(t, st, acctOne))
-	assert.Equal(t, []string{acctTwo + "/" + secUSD}, heldIn(t, st, acctTwo))
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 
-func Test_holdings_reads_every_account_when_none_is_named(t *testing.T) {
-	t.Parallel()
-	st := accountHoldingsStore(t, nil)
+			got := heldIn(t, st, c.ids...)
 
-	got := heldIn(t, st)
-
-	assert.Equal(t, []string{acctTwo + "/" + secUSD, acctOne + "/" + secAcme, acctOne + "/" + secUSD}, got)
-}
-
-func Test_holdings_reads_two_named_accounts_in_table_order_whatever_order_they_are_named(t *testing.T) {
-	t.Parallel()
-	st := accountHoldingsStore(t, nil)
-
-	got := heldIn(t, st, acctOne, acctTwo)
-
-	assert.Equal(t, []string{acctTwo + "/" + secUSD, acctOne + "/" + secAcme, acctOne + "/" + secUSD}, got)
-}
-
-func Test_holdings_reads_nothing_for_an_id_that_names_no_account(t *testing.T) {
-	t.Parallel()
-	st := accountHoldingsStore(t, nil)
-
-	got := heldIn(t, st, acctNone)
-
-	assert.Empty(t, got)
+			assert.Equal(t, c.want, got)
+		})
+	}
 }
 
 func Test_holdings_reads_a_named_closed_account(t *testing.T) {
@@ -387,49 +378,78 @@ func holdingsRead(t *testing.T, st *duckstore.Store, date time.Time, ids ...stri
 	return got
 }
 
-func Test_holdings_reads_the_first_and_last_investment_transaction_dates_of_every_account(t *testing.T) {
+func Test_holdings_reads_the_first_and_last_investment_transaction_dates(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, holdingRows(
-		buy(acctOne, secAcme, 1, march(3), oneShare),
-		buy(acctTwo, secUSD, 2, march(1), oneShare),
-		buy(acctOne, secAcme, 3, march(5), oneShare)))
+	cash := buy(acctOne, secAcme, 1, march(1), 0)
+	cash.Action, cash.SecurityID, cash.Shares = "div", nil, nil
+	future := localToday().AddDate(0, 0, 3)
+	cases := []struct {
+		name  string
+		txns  []store.InvestmentTransaction
+		asOf  time.Time
+		ids   []string
+		first time.Time
+		last  time.Time
+	}{
+		{
+			name: "of_every_account",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, march(3), oneShare), buy(acctTwo, secUSD, 2, march(1), oneShare), buy(acctOne, secAcme, 3, march(5), oneShare),
+			},
+			asOf: march(5), first: march(1), last: march(5),
+		},
+		{
+			name: "of_only_the_named_accounts",
+			txns: []store.InvestmentTransaction{
+				buy(acctTwo, secUSD, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(3), oneShare),
+				buy(acctOne, secAcme, 3, march(4), oneShare), buy(acctTwo, secUSD, 4, march(8), oneShare),
+			},
+			asOf: march(5), ids: []string{acctOne}, first: march(3), last: march(4),
+		},
+		{
+			name: "counting_a_cash_only_and_a_future_dated_transaction",
+			txns: []store.InvestmentTransaction{cash, buy(acctOne, secAcme, 2, march(2), oneShare), buy(acctOne, secAcme, 3, future, oneShare)},
+			asOf: march(2), first: march(1), last: future,
+		},
+	}
 
-	got := holdingsRead(t, st, march(5))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWith(t, holdingRows(c.txns...))
 
-	assert.Equal(t, []time.Time{march(1), march(5)}, []time.Time{got.FirstTransaction, got.LastTransaction})
+			got := holdingsRead(t, st, c.asOf, c.ids...)
+
+			assert.Equal(t, []time.Time{c.first, c.last}, []time.Time{got.FirstTransaction, got.LastTransaction})
+		})
+	}
 }
 
-func Test_holdings_reads_no_transaction_dates_for_a_store_without_investment_transactions(t *testing.T) {
+func Test_holdings_reads_no_transaction_dates_when_no_investment_transaction_is_in_scope(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, holdingRows())
+	cases := []struct {
+		name string
+		txns []store.InvestmentTransaction
+		ids  []string
+	}{
+		{name: "a_store_without_investment_transactions"},
+		{
+			name: "an_id_that_names_no_account",
+			txns: []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(3), oneShare)}, ids: []string{acctNone},
+		},
+	}
 
-	got := holdingsRead(t, st, march(5))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWith(t, holdingRows(c.txns...))
 
-	assert.True(t, got.FirstTransaction.IsZero())
-	assert.True(t, got.LastTransaction.IsZero())
-}
+			got := holdingsRead(t, st, march(5), c.ids...)
 
-func Test_holdings_reads_the_transaction_span_of_only_the_named_accounts(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, holdingRows(
-		buy(acctTwo, secUSD, 1, march(1), oneShare),
-		buy(acctOne, secAcme, 2, march(3), oneShare),
-		buy(acctOne, secAcme, 3, march(4), oneShare),
-		buy(acctTwo, secUSD, 4, march(8), oneShare)))
-
-	got := holdingsRead(t, st, march(5), acctOne)
-
-	assert.Equal(t, []time.Time{march(3), march(4)}, []time.Time{got.FirstTransaction, got.LastTransaction})
-}
-
-func Test_holdings_reads_no_transaction_dates_for_an_id_that_names_no_account(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, holdingRows(buy(acctOne, secAcme, 1, march(3), oneShare)))
-
-	got := holdingsRead(t, st, march(5), acctNone)
-
-	assert.True(t, got.FirstTransaction.IsZero())
-	assert.True(t, got.LastTransaction.IsZero())
+			assert.True(t, got.FirstTransaction.IsZero())
+			assert.True(t, got.LastTransaction.IsZero())
+		})
+	}
 }
 
 func Test_holdings_reads_the_same_transaction_span_on_a_day_before_the_first_transaction(t *testing.T) {
@@ -444,37 +464,19 @@ func Test_holdings_reads_the_same_transaction_span_on_a_day_before_the_first_tra
 	assert.Equal(t, []time.Time{march(3), march(5)}, []time.Time{got.FirstTransaction, got.LastTransaction})
 }
 
-func Test_holdings_counts_a_cash_only_and_a_future_dated_transaction_in_the_span(t *testing.T) {
+func Test_holdings_returns_a_transaction_span_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	cash := buy(acctOne, secAcme, 1, march(1), 0)
-	cash.Action, cash.SecurityID, cash.Shares = "div", nil, nil
-	future := localToday().AddDate(0, 0, 3)
-	st := newStoreWith(t, holdingRows(cash, buy(acctOne, secAcme, 2, march(2), oneShare), buy(acctOne, secAcme, 3, future, oneShare)))
+	for _, c := range otherFaults("SELECT min", 2) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	got := holdingsRead(t, st, march(2))
+			_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: march(2)})
 
-	assert.Equal(t, []time.Time{march(1), future}, []time.Time{got.FirstTransaction, got.LastTransaction})
-}
-
-func Test_holdings_returns_the_transaction_span_query_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, queryFault: fault}))
-
-	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: march(2)})
-
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_holdings_returns_a_transaction_span_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, scanFault: errScanFailed}))
-
-	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: march(2)})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_holdings_view_takes_the_latest_price_on_or_before_the_date(t *testing.T) {
@@ -705,15 +707,38 @@ func dayList(days ...time.Time) string {
 	return strings.Join(texts, ",")
 }
 
-func Test_holdings_view_lists_each_day_of_a_closed_span_from_the_first_to_the_last(t *testing.T) {
+func Test_holdings_view_lists_each_day_a_holding_is_held_and_none_between_spans(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, holdingRows(
-		buy(acctOne, secAcme, 1, march(1), oneShare),
-		buy(acctOne, secAcme, 2, march(4), -oneShare)))
+	cases := []struct {
+		name string
+		txns []store.InvestmentTransaction
+		want string
+	}{
+		{
+			name: "each_day_of_a_closed_span_from_the_first_to_the_last",
+			txns: []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(4), -oneShare)},
+			want: dayList(march(1), march(2), march(3)),
+		},
+		{
+			name: "none_between_two_spans_of_one_holding",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(3), -oneShare),
+				buy(acctOne, secAcme, 3, march(5), oneShare), buy(acctOne, secAcme, 4, march(7), -oneShare),
+			},
+			want: dayList(march(1), march(2), march(5), march(6)),
+		},
+	}
 
-	got := queryTexts(t, st, heldDaysQuery)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWith(t, holdingRows(c.txns...))
 
-	assert.Equal(t, [][]string{{dayList(march(1), march(2), march(3))}}, got)
+			got := queryTexts(t, st, heldDaysQuery)
+
+			assert.Equal(t, [][]string{{c.want}}, got)
+		})
+	}
 }
 
 func Test_holdings_view_stops_each_span_at_today(t *testing.T) {
@@ -737,6 +762,11 @@ func Test_holdings_view_stops_each_span_at_today(t *testing.T) {
 			},
 			want: dayList(daysAgo(1), today),
 		},
+		{
+			name: "a span that starts after today has no rows",
+			txns: []store.InvestmentTransaction{buy(acctOne, secAcme, 1, today.AddDate(0, 0, 3), oneShare)},
+			want: dayList(),
+		},
 	}
 
 	for _, c := range cases {
@@ -751,47 +781,38 @@ func Test_holdings_view_stops_each_span_at_today(t *testing.T) {
 	}
 }
 
-func Test_holdings_view_has_no_rows_for_a_span_that_starts_after_today(t *testing.T) {
+func Test_holdings_view_has_one_row_a_day_with_the_shares_held_that_day(t *testing.T) {
 	t.Parallel()
-	st := newStoreWith(t, holdingRows(buy(acctOne, secAcme, 1, localToday().AddDate(0, 0, 3), oneShare)))
+	cases := []struct {
+		name string
+		txns []store.InvestmentTransaction
+		want [][]string
+	}{
+		{
+			name: "where_two_spans_meet",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(3), oneShare),
+				buy(acctOne, secAcme, 3, march(5), -2*oneShare),
+			},
+			want: [][]string{{"2026-03-01", "1.000000"}, {"2026-03-02", "1.000000"}, {"2026-03-03", "2.000000"}, {"2026-03-04", "2.000000"}},
+		},
+		{
+			name: "across_a_span_of_negative_shares",
+			txns: []store.InvestmentTransaction{buy(acctOne, secAcme, 1, march(1), -oneShare), buy(acctOne, secAcme, 2, march(3), oneShare)},
+			want: [][]string{{"2026-03-01", "-1.000000"}, {"2026-03-02", "-1.000000"}},
+		},
+	}
 
-	got := queryTexts(t, st, heldDaysQuery)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWith(t, holdingRows(c.txns...))
 
-	assert.Equal(t, [][]string{{""}}, got)
-}
+			got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), CAST(shares AS VARCHAR) FROM v_holdings ORDER BY date")
 
-func Test_holdings_view_has_no_rows_between_two_spans_of_one_holding(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, holdingRows(
-		buy(acctOne, secAcme, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(3), -oneShare),
-		buy(acctOne, secAcme, 3, march(5), oneShare), buy(acctOne, secAcme, 4, march(7), -oneShare)))
-
-	got := queryTexts(t, st, heldDaysQuery)
-
-	assert.Equal(t, [][]string{{dayList(march(1), march(2), march(5), march(6))}}, got)
-}
-
-func Test_holdings_view_has_one_row_a_day_where_two_spans_meet(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, holdingRows(
-		buy(acctOne, secAcme, 1, march(1), oneShare), buy(acctOne, secAcme, 2, march(3), oneShare),
-		buy(acctOne, secAcme, 3, march(5), -2*oneShare)))
-
-	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), CAST(shares AS VARCHAR) FROM v_holdings ORDER BY date")
-
-	assert.Equal(t, [][]string{
-		{"2026-03-01", "1.000000"}, {"2026-03-02", "1.000000"}, {"2026-03-03", "2.000000"}, {"2026-03-04", "2.000000"},
-	}, got)
-}
-
-func Test_holdings_view_expands_a_span_of_negative_shares(t *testing.T) {
-	t.Parallel()
-	st := newStoreWith(t, holdingRows(
-		buy(acctOne, secAcme, 1, march(1), -oneShare), buy(acctOne, secAcme, 2, march(3), oneShare)))
-
-	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), CAST(shares AS VARCHAR) FROM v_holdings ORDER BY date")
-
-	assert.Equal(t, [][]string{{"2026-03-01", "-1.000000"}, {"2026-03-02", "-1.000000"}}, got)
+			assert.Equal(t, c.want, got)
+		})
+	}
 }
 
 func Test_holdings_view_lists_a_holding_whose_security_row_is_missing(t *testing.T) {
