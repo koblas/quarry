@@ -143,21 +143,6 @@ func acbActions(result report.ACB) []string {
 	return actions
 }
 
-func Test_acb_raises_the_acb_by_a_reinvested_distribution(t *testing.T) {
-	got := acbWalkAdjusted(t, []report.ACBAdjustment{acbAdjustment(t, "sec-1", "2024-06-30", 0, 250)}, acbBuyOfTen(t))
-
-	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: 1_250}}, acbPositionRows(got))
-	assert.Equal(t, []acbAdjustmentRow{{Action: "reinvested distribution", CAD: -250, ACB: 1_250}}, acbAdjustmentRows(t, got))
-	assert.Empty(t, got.AdjustmentIssues)
-}
-
-func Test_acb_lowers_the_acb_by_a_return_of_capital(t *testing.T) {
-	got := acbWalkAdjusted(t, []report.ACBAdjustment{acbAdjustment(t, "sec-1", "2024-06-30", 300, 0)}, acbBuyOfTen(t))
-
-	assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: 700}}, acbPositionRows(got))
-	assert.Equal(t, []acbAdjustmentRow{{Action: "return of capital", CAD: 300, ACB: 700}}, acbAdjustmentRows(t, got))
-}
-
 func Test_acb_describes_an_adjustment_event_as_moving_no_shares_and_belonging_to_no_transaction(t *testing.T) {
 	got := acbWalkAdjusted(t, []report.ACBAdjustment{acbAdjustment(t, "sec-1", "2024-06-30", 0, 250)}, acbBuyOfTen(t))
 
@@ -491,22 +476,6 @@ func Test_acb_converts_usd_at_the_rate_on_or_before_the_date(t *testing.T) {
 	}
 }
 
-func Test_acb_converts_a_usd_sales_proceeds_and_outlays_each_at_its_rate(t *testing.T) {
-	commission := int64(10_050)
-	sell := acbTx(t, 2, "acct-3", "sec-1", "2024-01-10", store.ActionSell, "USD", -10*acbMillion, 12_000)
-	sell.Commission = &commission
-
-	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")},
-		[]store.Rate{acbRate(t, "2024-01-02", 1_300_000), acbRate(t, "2024-01-10", 1_350_000)},
-		acbTx(t, 1, "acct-3", "sec-1", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, -10_000),
-		sell,
-	)
-
-	assert.Equal(t, []acbSaleRow{
-		{Date: "2024-01-10", Security: "sec-1", Shares: "10", Proceeds: 16_336, Outlays: 136, ACBRemoved: 13_000, Gain: 3_200},
-	}, acbSaleRows(got))
-}
-
 func Test_acb_splits_and_consolidates_shares_not_acb(t *testing.T) {
 	buy := acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -1_000)
 	twoForOne := func(sourceID int64, account, date string) store.InvestmentTransaction {
@@ -665,22 +634,6 @@ func Test_acb_gives_the_acb_per_share_in_dollars_and_none_for_an_empty_pool(t *t
 	assert.Nil(t, soldOut.Securities[0].PerShare())
 }
 
-func Test_acb_converts_a_usd_sales_proceeds_and_outlays_together_before_rounding(t *testing.T) {
-	commission := int64(10_100)
-	sell := acbTx(t, 2, "acct-3", "sec-1", "2024-01-10", store.ActionSell, "USD", -10*acbMillion, 1_001)
-	sell.Commission = &commission
-
-	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")},
-		[]store.Rate{acbRate(t, "2024-01-02", 1_500_000)},
-		acbTx(t, 1, "acct-3", "sec-1", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, -1_000),
-		sell,
-	)
-
-	assert.Equal(t, []acbSaleRow{
-		{Date: "2024-01-10", Security: "sec-1", Shares: "10", Proceeds: 1_653, Outlays: 152, ACBRemoved: 1_500, Gain: 1},
-	}, acbSaleRows(got))
-}
-
 const (
 	acbUnclassifiedOne = "acb needs every brokerage and retirement account classified; 1 account is in neither accounts.registered nor accounts.non-registered in " +
 		"~/Library/Application Support/quarry/config.toml; quarry findings --type unclassified-account --status all lists it"
@@ -779,44 +732,6 @@ func Test_acb_names_the_account_of_each_event_and_sale(t *testing.T) {
 	assert.Equal(t, [][2]string{{"acct-1", "Margin"}, {"acct-2", "Old margin"}, {"acct-2", "Old margin"}}, accounts)
 	sale := got.Years[0].Sales[0]
 	assert.Equal(t, [2]string{"acct-2", "Old margin"}, [2]string{sale.AccountID, sale.Account})
-}
-
-func Test_acb_gives_a_usd_event_its_amount_currency_rate_and_cad(t *testing.T) {
-	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")},
-		[]store.Rate{acbRate(t, "2024-01-02", 1_300_000)},
-		acbTx(t, 1, "acct-3", "sec-1", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, -10_000),
-	)
-
-	event := got.Securities[0].Events[0]
-	assert.Equal(t, int64(-10_000), *event.Amount)
-	assert.Equal(t, "USD", event.Currency)
-	assert.Equal(t, int64(1_300_000), int64(event.Rate))
-	assert.Equal(t, int64(-13_000), event.CAD)
-	assert.False(t, event.Unvalued)
-}
-
-func Test_acb_gives_a_cad_event_no_rate_even_when_rates_are_stored(t *testing.T) {
-	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "CAD")},
-		[]store.Rate{acbRate(t, "2024-01-02", 1_300_000)},
-		acbTx(t, 1, "acct-1", "sec-1", "2024-01-02", store.ActionBuy, "CAD", 10*acbMillion, -10_000),
-	)
-
-	event := got.Securities[0].Events[0]
-	assert.Equal(t, int64(-10_000), *event.Amount)
-	assert.Equal(t, "CAD", event.Currency)
-	assert.Zero(t, event.Rate)
-	assert.Equal(t, int64(-10_000), event.CAD)
-}
-
-func Test_acb_leaves_a_usd_event_with_no_rate_on_file_unvalued(t *testing.T) {
-	got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")}, nil,
-		acbTx(t, 1, "acct-3", "sec-1", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, -10_000),
-	)
-
-	event := got.Securities[0].Events[0]
-	assert.Equal(t, int64(-10_000), *event.Amount)
-	assert.Zero(t, event.Rate)
-	assert.True(t, event.Unvalued)
 }
 
 func Test_acb_marks_only_a_sale_realized_and_gives_it_outlays_in_cad(t *testing.T) {
@@ -2081,6 +1996,108 @@ func Test_ACBYear_counts_the_sales_marked_unknown_cost(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			assert.Equal(t, c.want, report.ACBYear{Sales: c.sales}.UnknownCostSales())
+		})
+	}
+}
+
+func Test_acb_moves_the_acb_by_an_adjustment(t *testing.T) {
+	cases := []struct {
+		name                   string
+		returnOfCapital        int64
+		reinvestedDistribution int64
+		wantACB                int64
+		wantRow                acbAdjustmentRow
+	}{
+		{
+			name: "a reinvested distribution raises it", reinvestedDistribution: 250, wantACB: 1_250,
+			wantRow: acbAdjustmentRow{Action: "reinvested distribution", CAD: -250, ACB: 1_250},
+		},
+		{
+			name: "a return of capital lowers it", returnOfCapital: 300, wantACB: 700,
+			wantRow: acbAdjustmentRow{Action: "return of capital", CAD: 300, ACB: 700},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := acbWalkAdjusted(t, []report.ACBAdjustment{acbAdjustment(t, "sec-1", "2024-06-30", c.returnOfCapital, c.reinvestedDistribution)}, acbBuyOfTen(t))
+
+			assert.Equal(t, []acbPositionRow{{Name: "XEQT", Shares: "10", ACB: c.wantACB}}, acbPositionRows(got))
+			assert.Equal(t, []acbAdjustmentRow{c.wantRow}, acbAdjustmentRows(t, got))
+			assert.Empty(t, got.AdjustmentIssues)
+		})
+	}
+}
+
+func Test_acb_converts_a_usd_sales_proceeds_and_outlays(t *testing.T) {
+	cases := []struct {
+		name       string
+		rates      []store.Rate
+		buyAmount  int64
+		sellAmount int64
+		commission int64
+		want       acbSaleRow
+	}{
+		{
+			name:  "each at its rate",
+			rates: []store.Rate{acbRate(t, "2024-01-02", 1_300_000), acbRate(t, "2024-01-10", 1_350_000)}, buyAmount: -10_000, sellAmount: 12_000, commission: 10_050,
+			want: acbSaleRow{Date: "2024-01-10", Security: "sec-1", Shares: "10", Proceeds: 16_336, Outlays: 136, ACBRemoved: 13_000, Gain: 3_200},
+		},
+		{
+			name:  "together before rounding",
+			rates: []store.Rate{acbRate(t, "2024-01-02", 1_500_000)}, buyAmount: -1_000, sellAmount: 1_001, commission: 10_100,
+			want: acbSaleRow{Date: "2024-01-10", Security: "sec-1", Shares: "10", Proceeds: 1_653, Outlays: 152, ACBRemoved: 1_500, Gain: 1},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sell := acbTx(t, 2, "acct-3", "sec-1", "2024-01-10", store.ActionSell, "USD", -10*acbMillion, c.sellAmount)
+			sell.Commission = &c.commission
+
+			got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", "USD")}, c.rates,
+				acbTx(t, 1, "acct-3", "sec-1", "2024-01-02", store.ActionBuy, "USD", 10*acbMillion, c.buyAmount),
+				sell,
+			)
+
+			assert.Equal(t, []acbSaleRow{c.want}, acbSaleRows(got))
+		})
+	}
+}
+
+func Test_acb_gives_an_event_its_amount_currency_rate_and_cad(t *testing.T) {
+	cases := []struct {
+		name         string
+		currency     string
+		account      string
+		rates        []store.Rate
+		wantRate     int64
+		wantCAD      int64
+		wantUnvalued bool
+	}{
+		{
+			name: "a usd event", currency: "USD", account: "acct-3", rates: []store.Rate{acbRate(t, "2024-01-02", 1_300_000)},
+			wantRate: 1_300_000, wantCAD: -13_000,
+		},
+		{
+			name: "a cad event has no rate even when rates are stored", currency: "CAD", account: "acct-1", rates: []store.Rate{acbRate(t, "2024-01-02", 1_300_000)},
+			wantCAD: -10_000,
+		},
+		{name: "a usd event with no rate on file is unvalued", currency: "USD", account: "acct-3", wantUnvalued: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := acbWalkWith(t, []store.Security{acbSecurity("sec-1", "XEQT", c.currency)}, c.rates,
+				acbTx(t, 1, c.account, "sec-1", "2024-01-02", store.ActionBuy, c.currency, 10*acbMillion, -10_000),
+			)
+
+			event := got.Securities[0].Events[0]
+			assert.Equal(t, int64(-10_000), *event.Amount)
+			assert.Equal(t, c.wantRate, int64(event.Rate))
+			assert.Equal(t, c.wantUnvalued, event.Unvalued)
+			assert.Equal(t, c.currency, event.Currency)
+			assert.Equal(t, c.wantCAD, event.CAD)
 		})
 	}
 }

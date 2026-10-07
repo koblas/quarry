@@ -165,7 +165,7 @@ func Test_acb_refuses_a_store_it_cannot_read(t *testing.T) {
 
 	_, err := srv.ACB(t.Context(), report.ACBRequest{Classification: acbClassification(), Today: acbToday})
 
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
+	assert.EqualError(t, err, missingStoreRefusal)
 }
 
 func Test_acb_reports_an_interrupt_during_the_read(t *testing.T) {

@@ -313,7 +313,7 @@ func Test_anomalies_refuse_when_the_accounts_read_fails_to_open_the_store(t *tes
 
 	_, err := srv.Anomalies(t.Context(), report.AnomaliesRequest{Window: thisYear, Now: recurringNow, Accounts: []string{"Visa"}})
 
-	require.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
+	require.EqualError(t, err, missingStoreRefusal)
 	assert.Zero(t, reads)
 }
 
@@ -789,16 +789,6 @@ func Test_anomalies_count_nothing_for_an_unconverted_charge_in_an_account_that_w
 	assert.Zero(t, got.Unconverted.Transactions)
 }
 
-func Test_anomalies_read_the_charges_once_whatever_the_reporting_currency(t *testing.T) {
-	reads := 0
-	srv := report.NewServer(report.WithStore(fakeStore{chargesReads: &reads}))
-
-	_, err := srv.Anomalies(t.Context(), report.AnomaliesRequest{Window: thisYear, Now: recurringNow, Currency: money.USD})
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, reads)
-}
-
 // anomaliesIn is the Anomalies read over charges, in window, at recurringNow.
 func anomaliesIn(t *testing.T, window store.Window, charges []store.Charge) report.Anomalies {
 	t.Helper()
@@ -1025,29 +1015,6 @@ func Test_anomalies_state_the_multiple_to_a_tenth_rounded_half_away_from_zero(t 
 	}
 }
 
-func Test_anomalies_read_the_charges_once_through_today_whatever_the_window(t *testing.T) {
-	var got store.ChargeParams
-	reads := 0
-	srv := report.NewServer(report.WithStore(fakeStore{gotCharges: &got, chargesReads: &reads}))
-	window := store.Window{Since: allTime.Since, Until: dateOf(t, "2030-12-31")}
-
-	_, err := srv.Anomalies(t.Context(), report.AnomaliesRequest{Window: window, Now: recurringNow})
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, reads)
-	assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
-}
-
-func Test_anomalies_read_the_charges_through_the_local_date_when_the_utc_date_is_later(t *testing.T) {
-	var got store.ChargeParams
-	srv := report.NewServer(report.WithStore(fakeStore{gotCharges: &got}))
-
-	_, err := srv.Anomalies(t.Context(), report.AnomaliesRequest{Window: thisYear, Now: windowNow})
-
-	require.NoError(t, err)
-	assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
-}
-
 func Test_anomalies_return_the_window_and_the_transaction_span_of_the_read(t *testing.T) {
 	span := store.TransactionRange{First: dateOf(t, "2003-01-04"), Last: dateOf(t, "2026-09-26")}
 	srv := report.NewServer(report.WithStore(fakeStore{charges: store.Charges{Transactions: span}}))
@@ -1067,7 +1034,7 @@ func Test_anomalies_refuse_a_store_that_cannot_be_opened(t *testing.T) {
 
 	refusal, ok := errors.AsType[report.RefusalError](err)
 	require.True(t, ok)
-	assert.Equal(t, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it", refusal.Error())
+	assert.Equal(t, missingStoreRefusal, refusal.Error())
 }
 
 func Test_anomalies_pass_on_a_charges_read_fault_that_is_not_a_refusal(t *testing.T) {
@@ -1154,6 +1121,31 @@ func Test_anomalies_list_newest_first_then_by_descending_source_id(t *testing.T)
 				ids = append(ids, a.SourceID)
 			}
 			assert.Equal(t, c.wantSourceIDs, ids)
+		})
+	}
+}
+
+func Test_anomalies_read_the_charges_once_through_today(t *testing.T) {
+	cases := []struct {
+		name string
+		req  report.AnomaliesRequest
+	}{
+		{name: "whatever the reporting currency", req: report.AnomaliesRequest{Window: thisYear, Now: recurringNow, Currency: money.USD}},
+		{name: "whatever the window", req: report.AnomaliesRequest{Window: store.Window{Since: allTime.Since, Until: dateOf(t, "2030-12-31")}, Now: recurringNow}},
+		{name: "through the local date when the utc date is later", req: report.AnomaliesRequest{Window: thisYear, Now: windowNow}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got store.ChargeParams
+			reads := 0
+			srv := report.NewServer(report.WithStore(fakeStore{gotCharges: &got, chargesReads: &reads}))
+
+			_, err := srv.Anomalies(t.Context(), c.req)
+
+			require.NoError(t, err)
+			assert.Equal(t, 1, reads)
+			assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
 		})
 	}
 }

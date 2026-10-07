@@ -74,97 +74,6 @@ func Test_findings_groups_open_findings_by_type_in_display_order_and_omits_empty
 	assert.Equal(t, []finding.Type{finding.Duplicate, finding.OneSidedTransfer, finding.Uncategorized}, types)
 }
 
-func Test_findings_sorts_a_duplicate_group_by_the_pairs_later_date_descending_then_id(t *testing.T) {
-	got := findingsOf(t,
-		dated("duplicate:txn-9+txn-10", finding.Duplicate, march1, march3),
-		dated("duplicate:txn-5+txn-6", finding.Duplicate, march2, march2),
-		dated("duplicate:txn-7+txn-8", finding.Duplicate, march1, march3),
-		dated("duplicate:txn-1+txn-2", finding.Duplicate, march1, march1))
-
-	assert.Equal(t, []string{
-		"duplicate:txn-7+txn-8", "duplicate:txn-9+txn-10", "duplicate:txn-5+txn-6", "duplicate:txn-1+txn-2",
-	}, idsOf(got.Groups[0]))
-}
-
-func Test_findings_sorts_an_unlinked_transfer_group_by_the_pairs_later_date_descending_then_id(t *testing.T) {
-	got := findingsOf(t,
-		dated("unlinked-transfer:txn-9+txn-10", finding.UnlinkedTransfer, march3, march1),
-		dated("unlinked-transfer:txn-5+txn-6", finding.UnlinkedTransfer, march2, march2),
-		dated("unlinked-transfer:txn-7+txn-8", finding.UnlinkedTransfer, march1, march3),
-		dated("unlinked-transfer:txn-1+txn-2", finding.UnlinkedTransfer, march1, march1))
-
-	assert.Equal(t, []string{
-		"unlinked-transfer:txn-7+txn-8", "unlinked-transfer:txn-9+txn-10", "unlinked-transfer:txn-5+txn-6", "unlinked-transfer:txn-1+txn-2",
-	}, idsOf(got.Groups[0]))
-}
-
-func Test_findings_sorts_a_one_sided_group_by_date_descending_then_id(t *testing.T) {
-	got := findingsOf(t,
-		dated("one-sided-transfer:xfer-9", finding.OneSidedTransfer, march1),
-		dated("one-sided-transfer:xfer-2", finding.OneSidedTransfer, march2),
-		dated("one-sided-transfer:xfer-1", finding.OneSidedTransfer, march1))
-
-	assert.Equal(t, []string{"one-sided-transfer:xfer-2", "one-sided-transfer:xfer-1", "one-sided-transfer:xfer-9"}, idsOf(got.Groups[0]))
-}
-
-func Test_findings_sorts_an_uncategorized_group_by_item_count_descending_then_payee_ignoring_case_then_id(t *testing.T) {
-	got := findingsOf(t,
-		paid("uncategorized:payee-1", "amazon", 2),
-		paid("uncategorized:payee-2", "Zed", 3),
-		paid("uncategorized:payee-4", "Bakery", 2),
-		paid("uncategorized:payee-3", "Bakery", 2),
-		paid("uncategorized:payee-5", "Bakery", 1))
-
-	assert.Equal(t, []string{
-		"uncategorized:payee-2", "uncategorized:payee-1", "uncategorized:payee-3", "uncategorized:payee-4", "uncategorized:payee-5",
-	}, idsOf(got.Groups[0]))
-}
-
-func Test_findings_sorts_a_mixed_categories_group_by_transaction_sum_descending_then_payee_ignoring_case_then_id(t *testing.T) {
-	got := findingsOf(t,
-		mixed("mixed-categories:payee-1", "Zed", 10),
-		mixed("mixed-categories:payee-2", "amazon", 10),
-		mixed("mixed-categories:payee-3", "Bakery", 3, 3),
-		mixed("mixed-categories:payee-4", "Bakery", 3, 3),
-		mixed("mixed-categories:payee-5", "Cafe", 40),
-		mixed("mixed-categories:payee-6", "Dairy", 30, 30))
-
-	assert.Equal(t, []string{
-		"mixed-categories:payee-6", "mixed-categories:payee-5", "mixed-categories:payee-2", "mixed-categories:payee-1",
-		"mixed-categories:payee-3", "mixed-categories:payee-4",
-	}, idsOf(got.Groups[0]))
-}
-
-func Test_findings_sorts_a_payee_variants_group_by_transaction_sum_descending_then_id(t *testing.T) {
-	got := findingsOf(t,
-		variants("payee-variants:a", 3),
-		variants("payee-variants:c", 10),
-		variants("payee-variants:b", 6, 4),
-		variants("payee-variants:d", 40))
-
-	assert.Equal(t, []string{"payee-variants:d", "payee-variants:b", "payee-variants:c", "payee-variants:a"}, idsOf(got.Groups[0]))
-}
-
-func Test_findings_sorts_a_similar_categories_group_by_split_sum_descending_then_id(t *testing.T) {
-	got := findingsOf(t,
-		similar("similar-categories:a", 3),
-		similar("similar-categories:c", 10),
-		similar("similar-categories:b", 6, 4),
-		similar("similar-categories:d", 40))
-
-	assert.Equal(t, []string{"similar-categories:d", "similar-categories:b", "similar-categories:c", "similar-categories:a"}, idsOf(got.Groups[0]))
-}
-
-func Test_findings_sorts_unused_categories_by_path_ignoring_case_then_id(t *testing.T) {
-	got := findingsOf(t,
-		unused("unused-category:cat-1", "Bank"),
-		unused("unused-category:cat-9", "auto:parking"),
-		unused("unused-category:cat-20", "Zoo"),
-		unused("unused-category:cat-10", "Auto:Parking"))
-
-	assert.Equal(t, []string{"unused-category:cat-10", "unused-category:cat-9", "unused-category:cat-1", "unused-category:cat-20"}, idsOf(got.Groups[0]))
-}
-
 func Test_findings_counts_ignored_and_fixed_findings_without_listing_them(t *testing.T) {
 	fixed := store.Finding{ID: "uncategorized:payee-2", Type: finding.Uncategorized, FixedAt: &fixedAt}
 	srv := report.NewServer(report.WithStore(fakeStore{findings: store.FindingList{Findings: []store.Finding{
@@ -223,7 +132,7 @@ func Test_findings_refuses_with_the_store_refusal_copy(t *testing.T) {
 
 	_, err := srv.Findings(t.Context(), report.FindingsRequest{})
 
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
+	assert.EqualError(t, err, missingStoreRefusal)
 }
 
 func Test_findings_returns_a_store_fault_that_is_not_a_refusal_unchanged(t *testing.T) {
@@ -243,15 +152,6 @@ func Test_findings_reports_an_interrupt_before_any_store_refusal(t *testing.T) {
 	_, err := srv.Findings(ctx, report.FindingsRequest{})
 
 	assert.EqualError(t, err, "findings interrupted")
-}
-
-func Test_findings_sorts_an_uncategorized_finding_with_no_items_after_those_with_items_and_by_id(t *testing.T) {
-	got := findingsOf(t,
-		paid("uncategorized:payee-2", "", 0),
-		paid("uncategorized:payee-3", "Bakery", 1),
-		paid("uncategorized:payee-1", "", 0))
-
-	assert.Equal(t, []string{"uncategorized:payee-3", "uncategorized:payee-1", "uncategorized:payee-2"}, idsOf(got.Groups[0]))
 }
 
 func Test_findings_neither_counts_nor_lists_a_finding_of_a_type_it_does_not_know(t *testing.T) {
@@ -361,22 +261,6 @@ func Test_findings_lists_only_the_requested_type(t *testing.T) {
 	assert.Equal(t, map[finding.Type][]string{finding.Uncategorized: {openPayee, fixedPayee}}, listIDs(got))
 }
 
-func Test_findings_counts_follow_the_type_filter_not_the_status_filter(t *testing.T) {
-	req := report.FindingsRequest{Status: finding.StatusIgnored, Type: finding.Duplicate, Ignore: []string{ignoredDuplicate}}
-
-	got := findingsWith(t, req, mixedFindings()...)
-
-	assert.Equal(t, finding.Counts{Open: 1, Ignored: 1, Fixed: 1}, got.Counts)
-}
-
-func Test_findings_counts_every_type_when_none_is_requested(t *testing.T) {
-	req := report.FindingsRequest{Status: finding.StatusIgnored, Ignore: []string{ignoredDuplicate}}
-
-	got := findingsWith(t, req, mixedFindings()...)
-
-	assert.Equal(t, finding.Counts{Open: 2, Ignored: 1, Fixed: 2}, got.Counts)
-}
-
 func Test_findings_reports_unmatched_ignore_ids_even_when_type_filters_their_finding_out(t *testing.T) {
 	req := report.FindingsRequest{Type: finding.Duplicate, Ignore: []string{openPayee, "duplicate:txn-99+txn-100"}}
 
@@ -461,50 +345,6 @@ func newlyFixed(id string, typ finding.Type) store.Finding {
 	return f
 }
 
-func Test_findingCounts_tallies_each_status_and_the_new_and_newly_fixed_findings(t *testing.T) {
-	got := findingCountsOf(t, []string{ignoredDuplicate},
-		dated(openDuplicate, finding.Duplicate, march1),
-		newFinding(openPayee, finding.Uncategorized),
-		dated(ignoredDuplicate, finding.Duplicate, march3),
-		newlyFixed(fixedDuplicate, finding.Duplicate))
-
-	assert.Equal(t, finding.Counts{Open: 2, Ignored: 1, Fixed: 1, New: 1, NewlyFixed: 1}, got)
-}
-
-func Test_findingCounts_counts_an_ignored_fixed_finding_as_fixed(t *testing.T) {
-	got := findingCountsOf(t, []string{fixedDuplicate}, gone(fixedDuplicate, finding.Duplicate, fixedAt))
-
-	assert.Equal(t, finding.Counts{Fixed: 1}, got)
-}
-
-func Test_findingCounts_does_not_count_an_ignored_new_finding_as_new(t *testing.T) {
-	got := findingCountsOf(t, []string{openPayee}, newFinding(openPayee, finding.Uncategorized))
-
-	assert.Equal(t, finding.Counts{Ignored: 1}, got)
-}
-
-func Test_findingCounts_counts_every_finding_as_open_when_nothing_is_ignored(t *testing.T) {
-	got := findingCountsOf(t, nil,
-		dated(openDuplicate, finding.Duplicate, march1),
-		dated(ignoredDuplicate, finding.Duplicate, march3))
-
-	assert.Equal(t, finding.Counts{Open: 2}, got)
-}
-
-func Test_findingCounts_ignores_an_id_that_names_no_finding(t *testing.T) {
-	got := findingCountsOf(t, []string{"duplicate:txn-98+txn-99"}, dated(openDuplicate, finding.Duplicate, march1))
-
-	assert.Equal(t, finding.Counts{Open: 1}, got)
-}
-
-func Test_findingCounts_skips_a_finding_of_a_type_this_binary_does_not_know(t *testing.T) {
-	got := findingCountsOf(t, nil,
-		dated(openDuplicate, finding.Duplicate, march1),
-		dated("mystery:thing-1", finding.Type("mystery"), march1))
-
-	assert.Equal(t, finding.Counts{Open: 1}, got)
-}
-
 func Test_findingCounts_counts_an_unclassified_account_open_and_never_new(t *testing.T) {
 	got := unclassifiedCounts(nil, report.Classification{}, brokerage("acct-1", "TFSA"), brokerage("acct-2", "Margin"))
 
@@ -544,4 +384,185 @@ func Test_findingCounts_adds_an_unclassified_account_to_the_stored_findings(t *t
 	got := report.CountFindings(st, nil, report.Classification{})
 
 	assert.Equal(t, finding.Counts{Open: 2}, got)
+}
+
+func Test_findings_sorts_each_group(t *testing.T) {
+	cases := []struct {
+		name     string
+		findings []store.Finding
+		want     []string
+	}{
+		{
+			name: "a duplicate group by the pairs later date descending then id",
+			findings: []store.Finding{
+				dated("duplicate:txn-9+txn-10", finding.Duplicate, march1, march3),
+				dated("duplicate:txn-5+txn-6", finding.Duplicate, march2, march2),
+				dated("duplicate:txn-7+txn-8", finding.Duplicate, march1, march3),
+				dated("duplicate:txn-1+txn-2", finding.Duplicate, march1, march1),
+			},
+			want: []string{"duplicate:txn-7+txn-8", "duplicate:txn-9+txn-10", "duplicate:txn-5+txn-6", "duplicate:txn-1+txn-2"},
+		},
+		{
+			name: "an unlinked transfer group by the pairs later date descending then id",
+			findings: []store.Finding{
+				dated("unlinked-transfer:txn-9+txn-10", finding.UnlinkedTransfer, march3, march1),
+				dated("unlinked-transfer:txn-5+txn-6", finding.UnlinkedTransfer, march2, march2),
+				dated("unlinked-transfer:txn-7+txn-8", finding.UnlinkedTransfer, march1, march3),
+				dated("unlinked-transfer:txn-1+txn-2", finding.UnlinkedTransfer, march1, march1),
+			},
+			want: []string{
+				"unlinked-transfer:txn-7+txn-8", "unlinked-transfer:txn-9+txn-10", "unlinked-transfer:txn-5+txn-6", "unlinked-transfer:txn-1+txn-2",
+			},
+		},
+		{
+			name: "a one sided group by date descending then id",
+			findings: []store.Finding{
+				dated("one-sided-transfer:xfer-9", finding.OneSidedTransfer, march1),
+				dated("one-sided-transfer:xfer-2", finding.OneSidedTransfer, march2),
+				dated("one-sided-transfer:xfer-1", finding.OneSidedTransfer, march1),
+			},
+			want: []string{"one-sided-transfer:xfer-2", "one-sided-transfer:xfer-1", "one-sided-transfer:xfer-9"},
+		},
+		{
+			name: "an uncategorized group by item count descending then payee ignoring case then id",
+			findings: []store.Finding{
+				paid("uncategorized:payee-1", "amazon", 2),
+				paid("uncategorized:payee-2", "Zed", 3),
+				paid("uncategorized:payee-4", "Bakery", 2),
+				paid("uncategorized:payee-3", "Bakery", 2),
+				paid("uncategorized:payee-5", "Bakery", 1),
+			},
+			want: []string{"uncategorized:payee-2", "uncategorized:payee-1", "uncategorized:payee-3", "uncategorized:payee-4", "uncategorized:payee-5"},
+		},
+		{
+			name: "a mixed categories group by transaction sum descending then payee ignoring case then id",
+			findings: []store.Finding{
+				mixed("mixed-categories:payee-1", "Zed", 10),
+				mixed("mixed-categories:payee-2", "amazon", 10),
+				mixed("mixed-categories:payee-3", "Bakery", 3, 3),
+				mixed("mixed-categories:payee-4", "Bakery", 3, 3),
+				mixed("mixed-categories:payee-5", "Cafe", 40),
+				mixed("mixed-categories:payee-6", "Dairy", 30, 30),
+			},
+			want: []string{
+				"mixed-categories:payee-6", "mixed-categories:payee-5", "mixed-categories:payee-2", "mixed-categories:payee-1",
+				"mixed-categories:payee-3", "mixed-categories:payee-4",
+			},
+		},
+		{
+			name: "a payee variants group by transaction sum descending then id",
+			findings: []store.Finding{
+				variants("payee-variants:a", 3), variants("payee-variants:c", 10), variants("payee-variants:b", 6, 4), variants("payee-variants:d", 40),
+			},
+			want: []string{"payee-variants:d", "payee-variants:b", "payee-variants:c", "payee-variants:a"},
+		},
+		{
+			name: "a similar categories group by split sum descending then id",
+			findings: []store.Finding{
+				similar("similar-categories:a", 3), similar("similar-categories:c", 10), similar("similar-categories:b", 6, 4), similar("similar-categories:d", 40),
+			},
+			want: []string{"similar-categories:d", "similar-categories:b", "similar-categories:c", "similar-categories:a"},
+		},
+		{
+			name: "unused categories by path ignoring case then id",
+			findings: []store.Finding{
+				unused("unused-category:cat-1", "Bank"), unused("unused-category:cat-9", "auto:parking"),
+				unused("unused-category:cat-20", "Zoo"), unused("unused-category:cat-10", "Auto:Parking"),
+			},
+			want: []string{"unused-category:cat-10", "unused-category:cat-9", "unused-category:cat-1", "unused-category:cat-20"},
+		},
+		{
+			name: "an uncategorized finding with no items after those with items and by id",
+			findings: []store.Finding{
+				paid("uncategorized:payee-2", "", 0), paid("uncategorized:payee-3", "Bakery", 1), paid("uncategorized:payee-1", "", 0),
+			},
+			want: []string{"uncategorized:payee-3", "uncategorized:payee-1", "uncategorized:payee-2"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := findingsOf(t, c.findings...)
+
+			assert.Equal(t, c.want, idsOf(got.Groups[0]))
+		})
+	}
+}
+
+func Test_findings_counts_follow_the_type_filter_not_the_status_filter(t *testing.T) {
+	cases := []struct {
+		name string
+		req  report.FindingsRequest
+		want finding.Counts
+	}{
+		{
+			name: "a requested type counts that type in every status",
+			req:  report.FindingsRequest{Status: finding.StatusIgnored, Type: finding.Duplicate, Ignore: []string{ignoredDuplicate}},
+			want: finding.Counts{Open: 1, Ignored: 1, Fixed: 1},
+		},
+		{
+			name: "no requested type counts every type",
+			req:  report.FindingsRequest{Status: finding.StatusIgnored, Ignore: []string{ignoredDuplicate}},
+			want: finding.Counts{Open: 2, Ignored: 1, Fixed: 2},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := findingsWith(t, c.req, mixedFindings()...)
+
+			assert.Equal(t, c.want, got.Counts)
+		})
+	}
+}
+
+func Test_findingCounts_tallies_the_stored_findings(t *testing.T) {
+	cases := []struct {
+		name     string
+		ignore   []string
+		findings []store.Finding
+		want     finding.Counts
+	}{
+		{
+			name: "each status and the new and newly fixed findings", ignore: []string{ignoredDuplicate},
+			findings: []store.Finding{
+				dated(openDuplicate, finding.Duplicate, march1),
+				newFinding(openPayee, finding.Uncategorized),
+				dated(ignoredDuplicate, finding.Duplicate, march3),
+				newlyFixed(fixedDuplicate, finding.Duplicate),
+			},
+			want: finding.Counts{Open: 2, Ignored: 1, Fixed: 1, New: 1, NewlyFixed: 1},
+		},
+		{
+			name: "an ignored fixed finding as fixed", ignore: []string{fixedDuplicate},
+			findings: []store.Finding{gone(fixedDuplicate, finding.Duplicate, fixedAt)},
+			want:     finding.Counts{Fixed: 1},
+		},
+		{
+			name: "an ignored new finding as ignored and not new", ignore: []string{openPayee},
+			findings: []store.Finding{newFinding(openPayee, finding.Uncategorized)},
+			want:     finding.Counts{Ignored: 1},
+		},
+		{
+			name:     "every finding as open when nothing is ignored",
+			findings: []store.Finding{dated(openDuplicate, finding.Duplicate, march1), dated(ignoredDuplicate, finding.Duplicate, march3)},
+			want:     finding.Counts{Open: 2},
+		},
+		{
+			name: "an ignore id that names no finding is ignored", ignore: []string{"duplicate:txn-98+txn-99"},
+			findings: []store.Finding{dated(openDuplicate, finding.Duplicate, march1)},
+			want:     finding.Counts{Open: 1},
+		},
+		{
+			name:     "a finding of a type this binary does not know is skipped",
+			findings: []store.Finding{dated(openDuplicate, finding.Duplicate, march1), dated("mystery:thing-1", finding.Type("mystery"), march1)},
+			want:     finding.Counts{Open: 1},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, findingCountsOf(t, c.ignore, c.findings...))
+		})
+	}
 }

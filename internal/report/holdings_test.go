@@ -41,57 +41,6 @@ func ownHolding(code *string, cents *big.Int) store.Holding {
 	return store.Holding{Currency: code, Value: cents}
 }
 
-func Test_holdings_native_totals_each_stored_currency_cad_then_usd_then_alphabetically(t *testing.T) {
-	rows := []store.Holding{
-		ownHolding(new("GBP"), big.NewInt(1)),
-		ownHolding(new("EUR"), big.NewInt(2)),
-		ownHolding(new("USD"), big.NewInt(3)),
-		ownHolding(new("AUD"), big.NewInt(4)),
-		ownHolding(new("CAD"), big.NewInt(5)),
-	}
-
-	result := holdingsOf(t, rows, money.Native)
-
-	assert.Equal(t, []string{"CAD 5", "USD 3", "AUD 4", "EUR 2", "GBP 1"}, totalValues(result))
-}
-
-func Test_holdings_native_total_sums_the_values_of_one_currency(t *testing.T) {
-	rows := []store.Holding{
-		ownHolding(new("CAD"), big.NewInt(100)),
-		ownHolding(new("USD"), big.NewInt(7)),
-		ownHolding(new("CAD"), big.NewInt(-30)),
-	}
-
-	result := holdingsOf(t, rows, money.Native)
-
-	assert.Equal(t, []string{"CAD 70", "USD 7"}, totalValues(result))
-}
-
-func Test_holdings_native_total_leaves_out_a_security_with_no_currency(t *testing.T) {
-	rows := []store.Holding{ownHolding(new("CAD"), big.NewInt(100)), ownHolding(nil, big.NewInt(900))}
-
-	result := holdingsOf(t, rows, money.Native)
-
-	assert.Equal(t, []string{"CAD 100"}, totalValues(result))
-}
-
-func Test_holdings_native_total_leaves_out_an_unpriced_holding_but_counts_a_zero_value(t *testing.T) {
-	cases := []struct {
-		name string
-		rows []store.Holding
-		want []string
-	}{
-		{name: "an unpriced holding alone gives no total", rows: []store.Holding{ownHolding(new("CAD"), nil)}, want: []string{}},
-		{name: "a zero value alone gives a zero total", rows: []store.Holding{ownHolding(new("CAD"), big.NewInt(0)), ownHolding(new("CAD"), nil)}, want: []string{"CAD 0"}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, totalValues(holdingsOf(t, c.rows, money.Native)))
-		})
-	}
-}
-
 func Test_holdings_reads_the_store_once_for_the_day_asked_and_returns_it_with_the_currency(t *testing.T) {
 	var got store.HoldingsParams
 	var reads int
@@ -135,36 +84,6 @@ func Test_holdings_converts_each_value_to_the_asked_currency(t *testing.T) {
 	}
 }
 
-func Test_holdings_total_is_in_the_asked_currency_and_sums_that_currencys_values(t *testing.T) {
-	rows := []store.Holding{
-		{ValueCAD: big.NewInt(37_704_00), ValueUSD: big.NewInt(1)},
-		{ValueCAD: big.NewInt(33_536_72), ValueUSD: big.NewInt(2)},
-	}
-
-	assert.Equal(t, []string{"CAD 7124072"}, totalValues(holdingsOf(t, rows, money.CAD)))
-	assert.Equal(t, []string{"USD 3"}, totalValues(holdingsOf(t, rows, money.USD)))
-}
-
-func Test_holdings_total_leaves_out_values_with_no_conversion(t *testing.T) {
-	rows := []store.Holding{cadHolding(big.NewInt(100)), cadHolding(nil), cadHolding(big.NewInt(250))}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"CAD 350"}, totalValues(result))
-}
-
-func Test_holdings_total_leaves_out_a_security_quarry_does_not_convert(t *testing.T) {
-	rows := []store.Holding{
-		{Currency: new("CAD"), ValueCAD: big.NewInt(100)},
-		{Currency: nil, Value: big.NewInt(900)},
-		{Currency: new("EUR"), Value: big.NewInt(700)},
-	}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"CAD 100"}, totalValues(result))
-}
-
 func Test_Convertible_is_true_only_for_a_security_in_cad_or_usd(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -185,30 +104,6 @@ func Test_Convertible_is_true_only_for_a_security_in_cad_or_usd(t *testing.T) {
 	}
 }
 
-func Test_holdings_total_sums_values_past_the_int64_range(t *testing.T) {
-	rows := []store.Holding{cadHolding(big.NewInt(math.MaxInt64)), cadHolding(big.NewInt(math.MaxInt64))}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"CAD 18446744073709551614"}, totalValues(result))
-}
-
-func Test_holdings_total_counts_a_negative_value(t *testing.T) {
-	rows := []store.Holding{cadHolding(big.NewInt(500)), cadHolding(big.NewInt(-200))}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"CAD 300"}, totalValues(result))
-}
-
-func Test_holdings_total_is_zero_when_a_zero_value_is_the_only_one_that_converts(t *testing.T) {
-	rows := []store.Holding{cadHolding(big.NewInt(0)), cadHolding(nil)}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"CAD 0"}, totalValues(result))
-}
-
 func Test_holdings_has_no_total_when_no_row_converts(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -219,6 +114,7 @@ func Test_holdings_has_no_total_when_no_row_converts(t *testing.T) {
 		{name: "every row unconverted", rows: []store.Holding{cadHolding(nil), cadHolding(nil)}, currency: money.CAD},
 		{name: "only the other currency converts", rows: []store.Holding{cadHolding(big.NewInt(100))}, currency: money.USD},
 		{name: "a native listing", rows: []store.Holding{{Value: big.NewInt(100), ValueCAD: big.NewInt(100)}}, currency: money.Native},
+		{name: "an unpriced holding has no unconverted entry", rows: []store.Holding{{Currency: new("USD")}}, currency: money.CAD},
 	}
 
 	for _, c := range cases {
@@ -226,15 +122,6 @@ func Test_holdings_has_no_total_when_no_row_converts(t *testing.T) {
 			assert.Empty(t, holdingsOf(t, c.rows, c.currency).Totals)
 		})
 	}
-}
-
-func Test_holdings_refuses_when_the_read_fails_to_open_the_store(t *testing.T) {
-	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
-	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
-
-	_, err := srv.Holdings(t.Context(), report.HoldingsRequest{})
-
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
 }
 
 func Test_holdings_reports_an_interrupt_during_the_read(t *testing.T) {
@@ -321,15 +208,6 @@ func Test_holdings_refuses_an_ambiguous_account_name(t *testing.T) {
 	assert.Zero(t, reads)
 }
 
-func Test_holdings_refuses_when_the_accounts_read_fails_to_open_the_store(t *testing.T) {
-	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
-	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
-
-	_, err := srv.Holdings(t.Context(), report.HoldingsRequest{Accounts: []string{"Chequing"}})
-
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
-}
-
 func Test_holdings_does_not_read_accounts_when_none_is_named(t *testing.T) {
 	var accountsReads int
 	var got store.HoldingsParams
@@ -346,115 +224,6 @@ func Test_holdings_does_not_read_accounts_when_none_is_named(t *testing.T) {
 // pricedHolding is a priced holding in currency code worth cents in it, with no conversion; a nil code is no currency.
 func pricedHolding(code *string, cents int64) store.Holding {
 	return store.Holding{Currency: code, Price: new(int64(1_000_000)), Value: big.NewInt(cents)}
-}
-
-func Test_holdings_needs_rate_is_true_for_a_priced_holding_in_the_other_currency_with_no_conversion(t *testing.T) {
-	cases := []struct {
-		name     string
-		currency money.Currency
-		row      store.Holding
-	}{
-		{name: "USD in a CAD report", currency: money.CAD, row: pricedHolding(new("USD"), 100)},
-		{name: "CAD in a USD report", currency: money.USD, row: pricedHolding(new("CAD"), 100)},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.True(t, report.Holdings{Currency: c.currency}.NeedsRate(c.row))
-		})
-	}
-}
-
-func Test_holdings_needs_rate_is_false_for_a_row_in_the_reporting_currency(t *testing.T) {
-	cases := []struct {
-		name     string
-		currency money.Currency
-		code     string
-	}{
-		{name: "CAD in a CAD report", currency: money.CAD, code: "CAD"},
-		{name: "USD in a USD report", currency: money.USD, code: "USD"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.False(t, report.Holdings{Currency: c.currency}.NeedsRate(pricedHolding(new(c.code), 100)))
-		})
-	}
-}
-
-func Test_holdings_needs_rate_is_false_for_a_security_quarry_does_not_convert(t *testing.T) {
-	cases := []struct {
-		name string
-		code *string
-	}{
-		{name: "another currency", code: new("EUR")},
-		{name: "no currency", code: nil},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.False(t, report.Holdings{Currency: money.CAD}.NeedsRate(pricedHolding(c.code, 100)))
-		})
-	}
-}
-
-func Test_holdings_needs_rate_is_false_when_a_rate_converted_the_row(t *testing.T) {
-	row := pricedHolding(new("USD"), 100)
-	row.ValueCAD = big.NewInt(136)
-
-	assert.False(t, report.Holdings{Currency: money.CAD}.NeedsRate(row))
-}
-
-func Test_holdings_needs_rate_is_false_for_a_holding_with_no_price(t *testing.T) {
-	assert.False(t, report.Holdings{Currency: money.CAD}.NeedsRate(store.Holding{Currency: new("USD")}))
-}
-
-func Test_holdings_needs_rate_is_false_in_a_native_listing(t *testing.T) {
-	assert.False(t, report.Holdings{Currency: money.Native}.NeedsRate(pricedHolding(new("USD"), 100)))
-}
-
-func Test_holdings_total_lists_the_unconverted_currency_when_no_row_converts(t *testing.T) {
-	rows := []store.Holding{pricedHolding(new("USD"), 100), pricedHolding(new("USD"), 50)}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"USD 150"}, totalValues(result))
-}
-
-func Test_holdings_total_lists_the_converted_currency_before_the_unconverted_one(t *testing.T) {
-	cad := pricedHolding(new("CAD"), 300)
-	cad.ValueCAD = big.NewInt(300)
-	rows := []store.Holding{pricedHolding(new("USD"), 100), cad}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"CAD 300", "USD 100"}, totalValues(result))
-}
-
-func Test_holdings_total_of_a_usd_report_lists_the_cad_holdings_it_could_not_convert(t *testing.T) {
-	usd := pricedHolding(new("USD"), 200)
-	usd.ValueUSD = big.NewInt(200)
-	rows := []store.Holding{pricedHolding(new("CAD"), 500), usd}
-
-	result := holdingsOf(t, rows, money.USD)
-
-	assert.Equal(t, []string{"USD 200", "CAD 500"}, totalValues(result))
-}
-
-func Test_holdings_total_counts_a_priced_zero_that_needs_a_rate(t *testing.T) {
-	rows := []store.Holding{pricedHolding(new("USD"), 0)}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Equal(t, []string{"USD 0"}, totalValues(result))
-}
-
-func Test_holdings_total_has_no_unconverted_entry_for_an_unpriced_holding(t *testing.T) {
-	rows := []store.Holding{{Currency: new("USD")}}
-
-	result := holdingsOf(t, rows, money.CAD)
-
-	assert.Empty(t, result.Totals)
 }
 
 func Test_holdings_carries_the_first_rate_date_the_store_read(t *testing.T) {
@@ -479,4 +248,171 @@ func Test_holdings_carries_the_transaction_span_the_store_read_from_one_read(t *
 	require.NoError(t, err)
 	assert.Equal(t, []time.Time{first, last}, []time.Time{result.FirstTransaction, result.LastTransaction})
 	assert.Equal(t, 1, reads)
+}
+
+// withValueCAD is h with a CAD value of cents.
+func withValueCAD(h store.Holding, cents int64) store.Holding {
+	h.ValueCAD = big.NewInt(cents)
+	return h
+}
+
+// withValueUSD is h with a USD value of cents.
+func withValueUSD(h store.Holding, cents int64) store.Holding {
+	h.ValueUSD = big.NewInt(cents)
+	return h
+}
+
+func Test_holdings_totals_by_currency(t *testing.T) {
+	cases := []struct {
+		name     string
+		rows     []store.Holding
+		currency money.Currency
+		want     []string
+	}{
+		{
+			name: "native totals each stored currency cad then usd then alphabetically", currency: money.Native,
+			rows: []store.Holding{
+				ownHolding(new("GBP"), big.NewInt(1)), ownHolding(new("EUR"), big.NewInt(2)), ownHolding(new("USD"), big.NewInt(3)),
+				ownHolding(new("AUD"), big.NewInt(4)), ownHolding(new("CAD"), big.NewInt(5)),
+			},
+			want: []string{"CAD 5", "USD 3", "AUD 4", "EUR 2", "GBP 1"},
+		},
+		{
+			name: "native sums the values of one currency", currency: money.Native,
+			rows: []store.Holding{ownHolding(new("CAD"), big.NewInt(100)), ownHolding(new("USD"), big.NewInt(7)), ownHolding(new("CAD"), big.NewInt(-30))},
+			want: []string{"CAD 70", "USD 7"},
+		},
+		{
+			name: "native leaves out a security with no currency", currency: money.Native,
+			rows: []store.Holding{ownHolding(new("CAD"), big.NewInt(100)), ownHolding(nil, big.NewInt(900))},
+			want: []string{"CAD 100"},
+		},
+		{
+			name: "native leaves out an unpriced holding alone and gives no total", currency: money.Native,
+			rows: []store.Holding{ownHolding(new("CAD"), nil)},
+			want: []string{},
+		},
+		{
+			name: "native counts a zero value alone as a zero total", currency: money.Native,
+			rows: []store.Holding{ownHolding(new("CAD"), big.NewInt(0)), ownHolding(new("CAD"), nil)},
+			want: []string{"CAD 0"},
+		},
+		{
+			name: "cad sums the cad values", currency: money.CAD,
+			rows: []store.Holding{
+				{ValueCAD: big.NewInt(37_704_00), ValueUSD: big.NewInt(1)},
+				{ValueCAD: big.NewInt(33_536_72), ValueUSD: big.NewInt(2)},
+			},
+			want: []string{"CAD 7124072"},
+		},
+		{
+			name: "usd sums the usd values", currency: money.USD,
+			rows: []store.Holding{
+				{ValueCAD: big.NewInt(37_704_00), ValueUSD: big.NewInt(1)},
+				{ValueCAD: big.NewInt(33_536_72), ValueUSD: big.NewInt(2)},
+			},
+			want: []string{"USD 3"},
+		},
+		{
+			name: "values with no conversion are left out", currency: money.CAD,
+			rows: []store.Holding{cadHolding(big.NewInt(100)), cadHolding(nil), cadHolding(big.NewInt(250))},
+			want: []string{"CAD 350"},
+		},
+		{
+			name: "a security quarry does not convert is left out", currency: money.CAD,
+			rows: []store.Holding{
+				{Currency: new("CAD"), ValueCAD: big.NewInt(100)},
+				{Currency: nil, Value: big.NewInt(900)},
+				{Currency: new("EUR"), Value: big.NewInt(700)},
+			},
+			want: []string{"CAD 100"},
+		},
+		{
+			name: "values past the int64 range are summed", currency: money.CAD,
+			rows: []store.Holding{cadHolding(big.NewInt(math.MaxInt64)), cadHolding(big.NewInt(math.MaxInt64))},
+			want: []string{"CAD 18446744073709551614"},
+		},
+		{
+			name: "a negative value is counted", currency: money.CAD,
+			rows: []store.Holding{cadHolding(big.NewInt(500)), cadHolding(big.NewInt(-200))},
+			want: []string{"CAD 300"},
+		},
+		{
+			name: "a zero value is the total when it is the only one that converts", currency: money.CAD,
+			rows: []store.Holding{cadHolding(big.NewInt(0)), cadHolding(nil)},
+			want: []string{"CAD 0"},
+		},
+		{
+			name: "the unconverted currency is listed when no row converts", currency: money.CAD,
+			rows: []store.Holding{pricedHolding(new("USD"), 100), pricedHolding(new("USD"), 50)},
+			want: []string{"USD 150"},
+		},
+		{
+			name: "the converted currency is listed before the unconverted one", currency: money.CAD,
+			rows: []store.Holding{pricedHolding(new("USD"), 100), withValueCAD(pricedHolding(new("CAD"), 300), 300)},
+			want: []string{"CAD 300", "USD 100"},
+		},
+		{
+			name: "a usd report lists the cad holdings it could not convert", currency: money.USD,
+			rows: []store.Holding{pricedHolding(new("CAD"), 500), withValueUSD(pricedHolding(new("USD"), 200), 200)},
+			want: []string{"USD 200", "CAD 500"},
+		},
+		{
+			name: "a priced zero that needs a rate is counted", currency: money.CAD,
+			rows: []store.Holding{pricedHolding(new("USD"), 0)},
+			want: []string{"USD 0"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, totalValues(holdingsOf(t, c.rows, c.currency)))
+		})
+	}
+}
+
+func Test_holdings_needs_rate_only_for_a_priced_holding_in_the_other_currency_with_no_conversion(t *testing.T) {
+	cases := []struct {
+		name     string
+		currency money.Currency
+		row      store.Holding
+		want     bool
+	}{
+		{name: "USD in a CAD report", currency: money.CAD, row: pricedHolding(new("USD"), 100), want: true},
+		{name: "CAD in a USD report", currency: money.USD, row: pricedHolding(new("CAD"), 100), want: true},
+		{name: "CAD in a CAD report", currency: money.CAD, row: pricedHolding(new("CAD"), 100), want: false},
+		{name: "USD in a USD report", currency: money.USD, row: pricedHolding(new("USD"), 100), want: false},
+		{name: "another currency", currency: money.CAD, row: pricedHolding(new("EUR"), 100), want: false},
+		{name: "no currency", currency: money.CAD, row: pricedHolding(nil, 100), want: false},
+		{name: "a row a rate converted", currency: money.CAD, row: withValueCAD(pricedHolding(new("USD"), 100), 136), want: false},
+		{name: "a holding with no price", currency: money.CAD, row: store.Holding{Currency: new("USD")}, want: false},
+		{name: "a native listing", currency: money.Native, row: pricedHolding(new("USD"), 100), want: false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, report.Holdings{Currency: c.currency}.NeedsRate(c.row))
+		})
+	}
+}
+
+func Test_holdings_refuses_when_a_read_fails_to_open_the_store(t *testing.T) {
+	cases := []struct {
+		name string
+		req  report.HoldingsRequest
+	}{
+		{name: "the holdings read", req: report.HoldingsRequest{}},
+		{name: "the accounts read", req: report.HoldingsRequest{Accounts: []string{"Chequing"}}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
+			srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
+
+			_, err := srv.Holdings(t.Context(), c.req)
+
+			assert.EqualError(t, err, missingStoreRefusal)
+		})
+	}
 }

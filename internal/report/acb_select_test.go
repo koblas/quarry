@@ -113,22 +113,6 @@ func Test_acb_refuses_the_first_selector_in_request_order_that_names_nothing_tho
 	assert.Empty(t, got.Securities)
 }
 
-func Test_acb_lists_a_selected_security_held_only_in_registered_accounts(t *testing.T) {
-	got, err := selectACB(t, selectHistory(t), "MPL")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"sec-3"}, got.SelectedIDs)
-	assert.Equal(t, []string{"sec-3"}, securityIDsOf(got.RegisteredOnly))
-}
-
-func Test_acb_counts_a_registered_account_transaction_dated_today_as_held(t *testing.T) {
-	got, err := selectACB(t, selectHistory(t), "TDY")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"sec-13"}, got.SelectedIDs)
-	assert.Equal(t, []string{"sec-13"}, securityIDsOf(got.RegisteredOnly))
-}
-
 func Test_acb_lists_securities_sharing_a_name_by_id_whatever_order_the_request_names_them(t *testing.T) {
 	for range 20 {
 		for _, selectors := range [][]string{{"TWB", "TWA"}, {"TWA", "TWB"}} {
@@ -170,4 +154,25 @@ func Test_acb_lists_ids_of_pooled_and_registered_only_securities_together_in_the
 	require.NoError(t, err)
 	assert.Equal(t, []string{"sec-1", "sec-3"}, got.SelectedIDs)
 	assert.Equal(t, []string{"sec-3"}, securityIDsOf(got.RegisteredOnly))
+}
+
+func Test_acb_lists_a_selected_security_held_only_in_registered_accounts(t *testing.T) {
+	cases := []struct {
+		name     string
+		selector string
+		want     []string
+	}{
+		{name: "a security held only in registered accounts", selector: "MPL", want: []string{"sec-3"}},
+		{name: "a registered account transaction dated today counts as held", selector: "TDY", want: []string{"sec-13"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := selectACB(t, selectHistory(t), c.selector)
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got.SelectedIDs)
+			assert.Equal(t, c.want, securityIDsOf(got.RegisteredOnly))
+		})
+	}
 }

@@ -164,7 +164,7 @@ func Test_networth_refuses_when_the_read_fails_to_open_the_store(t *testing.T) {
 
 	_, err := srv.NetWorth(t.Context(), report.NetWorthRequest{})
 
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
+	assert.EqualError(t, err, missingStoreRefusal)
 }
 
 func Test_networth_reports_an_interrupt_during_the_read(t *testing.T) {
@@ -267,49 +267,6 @@ func Test_networth_types_are_none_when_every_balance_is_zero(t *testing.T) {
 	assert.Empty(t, listing.Types())
 }
 
-func Test_networth_type_converted_sums_the_type_over_currencies_in_the_reporting_currency(t *testing.T) {
-	listing := report.NetWorth{Currency: money.CAD}
-	date := report.NetWorthDate{Rows: []store.NetWorthRow{
-		typedRow("chequing", "CAD", 1, big.NewInt(100)), typedRow("chequing", "USD", 1, big.NewInt(150)),
-		typedRow("savings", "CAD", 1, big.NewInt(9)),
-	}}
-
-	assert.Equal(t, big.NewInt(250), listing.TypeConverted(date, "chequing"))
-}
-
-func Test_networth_type_converted_leaves_out_a_row_no_rate_converts(t *testing.T) {
-	listing := report.NetWorth{Currency: money.CAD}
-	date := report.NetWorthDate{Rows: []store.NetWorthRow{typedRow("chequing", "CAD", 1, big.NewInt(100)), typedRow("chequing", "USD", 1, nil)}}
-
-	assert.Equal(t, big.NewInt(100), listing.TypeConverted(date, "chequing"))
-}
-
-func Test_networth_type_converted_is_nil_when_nothing_of_the_type_converts(t *testing.T) {
-	cases := []struct {
-		name    string
-		listing report.NetWorth
-		rows    []store.NetWorthRow
-	}{
-		{name: "the type has no row", listing: report.NetWorth{Currency: money.CAD}, rows: []store.NetWorthRow{typedRow("savings", "CAD", 1, big.NewInt(9))}},
-		{name: "no row of the type converts", listing: report.NetWorth{Currency: money.CAD}, rows: []store.NetWorthRow{typedRow("chequing", "USD", 1, nil)}},
-		{name: "a native listing converts none", listing: report.NetWorth{Currency: money.Native}, rows: []store.NetWorthRow{typedRow("chequing", "CAD", 1, big.NewInt(9))}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Nil(t, c.listing.TypeConverted(report.NetWorthDate{Rows: c.rows}, "chequing"))
-		})
-	}
-}
-
-func Test_networth_type_balance_is_the_balance_of_that_type_and_currency(t *testing.T) {
-	date := report.NetWorthDate{Rows: []store.NetWorthRow{
-		typedRow("chequing", "CAD", 100, nil), typedRow("chequing", "USD", 250, nil), typedRow("savings", "USD", 9, nil),
-	}}
-
-	assert.Equal(t, big.NewInt(250), date.TypeBalance("chequing", "USD"))
-}
-
 func Test_networth_warns_only_for_a_row_with_a_balance_no_rate_converts(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -391,13 +348,6 @@ func Test_networth_carries_the_date_of_the_first_balance_read_in_a_snapshot_and_
 	assert.Equal(t, []time.Time{first, first}, []time.Time{snapshot.FirstBalance, history.FirstBalance})
 }
 
-func Test_networth_type_balance_is_nil_without_a_row_for_the_type_and_currency(t *testing.T) {
-	date := report.NetWorthDate{Rows: []store.NetWorthRow{typedRow("chequing", "CAD", 100, nil), typedRow("savings", "USD", 9, nil)}}
-
-	assert.Nil(t, date.TypeBalance("chequing", "USD"))
-	assert.Nil(t, date.TypeBalance("brokerage", "CAD"))
-}
-
 func Test_networth_carries_the_unvalued_holdings_of_the_days_listed_and_drops_others(t *testing.T) {
 	listed := store.UnvaluedHolding{Date: netWorthDay, AccountID: "acct-1", SecurityID: "sec-1"}
 	january := store.UnvaluedHolding{Date: day(2026, time.January, 31), AccountID: "acct-1", SecurityID: "sec-2"}
@@ -420,4 +370,76 @@ func Test_networth_snapshot_carries_the_unvalued_holdings_from_its_one_store_rea
 	require.NoError(t, err)
 	assert.Equal(t, []store.UnvaluedHolding{held}, result.Unvalued)
 	assert.Equal(t, 1, reads)
+}
+
+func Test_networth_type_converted(t *testing.T) {
+	cases := []struct {
+		name    string
+		listing report.NetWorth
+		rows    []store.NetWorthRow
+		want    *big.Int
+	}{
+		{
+			name: "sums the type over currencies in the reporting currency", listing: report.NetWorth{Currency: money.CAD},
+			rows: []store.NetWorthRow{
+				typedRow("chequing", "CAD", 1, big.NewInt(100)), typedRow("chequing", "USD", 1, big.NewInt(150)),
+				typedRow("savings", "CAD", 1, big.NewInt(9)),
+			},
+			want: big.NewInt(250),
+		},
+		{
+			name: "leaves out a row no rate converts", listing: report.NetWorth{Currency: money.CAD},
+			rows: []store.NetWorthRow{typedRow("chequing", "CAD", 1, big.NewInt(100)), typedRow("chequing", "USD", 1, nil)},
+			want: big.NewInt(100),
+		},
+		{
+			name: "is nil when the type has no row", listing: report.NetWorth{Currency: money.CAD},
+			rows: []store.NetWorthRow{typedRow("savings", "CAD", 1, big.NewInt(9))},
+		},
+		{
+			name: "is nil when no row of the type converts", listing: report.NetWorth{Currency: money.CAD},
+			rows: []store.NetWorthRow{typedRow("chequing", "USD", 1, nil)},
+		},
+		{
+			name: "is nil for a native listing", listing: report.NetWorth{Currency: money.Native},
+			rows: []store.NetWorthRow{typedRow("chequing", "CAD", 1, big.NewInt(9))},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, c.listing.TypeConverted(report.NetWorthDate{Rows: c.rows}, "chequing"))
+		})
+	}
+}
+
+func Test_networth_type_balance(t *testing.T) {
+	cases := []struct {
+		name     string
+		rows     []store.NetWorthRow
+		kind     string
+		currency string
+		want     *big.Int
+	}{
+		{
+			name: "is the balance of that type and currency", kind: "chequing", currency: "USD", want: big.NewInt(250),
+			rows: []store.NetWorthRow{typedRow("chequing", "CAD", 100, nil), typedRow("chequing", "USD", 250, nil), typedRow("savings", "USD", 9, nil)},
+		},
+		{
+			name: "is nil without a row for the currency", kind: "chequing", currency: "USD",
+			rows: []store.NetWorthRow{typedRow("chequing", "CAD", 100, nil), typedRow("savings", "USD", 9, nil)},
+		},
+		{
+			name: "is nil without a row for the type", kind: "brokerage", currency: "CAD",
+			rows: []store.NetWorthRow{typedRow("chequing", "CAD", 100, nil), typedRow("savings", "USD", 9, nil)},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			date := report.NetWorthDate{Rows: c.rows}
+
+			assert.Equal(t, c.want, date.TypeBalance(c.kind, c.currency))
+		})
+	}
 }

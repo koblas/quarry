@@ -227,56 +227,6 @@ func Test_findings_lists_shares_without_cost_only_in_a_non_registered_account(t 
 	assert.Equal(t, []string{"shares-without-cost:itxn-4", "shares-without-cost:itxn-3"}, sharesIDs(got))
 }
 
-func Test_findings_does_not_list_an_add_of_zero_or_negative_units(t *testing.T) {
-	zero, negative := noCostAdd("itxn-1", "acct-1", 1), noCostAdd("itxn-2", "acct-1", 2)
-	zero.Shares, negative.Shares = new(int64(0)), new(-oneAndHalf)
-	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, zero, negative, noCostAdd("itxn-3", "acct-1", 3))
-
-	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
-
-	assert.Equal(t, []string{"shares-without-cost:itxn-3"}, sharesIDs(got))
-}
-
-func Test_findings_does_not_list_an_add_with_no_unit_count(t *testing.T) {
-	missing := noCostAdd("itxn-1", "acct-1", 1)
-	missing.Shares = nil
-	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, missing, noCostAdd("itxn-2", "acct-1", 2))
-
-	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
-
-	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
-}
-
-func Test_findings_does_not_list_a_reinvest_with_no_cost(t *testing.T) {
-	reinvest := noCostAdd("itxn-1", "acct-1", 1)
-	reinvest.Action = store.ActionReinvestDividend
-	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, reinvest, noCostAdd("itxn-2", "acct-1", 2))
-
-	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
-
-	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
-}
-
-func Test_findings_does_not_list_an_add_that_has_a_cost(t *testing.T) {
-	costed := noCostAdd("itxn-1", "acct-1", 1)
-	costed.CostBasis = new(int64(30_000))
-	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, costed, noCostAdd("itxn-2", "acct-1", 2))
-
-	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
-
-	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
-}
-
-func Test_findings_does_not_list_an_add_that_names_no_security(t *testing.T) {
-	bare := noCostAdd("itxn-1", "acct-1", 1)
-	bare.SecurityID = nil
-	list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, bare, noCostAdd("itxn-2", "acct-1", 2))
-
-	got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
-
-	assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
-}
-
 func Test_findings_lists_a_future_dated_add_with_no_cost(t *testing.T) {
 	future := noCostAdd("itxn-1", "acct-1", 1)
 	future.Date = time.Date(2999, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -399,4 +349,51 @@ func Test_count_findings_counts_no_shares_without_cost_when_the_classification_i
 	got := report.CountFindings(st, []string{"unclassified-account:acct-1"}, report.Classification{})
 
 	assert.Equal(t, finding.Counts{Ignored: 1}, got)
+}
+
+// An add of oneAndHalf shares of sec-1 into acct-1 with no cost, changed in one field.
+
+func addWithShares(tx store.InvestmentTransaction, shares *int64) store.InvestmentTransaction {
+	tx.Shares = shares
+	return tx
+}
+
+func addWithAction(tx store.InvestmentTransaction, action string) store.InvestmentTransaction {
+	tx.Action = action
+	return tx
+}
+
+func addWithCostBasis(tx store.InvestmentTransaction, cents *int64) store.InvestmentTransaction {
+	tx.CostBasis = cents
+	return tx
+}
+
+func addWithSecurity(tx store.InvestmentTransaction, security *string) store.InvestmentTransaction {
+	tx.SecurityID = security
+	return tx
+}
+
+func Test_findings_does_not_list_an_add_that_is_not_shares_without_cost(t *testing.T) {
+	add := noCostAdd("itxn-1", "acct-1", 1)
+	cases := []struct {
+		name    string
+		skipped store.InvestmentTransaction
+	}{
+		{name: "an add of zero units", skipped: addWithShares(add, new(int64(0)))},
+		{name: "an add of negative units", skipped: addWithShares(add, new(-oneAndHalf))},
+		{name: "an add with no unit count", skipped: addWithShares(add, nil)},
+		{name: "a reinvest with no cost", skipped: addWithAction(add, store.ActionReinvestDividend)},
+		{name: "an add that has a cost", skipped: addWithCostBasis(add, new(int64(30_000)))},
+		{name: "an add that names no security", skipped: addWithSecurity(add, nil)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			list := sharesList([]store.Account{brokerage("acct-1", "Margin")}, c.skipped, noCostAdd("itxn-2", "acct-1", 2))
+
+			got := sharesFindings(t, report.FindingsRequest{Classification: nonRegistered()}, list)
+
+			assert.Equal(t, []string{"shares-without-cost:itxn-2"}, sharesIDs(got))
+		})
+	}
 }
