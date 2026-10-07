@@ -11,7 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const badCurrencyFlag = "quarry: --currency must be CAD, USD or native\n"
+const (
+	badCurrencyFlag   = "quarry: --currency must be CAD, USD or native\n"
+	claudeInstallArgs = "quarry: install takes no arguments; Run 'quarry claude install --help' for usage.\n"
+
+	claudeUninstallArgs = "quarry: uninstall takes no arguments; Run 'quarry claude uninstall --help' for usage.\n"
+)
 
 func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 	const (
@@ -52,6 +57,12 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 		{name: "summary with an argument", args: []string{"summary", "extra"}, wantStderr: "quarry: summary takes no arguments\n"},
 		{name: "mcp with an argument", args: []string{"mcp", "extra"}, wantStderr: "quarry: mcp takes no arguments\n"},
 		{name: "mcp with --json", args: []string{"mcp", "--json"}, wantStderr: "quarry: mcp always speaks JSON on stdout; drop --json\n"},
+		{name: "claude install with an argument", args: []string{"claude", "install", "extra"}, wantStderr: claudeInstallArgs},
+		{name: "claude install with --json", args: []string{"claude", "install", "--json"}, wantStderr: "quarry: claude install prints no JSON; drop --json\n"},
+		{name: "claude install with --json and an argument", args: []string{"claude", "install", "--json", "extra"}, wantStderr: claudeInstallArgs},
+		{name: "claude uninstall with an argument", args: []string{"claude", "uninstall", "extra"}, wantStderr: claudeUninstallArgs},
+		{name: "claude uninstall with --json", args: []string{"claude", "uninstall", "--json"}, wantStderr: "quarry: claude uninstall prints no JSON; drop --json\n"},
+		{name: "claude uninstall with --json and an argument", args: []string{"claude", "uninstall", "--json", "extra"}, wantStderr: claudeUninstallArgs},
 		{
 			name: "findings with an argument", args: []string{"findings", "duplicate:txn-1+txn-2"},
 			wantStderr: "quarry: findings takes no arguments; to ignore a finding add its id to findings.ignore in " +
