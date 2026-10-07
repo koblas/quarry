@@ -17,6 +17,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// brokerageHoldingAcme adds an active CAD brokerage "Brokerage", the security "Acme Corp" (ACME) and the position
+// of one in the other to b, returning their source ids in that order.
+func brokerageHoldingAcme(b *v9fixture.Builder) (int64, int64, int64) {
+	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
+	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	return brokeragePK, acmePK, positionPK
+}
+
+// investOn returns a function adding an investment transaction of action code on day to position in brokerage, with
+// one entry of row's amount; it returns the transaction's source id.
+func investOn(b *v9fixture.Builder, brokeragePK, positionPK int64) func(code int64, day time.Time, row v9fixture.TransactionRow) int64 {
+	return func(code int64, day time.Time, row v9fixture.TransactionRow) int64 {
+		row.Account, row.Position, row.PostedDate, row.Type = brokeragePK, positionPK, &day, &code
+		pk := b.InvestmentTransaction(row)
+		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
+		return pk
+	}
+}
+
+// syncCleanly writes b's bundle under home and syncs it, which must exit 0 with nothing on stderr; it returns stdout.
+func syncCleanly(t *testing.T, home string, b *v9fixture.Builder) string {
+	t.Helper()
+
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	require.Empty(t, stderr.String())
+	return stdout.String()
+}
+
+// openStoreReadOnly opens the store under home read-only until the test ends.
+func openStoreReadOnly(t *testing.T, home string) *duckdb.DB {
+	t.Helper()
+
+	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
+
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
 func Test_run_sync_imports_securities_and_their_prices(t *testing.T) {
 	home := newHome(t)
 
@@ -35,12 +78,7 @@ func Test_run_sync_imports_securities_and_their_prices(t *testing.T) {
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: barePK, QuoteDate: &day1, ClosingPrice: "12.3456785"})
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: noCurrencyPK, QuoteDate: nil, ClosingPrice: "5"})
 
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-
-	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-
-	require.Equal(t, 0, exitCode)
-	require.Empty(t, stderr.String())
+	syncCleanly(t, home, b)
 
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
@@ -73,11 +111,9 @@ func Test_run_sync_records_security_and_price_counts_in_import_runs(t *testing.T
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &day1, ClosingPrice: "12.5"})
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &day2, ClosingPrice: "13"})
 	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: barePK, QuoteDate: &day1, ClosingPrice: "4"})
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
-	exitCode, _, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	syncInvestmentFixture(t, home, b)
 
-	require.Equal(t, 0, exitCode)
 	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
 	db, err := duckdb.OpenReadOnly(t.Context(), storePath)
 	require.NoError(t, err)
@@ -91,9 +127,7 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	brokeragePK, acmePK, positionPK := brokerageHoldingAcme(b)
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 
 	expensePK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-50.00", PostedDate: &day})
@@ -124,16 +158,9 @@ func Test_run_sync_imports_investment_transactions_with_named_actions(t *testing
 	splitPK := invest(23, v9fixture.TransactionRow{Position: positionPK, Units: "0", Amount: "0", Numerator: "1", Denominator: "12"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0.541667"})
 
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	syncCleanly(t, home, b)
 
-	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-
-	require.Equal(t, 0, exitCode)
-	require.Empty(t, stderr.String())
-
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 
 	itxnID := func(pk int64) string { return fmt.Sprintf("itxn-%d", pk) }
 	acme := fmt.Sprintf("sec-%d", acmePK)
@@ -217,9 +244,7 @@ func syncThenReport(t *testing.T, withInvestments bool) (map[string]string, stri
 		reports[strings.Join(args, " ")] = stdout.String() + "\n--- stderr ---\n" + stderr.String()
 	}
 
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 	return reports, stringMap(t, db, `SELECT 'rows', CAST(count(*) AS VARCHAR) FROM investment_transactions`)["rows"]
 }
 
@@ -381,9 +406,7 @@ func oneHoldingBundle(t *testing.T, home, lotUnits string) v9fixture.Bundle {
 	reconciled := int64(2)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
 	cashPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
 	b.Entry(v9fixture.EntryRow{Parent: cashPK, Amount: "100.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &day, EndingBalance: "100.00"})
@@ -435,67 +458,43 @@ func Test_run_sync_applies_a_stock_split_in_date_order(t *testing.T) {
 	splitDay := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
 	sellDay := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
-	invest := func(code int64, day time.Time, row v9fixture.TransactionRow) {
-		row.Account, row.Position, row.PostedDate, row.Type = brokeragePK, positionPK, &day, &code
-		pk := b.InvestmentTransaction(row)
-		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
-	}
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
+	invest := investOn(b, brokeragePK, positionPK)
 	invest(19, sellDay, v9fixture.TransactionRow{Units: "-10", Amount: "100.00"})
 	invest(3, buyDay, v9fixture.TransactionRow{Units: "120", Amount: "-1200.00"})
 	invest(23, splitDay, v9fixture.TransactionRow{Units: "0", Amount: "0", Numerator: "1", Denominator: "12"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0"})
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	stdout := syncCleanly(t, home, b)
 
-	require.Equal(t, 0, exitCode)
-	require.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Shares    1 holding matches Quicken's share count\n")
+	assert.Contains(t, stdout, "Shares    1 holding matches Quicken's share count\n")
 }
 
 func Test_run_sync_reports_a_file_with_no_investment_data(t *testing.T) {
 	home := newHome(t)
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	stdout := syncCleanly(t, home, b)
 
-	require.Equal(t, 0, exitCode)
-	require.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(),
+	assert.Contains(t, stdout,
 		"Rows      0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices\n")
-	assert.Contains(t, stdout.String(), "Shares    no holdings to check\n")
+	assert.Contains(t, stdout, "Shares    no holdings to check\n")
 }
 
 func Test_run_sync_keeps_a_commission_with_fractions_of_a_cent(t *testing.T) {
 	home := newHome(t)
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
-	invest := func(code int64, row v9fixture.TransactionRow) int64 {
-		row.Account, row.Position, row.PostedDate, row.Type = brokeragePK, positionPK, &day, &code
-		pk := b.InvestmentTransaction(row)
-		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
-		return pk
-	}
-	buyPK := invest(3, v9fixture.TransactionRow{Units: "10", Amount: "-1000.50", Commission: "9.99"})
-	sellPK := invest(19, v9fixture.TransactionRow{Units: "-4", Amount: "400.25", Commission: "8.4998"})
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
+	invest := investOn(b, brokeragePK, positionPK)
+	buyPK := invest(3, day, v9fixture.TransactionRow{Units: "10", Amount: "-1000.50", Commission: "9.99"})
+	sellPK := invest(19, day, v9fixture.TransactionRow{Units: "-4", Amount: "400.25", Commission: "8.4998"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "6"})
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
-	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	syncCleanly(t, home, b)
 
-	require.Equal(t, 0, exitCode)
-	require.Empty(t, stderr.String())
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 	assert.Equal(t, map[string]string{
 		fmt.Sprintf("itxn-%d", buyPK):  "9.9900",
 		fmt.Sprintf("itxn-%d", sellPK): "8.4998",
@@ -506,32 +505,20 @@ func Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none(t *testing
 	home := newHome(t)
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
-	invest := func(code int64, row v9fixture.TransactionRow) int64 {
-		row.Account, row.Position, row.PostedDate, row.Type = brokeragePK, positionPK, &day, &code
-		pk := b.InvestmentTransaction(row)
-		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
-		return pk
-	}
-	buyPK := invest(3, v9fixture.TransactionRow{Units: "10", Amount: "-1000.50", CostBasis: "1000.50"})
-	reinvestPK := invest(15, v9fixture.TransactionRow{Units: "2", Amount: "0", CostBasis: "50.25"})
-	addWithCostPK := invest(2, v9fixture.TransactionRow{Units: "5", Amount: "0", CostBasis: "300"})
-	addWithoutCostPK := invest(2, v9fixture.TransactionRow{Units: "3", Amount: "0"})
-	sellPK := invest(19, v9fixture.TransactionRow{Units: "-4", Amount: "400.25", CostBasis: "0"})
-	dividendPK := invest(10, v9fixture.TransactionRow{Amount: "12"})
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
+	invest := investOn(b, brokeragePK, positionPK)
+	buyPK := invest(3, day, v9fixture.TransactionRow{Units: "10", Amount: "-1000.50", CostBasis: "1000.50"})
+	reinvestPK := invest(15, day, v9fixture.TransactionRow{Units: "2", Amount: "0", CostBasis: "50.25"})
+	addWithCostPK := invest(2, day, v9fixture.TransactionRow{Units: "5", Amount: "0", CostBasis: "300"})
+	addWithoutCostPK := invest(2, day, v9fixture.TransactionRow{Units: "3", Amount: "0"})
+	sellPK := invest(19, day, v9fixture.TransactionRow{Units: "-4", Amount: "400.25", CostBasis: "0"})
+	dividendPK := invest(10, day, v9fixture.TransactionRow{Amount: "12"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "16"})
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
-	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	syncCleanly(t, home, b)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	require.Empty(t, stderr.String())
 	assert.Equal(t, []string{"9"}, storeTextRows(t, home, "SELECT CAST(format_version AS VARCHAR) FROM store_info"))
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 	assert.Equal(t, map[string]string{
 		fmt.Sprintf("itxn-%d", buyPK):            "1000.50",
 		fmt.Sprintf("itxn-%d", reinvestPK):       "50.25",
@@ -553,14 +540,8 @@ func Test_run_sync_records_each_holdings_share_count_over_time(t *testing.T) {
 	sellDay := buyDay.AddDate(0, 0, 3)
 	futureDay := time.Now().UTC().Truncate(24*time.Hour).AddDate(1, 0, 0)
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
-	invest := func(code int64, day time.Time, row v9fixture.TransactionRow) {
-		row.Account, row.Position, row.PostedDate, row.Type = brokeragePK, positionPK, &day, &code
-		pk := b.InvestmentTransaction(row)
-		b.Entry(v9fixture.EntryRow{Parent: pk, Amount: row.Amount})
-	}
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
+	invest := investOn(b, brokeragePK, positionPK)
 	invest(3, buyDay, v9fixture.TransactionRow{Units: "10", Amount: "-100.00"})
 	invest(3, twoBuysDay, v9fixture.TransactionRow{Units: "5", Amount: "-50.00"})
 	invest(3, twoBuysDay, v9fixture.TransactionRow{Units: "5", Amount: "-50.00"})
@@ -706,9 +687,7 @@ func Test_run_sync_fails_when_holdings_share_counts_differ_from_quicken(t *testi
 func Test_run_sync_fails_a_holding_with_a_lot_and_no_transactions_against_zero_shares(t *testing.T) {
 	home := newHome(t)
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	_, _, positionPK := brokerageHoldingAcme(b)
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "3"})
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
@@ -725,9 +704,7 @@ func Test_run_sync_joins_a_share_failure_to_a_balance_failure_in_one_line(t *tes
 	reconciled := int64(2)
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
 	cashPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
 	b.Entry(v9fixture.EntryRow{Parent: cashPK, Amount: "100.00"})
 	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &day, EndingBalance: "100.01"})

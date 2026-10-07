@@ -14,10 +14,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// holdingsRowOf is one holdings table line with the columns w wide; the table ends a line at its last non-blank cell.
+func holdingsRowOf(w [8]int, account, security, shares, price, pricedOn, currency, value, in string) string {
+	return strings.TrimRight(fmt.Sprintf("%-*s  %-*s  %*s  %*s  %-*s  %-*s  %*s  %*s",
+		w[0], account, w[1], security, w[2], shares, w[3], price, w[4], pricedOn, w[5], currency, w[6], value, w[7], in), " ") + "\n"
+}
+
 // holdingsLine is one holdings table line, each cell as wide as the fixture's widest.
 func holdingsLine(account, security, shares, price, pricedOn, currency, value, in string) string {
-	return fmt.Sprintf("%-17s  %-26s  %6s  %6s  %-10s  %-8s  %9s  %9s\n",
-		account, security, shares, price, pricedOn, currency, value, in)
+	return holdingsRowOf([8]int{17, 26, 6, 6, 10, 8, 9, 9}, account, security, shares, price, pricedOn, currency, value, in)
 }
 
 // holdingsNativeLine is holdingsLine without the In column.
@@ -77,28 +82,24 @@ func holdingsRows() store.Rows {
 func Test_run_holdings_lists_todays_holdings_in_the_reporting_currency(t *testing.T) {
 	seedHoldingsStore(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
+	stdout, stderr := mustRunHoldings(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		holdingsLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
 		holdingsLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "33,536.72")+
 		holdingsLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
 		holdingsLine("Total", "", "", "", "", "", "", "71,290.72"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_holdings_native_lists_each_currencys_own_total(t *testing.T) {
 	seedHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--currency", "native"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--currency", "native")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts; cash not included\n\n"+
 		holdingsNativeLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value")+
 		holdingsNativeLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00")+
@@ -106,7 +107,7 @@ func Test_run_holdings_native_lists_each_currencys_own_total(t *testing.T) {
 		holdingsNativeLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00")+
 		holdingsNativeLine("Total", "", "", "", "", "CAD", "37,754.00")+
 		holdingsNativeLine("Total", "", "", "", "", "USD", "24,659.35"),
-		stdout.String())
+		stdout)
 }
 
 const chequingWarning = "quarry: warning: account \"Chequing\" is not a brokerage or retirement account, so it has no holdings\n"
@@ -143,8 +144,7 @@ func runHoldingsAccounts(t *testing.T, args ...string) (int, string, string) {
 
 // holdingsAccountLine is one table line sized to the Brokerage-only listing: Acme Corp (ACME) is its widest security.
 func holdingsAccountLine(account, security, shares, price, pricedOn, currency, value, in string) string {
-	return fmt.Sprintf("%-9s  %-16s  %6s  %5s  %-10s  %-8s  %9s  %9s\n",
-		account, security, shares, price, pricedOn, currency, value, in)
+	return holdingsRowOf([8]int{9, 16, 6, 5, 10, 8, 9, 9}, account, security, shares, price, pricedOn, currency, value, in)
 }
 
 func Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing(t *testing.T) {
@@ -152,18 +152,15 @@ func Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_che
 	rows := holdingsRows()
 	rows.Accounts = append(rows.Accounts, chequingAccount("acct-chq", 4))
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--account", "Brokerage", "--account", "Chequing"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--account", "Brokerage", "--account", "Chequing")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Holdings on 2026-03-12 in Brokerage, Chequing, amounts in CAD; cash not included\n\n"+
 		holdingsAccountLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsAccountLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
 		holdingsAccountLine("Total", "", "", "", "", "", "", "37,704.00"),
-		stdout.String())
-	assert.Equal(t, chequingWarning, stderr.String())
+		stdout)
+	assert.Equal(t, chequingWarning, stderr)
 }
 
 func Test_run_holdings_refuses_an_account_it_cannot_pick_with_nothing_on_stdout(t *testing.T) {
@@ -272,8 +269,7 @@ func mustJSON(t *testing.T, v any) string {
 
 // holdingsAsOfLine is one table line of seedSplitHoldingsStore's single holding, each cell as wide as its widest.
 func holdingsAsOfLine(account, security, shares, price, pricedOn, currency, value, in string) string {
-	return fmt.Sprintf("%-9s  %-16s  %6s  %5s  %-10s  %-8s  %8s  %8s\n",
-		account, security, shares, price, pricedOn, currency, value, in)
+	return holdingsRowOf([8]int{9, 16, 6, 5, 10, 8, 8, 8}, account, security, shares, price, pricedOn, currency, value, in)
 }
 
 // seedSplitHoldingsStore builds the store under a temp HOME with one CAD holding whose shares change by
@@ -313,18 +309,15 @@ func seedSplitHoldingsStore(t *testing.T) {
 
 func Test_run_holdings_as_of_a_year_lists_the_shares_after_a_split_before_it(t *testing.T) {
 	seedSplitHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--as-of", "2025"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--as-of", "2025")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Holdings on 2025-12-31 in all accounts, amounts in CAD; cash not included\n\n"+
 		holdingsAsOfLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsAsOfLine("Brokerage", "Acme Corp (ACME)", "200", "12.00", "2025-12-30", "CAD", "2,400.00", "2,400.00")+
 		holdingsAsOfLine("Total", "", "", "", "", "", "", "2,400.00"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_holdings_as_of_forms_pick_the_shares_of_their_day(t *testing.T) {
@@ -345,10 +338,8 @@ func Test_run_holdings_as_of_forms_pick_the_shares_of_their_day(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			seedSplitHoldingsStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"holdings", "--as-of", tt.asOf},
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--as-of", tt.asOf}, holdingsClock())
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, "Holdings on "+tt.caption+" in all accounts, amounts in CAD; cash not included\n\n"+
@@ -364,10 +355,8 @@ func Test_run_holdings_as_of_the_current_year_or_month_or_today_is_today(t *test
 	for _, asOf := range []string{"2026", "2026-03", "2026-03-12"} {
 		t.Run(asOf, func(t *testing.T) {
 			seedSplitHoldingsStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"holdings", "--as-of", asOf},
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--as-of", asOf}, holdingsClock())
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
@@ -382,10 +371,8 @@ func Test_run_holdings_as_of_the_current_year_or_month_or_today_is_today(t *test
 
 func Test_run_holdings_refuses_a_bad_as_of_before_looking_for_a_store(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--as-of", "2024-13"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--as-of", "2024-13"}, holdingsClock())
 
 	assert.Equal(t, 2, exitCode)
 	assert.Equal(t, `quarry: --as-of "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`+"\n", stderr.String())
@@ -418,10 +405,8 @@ func Test_run_holdings_refuses_a_date_it_cannot_use(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			seedHoldingsStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"holdings", "--as-of", tt.asOf},
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--as-of", tt.asOf}, holdingsClock())
 
 			assert.Equal(t, 2, exitCode)
 			assert.Equal(t, tt.stderr, stderr.String())
@@ -445,6 +430,16 @@ func holdingsRowsFromDayFive() store.Rows {
 	return rows
 }
 
+// mustRunHoldings runs holdings with args at holdingsClock, which must exit 0, and returns its stdout and stderr.
+func mustRunHoldings(t *testing.T, args ...string) (string, string) {
+	t.Helper()
+
+	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"holdings"}, args...), holdingsClock())
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	return stdout.String(), stderr.String()
+}
+
 // runHoldingsOn stores rows and runs holdings with args at holdingsClock.
 func runHoldingsOn(t *testing.T, rows store.Rows, args ...string) (int, string, string) {
 	t.Helper()
@@ -461,16 +456,13 @@ func Test_run_holdings_before_the_first_investment_transaction_warns_where_they_
 	rows := holdingsRows()
 	rows.InvestmentTransactions[2].Date = holdingsDay(5)
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--as-of", "2026-03-01"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--as-of", "2026-03-01")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Holdings on 2026-03-01 in all accounts, amounts in CAD; cash not included\n\n"+
-		"Account  Security  Shares  Price  Priced on  Currency  Value  In CAD\n", stdout.String())
+		"Account  Security  Shares  Price  Priced on  Currency  Value  In CAD\n", stdout)
 	assert.Equal(t, "quarry: warning: no holdings on 2026-03-01; the store's investment transactions run 2026-03-02 to 2026-03-05\n",
-		stderr.String())
+		stderr)
 }
 
 func Test_run_holdings_of_a_store_with_no_investment_transactions_warns_there_are_none(t *testing.T) {
@@ -523,11 +515,9 @@ func Test_run_holdings_json_before_the_first_investment_transaction_has_empty_li
 const holdingsNoPriceLine = "1 holding has no price on or before 2026-03-12, so it has no value and is left out of the total; " +
 	"enter a price for it in Quicken, then run quarry sync"
 
-// holdingsNoPriceTableLine is one table line wide enough for the "no price" cell; the table ends a line
-// at its last non-blank cell.
+// holdingsNoPriceTableLine is one table line wide enough for the "no price" cell.
 func holdingsNoPriceTableLine(account, security, shares, price, pricedOn, currency, value, in string) string {
-	return strings.TrimRight(fmt.Sprintf("%-17s  %-26s  %6s  %8s  %-10s  %-8s  %9s  %9s",
-		account, security, shares, price, pricedOn, currency, value, in), " ") + "\n"
+	return holdingsRowOf([8]int{17, 26, 6, 8, 10, 8, 9, 9}, account, security, shares, price, pricedOn, currency, value, in)
 }
 
 // seedHoldingsStoreWithUnpricedHolding is seedHoldingsStore plus 40 shares of Bare Fund in the brokerage,
@@ -548,10 +538,9 @@ func seedHoldingsStoreWithUnpricedHolding(t *testing.T) {
 func Test_run_holdings_lists_a_holding_with_no_price_without_value(t *testing.T) {
 	seedHoldingsStoreWithUnpricedHolding(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
+	stdout, stderr := mustRunHoldings(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: "+holdingsNoPriceLine+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+holdingsNoPriceLine+"\n", stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		holdingsNoPriceTableLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsNoPriceTableLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
@@ -559,7 +548,7 @@ func Test_run_holdings_lists_a_holding_with_no_price_without_value(t *testing.T)
 		holdingsNoPriceTableLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "33,536.72")+
 		holdingsNoPriceTableLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
 		holdingsNoPriceTableLine("Total", "", "", "", "", "", "", "71,290.72"),
-		stdout.String())
+		stdout)
 }
 
 // holdingsJSONRow is the fields of one holdings entry the no-price tests read back.
@@ -586,11 +575,10 @@ type holdingsJSONDoc struct {
 func Test_run_holdings_json_lists_the_unpriced_holding_with_nulls_and_a_warning(t *testing.T) {
 	seedHoldingsStoreWithUnpricedHolding(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--json"}, holdingsClock())
+	stdout, _ := mustRunHoldings(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc holdingsJSONDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
 	require.Len(t, doc.Holdings, 4)
 	assert.Equal(t, holdingsJSONRow{
 		Security: new("Acme Corp"), Shares: "1200.000000", Price: new("31.420000"), PriceDate: new("2026-03-09"),
@@ -613,40 +601,29 @@ const (
 		"run quarry sync to fetch them"
 )
 
-// holdingsNoRateLine is one table line of seedHoldingsStore's holdings; the In column may be blank, so the line is trimmed.
-func holdingsNoRateLine(account, security, shares, price, pricedOn, currency, value, in string) string {
-	return strings.TrimRight(holdingsLine(account, security, shares, price, pricedOn, currency, value, in), " \n") + "\n"
-}
-
 func Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately(t *testing.T) {
 	seedHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--as-of", "2026-03-09"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--as-of", "2026-03-09")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: "+holdingsBeforeFirstRateLine+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+holdingsBeforeFirstRateLine+"\n", stderr)
 	assert.Equal(t, "Holdings on 2026-03-09 in all accounts, amounts in CAD; cash not included\n\n"+
-		holdingsNoRateLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
-		holdingsNoRateLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
-		holdingsNoRateLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "no rate")+
-		holdingsNoRateLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
-		holdingsNoRateLine("Total", "", "", "", "", "", "", "37,754.00")+
-		holdingsNoRateLine("Total", "", "", "", "", "USD", "24,659.35", ""),
-		stdout.String())
+		holdingsLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
+		holdingsLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
+		holdingsLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "no rate")+
+		holdingsLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
+		holdingsLine("Total", "", "", "", "", "", "", "37,754.00")+
+		holdingsLine("Total", "", "", "", "", "USD", "24,659.35", ""),
+		stdout)
 }
 
 func Test_run_holdings_json_before_the_first_rate_lists_the_converted_total_then_the_usd_one_and_the_stderr_warning(t *testing.T) {
 	seedHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--json", "--as-of", "2026-03-09"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--json", "--as-of", "2026-03-09")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc holdingsJSONDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
 	require.Len(t, doc.Holdings, 3)
 	assert.Equal(t, "24659.35", *doc.Holdings[1].Value)
 	assert.Nil(t, doc.Holdings[1].ConvertedValue)
@@ -657,37 +634,31 @@ func Test_run_holdings_json_before_the_first_rate_lists_the_converted_total_then
 	assert.Equal(t, "USD", doc.Totals[1].Currency)
 	assert.Equal(t, "24659.35", doc.Totals[1].Value)
 	assert.Equal(t, []string{holdingsBeforeFirstRateLine}, doc.Warnings)
-	assert.Equal(t, "quarry: warning: "+doc.Warnings[0]+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+doc.Warnings[0]+"\n", stderr)
 }
 
 func Test_run_holdings_in_usd_before_the_first_rate_shows_no_rate_for_the_cad_rows_and_totals_cad_separately(t *testing.T) {
 	seedHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--currency", "USD", "--as-of", "2026-03-09"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--currency", "USD", "--as-of", "2026-03-09")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: "+holdingsBeforeFirstRateUSDLine+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+holdingsBeforeFirstRateUSDLine+"\n", stderr)
 	assert.Equal(t, "Holdings on 2026-03-09 in all accounts, amounts in USD; cash not included\n\n"+
-		holdingsNoRateLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In USD")+
-		holdingsNoRateLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "no rate")+
-		holdingsNoRateLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "24,659.35")+
-		holdingsNoRateLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "no rate")+
-		holdingsNoRateLine("Total", "", "", "", "", "", "", "24,659.35")+
-		holdingsNoRateLine("Total", "", "", "", "", "CAD", "37,754.00", ""),
-		stdout.String())
+		holdingsLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In USD")+
+		holdingsLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "no rate")+
+		holdingsLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "24,659.35")+
+		holdingsLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "no rate")+
+		holdingsLine("Total", "", "", "", "", "", "", "24,659.35")+
+		holdingsLine("Total", "", "", "", "", "CAD", "37,754.00", ""),
+		stdout)
 }
 
 func Test_run_holdings_native_before_the_first_rate_has_no_no_rate_cell_and_no_warning(t *testing.T) {
 	seedHoldingsStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--currency", "native", "--as-of", "2026-03-09"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--currency", "native", "--as-of", "2026-03-09")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Holdings on 2026-03-09 in all accounts; cash not included\n\n"+
 		holdingsNativeLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value")+
 		holdingsNativeLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00")+
@@ -695,44 +666,40 @@ func Test_run_holdings_native_before_the_first_rate_has_no_no_rate_cell_and_no_w
 		holdingsNativeLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00")+
 		holdingsNativeLine("Total", "", "", "", "", "CAD", "37,754.00")+
 		holdingsNativeLine("Total", "", "", "", "", "USD", "24,659.35"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_holdings_in_a_store_with_no_rates_says_so_and_shows_no_rate_for_the_usd_row(t *testing.T) {
 	home := newHome(t)
 	replaceStoreWithRates(t, home, holdingsRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
+	stdout, stderr := mustRunHoldings(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: "+holdingsNoRatesWarningLine+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+holdingsNoRatesWarningLine+"\n", stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
-		holdingsNoRateLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
-		holdingsNoRateLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
-		holdingsNoRateLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "no rate")+
-		holdingsNoRateLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
-		holdingsNoRateLine("Total", "", "", "", "", "", "", "37,754.00")+
-		holdingsNoRateLine("Total", "", "", "", "", "USD", "24,659.35", ""),
-		stdout.String())
+		holdingsLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
+		holdingsLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
+		holdingsLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "no rate")+
+		holdingsLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
+		holdingsLine("Total", "", "", "", "", "", "", "37,754.00")+
+		holdingsLine("Total", "", "", "", "", "USD", "24,659.35", ""),
+		stdout)
 }
 
 func Test_run_holdings_on_a_day_inside_a_rate_gap_converts_at_the_earlier_rate_and_is_silent(t *testing.T) {
 	home := newHome(t)
 	replaceStoreWithRates(t, home, holdingsRows(), usdRate(holdingsDay(10), 1_360_000), usdRate(holdingsDay(12), 1_400_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--as-of", "2026-03-11"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--as-of", "2026-03-11")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Holdings on 2026-03-11 in all accounts, amounts in CAD; cash not included\n\n"+
 		holdingsLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
 		holdingsLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "33,536.72")+
 		holdingsLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
 		holdingsLine("Total", "", "", "", "", "", "", "71,290.72"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_holdings_of_cad_holdings_only_before_the_first_rate_in_cad_needs_no_rate(t *testing.T) {
@@ -740,15 +707,12 @@ func Test_run_holdings_of_cad_holdings_only_before_the_first_rate_in_cad_needs_n
 	rows := holdingsRows()
 	rows.InvestmentTransactions, rows.Prices = rows.InvestmentTransactions[:1], rows.Prices[:1]
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--as-of", "2026-03-09"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--as-of", "2026-03-09")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.NotContains(t, stdout.String(), "no rate")
-	assert.Regexp(t, `(?m)^Total +37,704\.00$`, stdout.String())
+	assert.Empty(t, stderr)
+	assert.NotContains(t, stdout, "no rate")
+	assert.Regexp(t, `(?m)^Total +37,704\.00$`, stdout)
 }
 
 const (
@@ -759,8 +723,7 @@ const (
 
 // holdingsNotConvertedLine is one table line wide enough for the "not converted" cell.
 func holdingsNotConvertedLine(account, security, shares, price, pricedOn, currency, value, in string) string {
-	return strings.TrimRight(fmt.Sprintf("%-17s  %-26s  %6s  %6s  %-10s  %-8s  %9s  %13s",
-		account, security, shares, price, pricedOn, currency, value, in), " ") + "\n"
+	return holdingsRowOf([8]int{17, 26, 6, 6, 10, 8, 9, 13}, account, security, shares, price, pricedOn, currency, value, in)
 }
 
 // seedHoldingsStoreWithUnconvertible is seedHoldingsStore plus, in the brokerage, 5 shares of Mystery Fund
@@ -784,10 +747,9 @@ func seedHoldingsStoreWithUnconvertible(t *testing.T) {
 func Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total(t *testing.T) {
 	seedHoldingsStoreWithUnconvertible(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
+	stdout, stderr := mustRunHoldings(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: "+holdingsNoCurrencyLine+"\nquarry: warning: "+holdingsOtherCurrencyLine+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+holdingsNoCurrencyLine+"\nquarry: warning: "+holdingsOtherCurrencyLine+"\n", stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		holdingsNotConvertedLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsNotConvertedLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
@@ -796,17 +758,16 @@ func Test_run_holdings_leaves_a_security_it_cannot_convert_out_of_the_total(t *t
 		holdingsNotConvertedLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "33,536.72")+
 		holdingsNotConvertedLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
 		holdingsNotConvertedLine("Total", "", "", "", "", "", "", "71,290.72"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_holdings_json_lists_an_unconvertible_security_with_a_null_converted_value(t *testing.T) {
 	seedHoldingsStoreWithUnconvertible(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--json"}, holdingsClock())
+	stdout, _ := mustRunHoldings(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc holdingsJSONDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
 	require.Len(t, doc.Holdings, 5)
 	assert.Equal(t, holdingsJSONRow{
 		Security: new("Euro Fund"), Shares: "20.000000", Price: new("12.500000"), PriceDate: new("2026-03-09"),
@@ -824,13 +785,10 @@ func Test_run_holdings_json_lists_an_unconvertible_security_with_a_null_converte
 
 func Test_run_holdings_native_totals_a_security_priced_in_another_currency_and_never_one_with_none(t *testing.T) {
 	seedHoldingsStoreWithUnconvertible(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--currency", "native"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunHoldings(t, "--currency", "native")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: "+holdingsNoCurrencyLine+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+holdingsNoCurrencyLine+"\n", stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts; cash not included\n\n"+
 		holdingsNativeLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value")+
 		holdingsNativeLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00")+
@@ -841,7 +799,7 @@ func Test_run_holdings_native_totals_a_security_priced_in_another_currency_and_n
 		holdingsNativeLine("Total", "", "", "", "", "CAD", "37,754.00")+
 		holdingsNativeLine("Total", "", "", "", "", "USD", "24,659.35")+
 		holdingsNativeLine("Total", "", "", "", "", "EUR", "250.00"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_holdings_json_carries_account_and_security_names_as_stored(t *testing.T) {
@@ -850,19 +808,16 @@ func Test_run_holdings_json_carries_account_and_security_names_as_stored(t *test
 	rows.Accounts[0].Name = "Broker\nage"
 	rows.Securities[0].Name = "Acme\tCorp\r\n"
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"holdings", "--json", "--account", "acct-cad"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunHoldings(t, "--json", "--account", "acct-cad")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
 		Holdings []struct {
 			Account  string `json:"account"`
 			Security string `json:"security"`
 		} `json:"holdings"`
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
 	require.Len(t, doc.Holdings, 1)
 	assert.Equal(t, "Broker\nage", doc.Holdings[0].Account)
 	assert.Equal(t, "Acme\tCorp\r\n", doc.Holdings[0].Security)
@@ -881,30 +836,28 @@ func seedLowerCaseAccountHoldingsStore(t *testing.T) {
 func Test_run_holdings_sorts_accounts_ignoring_case_in_the_table(t *testing.T) {
 	seedLowerCaseAccountHoldingsStore(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
+	stdout, _ := mustRunHoldings(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		holdingsLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsLine("brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
 		holdingsLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "33,536.72")+
 		holdingsLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
 		holdingsLine("Total", "", "", "", "", "", "", "71,290.72"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_holdings_json_sorts_accounts_ignoring_case(t *testing.T) {
 	seedLowerCaseAccountHoldingsStore(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings", "--json"}, holdingsClock())
+	stdout, _ := mustRunHoldings(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
 		Holdings []struct {
 			Account string `json:"account"`
 		} `json:"holdings"`
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
 	accounts := make([]string, len(doc.Holdings))
 	for i, h := range doc.Holdings {
 		accounts[i] = h.Account
@@ -1007,10 +960,9 @@ func Test_run_holdings_lists_a_holding_priced_at_zero_with_a_value_of_zero_and_n
 	rows.Prices = append(rows.Prices, store.Price{SecurityID: "sec-zero", SourceID: 4, Date: holdingsDay(9), Price: 0})
 	replaceStoreWithRates(t, home, rows, usdRate(holdingsDay(10), 1_360_000))
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"holdings"}, holdingsClock())
+	stdout, stderr := mustRunHoldings(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Holdings on 2026-03-12 in all accounts, amounts in CAD; cash not included\n\n"+
 		holdingsLine("Account", "Security", "Shares", "Price", "Priced on", "Currency", "Value", "In CAD")+
 		holdingsLine("Brokerage", "Acme Corp (ACME)", "1,200", "31.42", "2026-03-09", "CAD", "37,704.00", "37,704.00")+
@@ -1018,5 +970,5 @@ func Test_run_holdings_lists_a_holding_priced_at_zero_with_a_value_of_zero_and_n
 		holdingsLine("IRA", "Vanguard Total Stock (VTI)", "85", "290.11", "2026-03-09", "USD", "24,659.35", "33,536.72")+
 		holdingsLine("Old RRSP (closed)", "Maple Fund", "10", "5.00", "2026-03-05", "CAD", "50.00", "50.00")+
 		holdingsLine("Total", "", "", "", "", "", "", "71,290.72"),
-		stdout.String())
+		stdout)
 }

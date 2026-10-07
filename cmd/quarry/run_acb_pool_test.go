@@ -38,9 +38,7 @@ const acmeReturnOfCapitalWarning = `"Acme Corp": return of capital on 2025-12-31
 
 // acbAdjustmentsRows is one non-registered CAD brokerage holding 10 shares of Acme Corp bought for 1,000.00 and never sold.
 func acbAdjustmentsRows() store.Rows {
-	rows := spendRows([]store.Account{
-		{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true},
-	})
+	rows := acbBrokerageRows()
 	rows.Securities = []store.Security{{ID: "sec-acme", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")}}
 	rows.InvestmentTransactions = []store.InvestmentTransaction{
 		acbTrade("inv-buy", 1, "acct-cad", "sec-acme", store.ActionBuy, "CAD", day(2024, time.February, 1), 10_000_000, -100_000),
@@ -49,22 +47,19 @@ func acbAdjustmentsRows() store.Rows {
 }
 
 func Test_run_acb_lowers_and_raises_the_acb_by_the_adjustments_and_counts_return_of_capital_above_it_as_a_gain(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, acbAdjustmentsConfig)
-	replaceStore(t, home, acbAdjustmentsRows())
+	acbFixture(t, acbAdjustmentsConfig, acbAdjustmentsRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
+	stdout, stderr := mustRunACB(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
 		"Year  Sales  Proceeds  Outlays   ACB  Gain or loss\n"+
-		fmt.Sprintf("%-4s  %5s  %8s  %7s  %4s  %12s  %s\n", "2025", "0", "0.00", "0.00", "0.00", "0.00",
+		acbYearRow(4, "2025", "0", "0.00", "0.00", "0.00", "0.00",
 			"1,250.00 return of capital above ACB, a capital gain")+
 		"\nACB on 2026-03-12, in CAD\n\n"+
-		fmt.Sprintf("%-9s  %-6s  %6s  %4s  %13s\n", "Security", "Ticker", "Shares", "ACB", "ACB per share")+
-		fmt.Sprintf("%-9s  %-6s  %6s  %4s  %13s\n", "Acme Corp", "ACME", "10", "0.00", "0.0000"),
-		stdout.String())
-	assert.Equal(t, "quarry: warning: "+acmeReturnOfCapitalWarning+"\n", stderr.String())
+		acbPositionRow(9, 4, "Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
+		acbPositionRow(9, 4, "Acme Corp", "ACME", "10", "0.00", "0.0000", ""),
+		stdout)
+	assert.Equal(t, "quarry: warning: "+acmeReturnOfCapitalWarning+"\n", stderr)
 }
 
 const acbAdjustmentWarningsConfig = `colour = "red"
@@ -116,17 +111,14 @@ func Test_run_acb_lists_config_then_adjustment_then_no_cost_then_removal_then_re
 }
 
 func Test_run_acb_names_two_adjustments_for_one_security_on_one_day_with_the_first_item(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n\n"+
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n\n"+
 		"[[acb.adjustment]]\nsecurity = \"sec-acme\"\ndate = 2024-06-30\nreinvested-distribution = 10.00\n\n"+
-		"[[acb.adjustment]]\nsecurity = \"sec-acme\"\ndate = 2024-06-30\nreturn-of-capital = 5.00\n")
-	replaceStore(t, home, acbAdjustmentsRows())
+		"[[acb.adjustment]]\nsecurity = \"sec-acme\"\ndate = 2024-06-30\nreturn-of-capital = 5.00\n", acbAdjustmentsRows())
 
-	exitCode, _, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
+	_, stderr := mustRunACB(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, stderrWarnings(configShown+`: acb.adjustment items 1 and 2 are both for "sec-acme" on 2024-06-30; quarry applies both`),
-		stderr.String())
+		stderr)
 }
 
 func Test_run_acb_writes_return_of_capital_gain_in_json(t *testing.T) {
@@ -137,11 +129,10 @@ func Test_run_acb_writes_return_of_capital_gain_in_json(t *testing.T) {
 		acbTrade("inv-sell", 2, "acct-cad", "sec-acme", store.ActionSell, "CAD", day(2024, time.September, 1), -2_000_000, 30_000))
 	replaceStore(t, home, rows)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
+	stdout, _ := mustRunACB(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
 	require.Len(t, doc.Years, 2)
 	assert.Equal(t, 2024, doc.Years[0].Year)
 	assert.Equal(t, 1, doc.Years[0].SaleCount)
@@ -167,17 +158,10 @@ const acmeRemovalWarning = `"Acme Corp": 4 shares left "CAD Brokerage" on 2025-0
 	"quarry took their share of the ACB out and reports no gain; if they went to a registered account or to someone else, " +
 	"that is a disposition at market value; check it with your accountant"
 
-// acbSharesPositionLine is one position table line, each cell as wide as this fixture's widest.
-func acbSharesPositionLine(security, ticker, shares, acb, perShare, suffix string) string {
-	return strings.TrimRight(fmt.Sprintf("%-9s  %-6s  %6s  %8s  %13s  %s", security, ticker, shares, acb, perShare, suffix), " ") + "\n"
-}
-
 // acbSharesRows is one non-registered CAD brokerage whose Acme Corp holding gains 10 bought, 5 added with a
 // cost and 5 added without one, then loses 4 removed with no sale.
 func acbSharesRows() store.Rows {
-	rows := spendRows([]store.Account{
-		{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true},
-	})
+	rows := acbBrokerageRows()
 	rows.Securities = []store.Security{{ID: "sec-acme", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")}}
 	withCost := acbTrade("inv-add-cost", 2, "acct-cad", "sec-acme", store.ActionAddShares, "CAD", day(2025, time.January, 2), 5_000_000, 0)
 	withCost.CostBasis = new(int64(60_000))
@@ -191,39 +175,33 @@ func acbSharesRows() store.Rows {
 }
 
 func Test_run_acb_takes_removed_shares_out_of_the_acb_and_adds_added_shares_at_their_cost(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	replaceStore(t, home, acbSharesRows())
+	acbFixture(t, acbNonRegistered, acbSharesRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
+	stdout, stderr := mustRunACB(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
 		"Year  Sales  Proceeds  Outlays  ACB  Gain or loss\n"+
 		"\nACB on 2026-03-12, in CAD\n\n"+
-		acbSharesPositionLine("Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
-		acbSharesPositionLine("Acme Corp", "ACME", "16", "1,280.00", "80.0000", "incomplete"),
-		stdout.String())
-	assert.Equal(t, stderrWarnings(acmeNoCostWarnings...), stderr.String())
+		acbPositionRow(9, 8, "Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
+		acbPositionRow(9, 8, "Acme Corp", "ACME", "16", "1,280.00", "80.0000", "incomplete"),
+		stdout)
+	assert.Equal(t, stderrWarnings(acmeNoCostWarnings...), stderr)
 }
 
 func Test_run_acb_lists_a_removal_warning_in_json(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	replaceStore(t, home, acbSharesRows())
+	acbFixture(t, acbNonRegistered, acbSharesRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
+	stdout, stderr := mustRunACB(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
 	assert.Equal(t, acmeNoCostWarnings, doc.Warnings)
-	assert.Equal(t, stderrWarnings(acmeNoCostWarnings...), stderr.String())
+	assert.Equal(t, stderrWarnings(acmeNoCostWarnings...), stderr)
 }
 
 func Test_run_acb_leaves_a_zero_unit_removal_out_of_the_warnings(t *testing.T) {
 	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
+	writeConfig(t, home, acbNonRegistered)
 	rows := acbSharesRows()
 	rows.InvestmentTransactions = append(rows.InvestmentTransactions,
 		acbTrade("inv-remove-zero", 5, "acct-cad", "sec-acme", store.ActionRemoveShares, "CAD", day(2025, time.March, 10), 0, 0))
@@ -253,16 +231,6 @@ func Test_run_acb_lists_the_configs_warnings_before_a_removal_warning_in_both_fo
 const acmeAddedNoCostWarning = `"Acme Corp" has shares added with no cost, so its ACB is too low and its gains too high; ` +
 	"quarry findings --type shares-without-cost lists them"
 
-// unknownCostYearLine is the year table's row for 2025, each cell as wide as this fixture's widest.
-func unknownCostYearLine(year, sales, proceeds, outlays, acb, gain, suffix string) string {
-	return fmt.Sprintf("%-4s  %5s  %8s  %7s  %6s  %12s  %s\n", year, sales, proceeds, outlays, acb, gain, suffix)
-}
-
-// unknownCostPositionLine is one position table line, each cell as wide as this fixture's widest.
-func unknownCostPositionLine(security, ticker, shares, acb, perShare, suffix string) string {
-	return strings.TrimRight(fmt.Sprintf("%-9s  %-6s  %6s  %6s  %13s  %s", security, ticker, shares, acb, perShare, suffix), " ") + "\n"
-}
-
 func noCostWarning(name string) string {
 	return fmt.Sprintf(`"%s" has shares added with no cost, so its ACB is too low and its gains too high; `+
 		"quarry findings --type shares-without-cost lists them", name)
@@ -284,9 +252,7 @@ func soldOutAndRebought() store.Rows {
 // unknownCostRows is one non-registered CAD brokerage whose Acme Corp holding buys 10 for 1,000.00, gains 5 with
 // no cost, then sells 5 for 900.00.
 func unknownCostRows() store.Rows {
-	rows := spendRows([]store.Account{
-		{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true},
-	})
+	rows := acbBrokerageRows()
 	rows.Securities = []store.Security{{ID: "sec-acme", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")}}
 	rows.InvestmentTransactions = []store.InvestmentTransaction{
 		acbTrade("inv-buy", 1, "acct-cad", "sec-acme", store.ActionBuy, "CAD", day(2024, time.February, 1), 10_000_000, -100_000),
@@ -297,33 +263,27 @@ func unknownCostRows() store.Rows {
 }
 
 func Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_with_no_cost(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	replaceStore(t, home, unknownCostRows())
+	acbFixture(t, acbNonRegistered, unknownCostRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
+	stdout, stderr := mustRunACB(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
 		acbYearLine("Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss")+
-		unknownCostYearLine("2025", "1", "900.00", "0.00", "333.33", "566.67", "1 sale of shares with unknown cost")+
+		acbYearRow(6, "2025", "1", "900.00", "0.00", "333.33", "566.67", "1 sale of shares with unknown cost")+
 		"\nACB on 2026-03-12, in CAD\n\n"+
-		fmt.Sprintf("%-9s  %-6s  %6s  %6s  %13s\n", "Security", "Ticker", "Shares", "ACB", "ACB per share")+
-		unknownCostPositionLine("Acme Corp", "ACME", "10", "666.67", "66.6670", "incomplete"),
-		stdout.String())
-	assert.Equal(t, "quarry: warning: "+acmeAddedNoCostWarning+"\n", stderr.String())
+		acbPositionRow(9, 6, "Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
+		acbPositionRow(9, 6, "Acme Corp", "ACME", "10", "666.67", "66.6670", "incomplete"),
+		stdout)
+	assert.Equal(t, "quarry: warning: "+acmeAddedNoCostWarning+"\n", stderr)
 }
 
 func Test_run_acb_writes_the_unknown_cost_marks_in_json(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	replaceStore(t, home, unknownCostRows())
+	acbFixture(t, acbNonRegistered, unknownCostRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
+	stdout, _ := mustRunACB(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
 	require.Len(t, doc.Years, 1)
 	assert.Equal(t, 1, doc.Years[0].UnknownCostSales)
 	require.Len(t, doc.Years[0].Sales, 1)
@@ -353,36 +313,30 @@ func noCostOrderRows() store.Rows {
 }
 
 func Test_run_acb_warns_for_no_cost_securities_by_name_ignoring_case_then_id(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	replaceStore(t, home, noCostOrderRows())
+	acbFixture(t, acbNonRegistered, noCostOrderRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
+	stdout, _ := mustRunACB(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
 	assert.Equal(t, []string{noCostWarning("alpha"), noCostWarning("alpha"), noCostWarning("Beta")}, doc.Warnings)
 	require.Len(t, doc.Securities, 3)
 	assert.Equal(t, []string{"sec-a1", "sec-a2", "sec-b"}, []string{doc.Securities[0].ID, doc.Securities[1].ID, doc.Securities[2].ID})
 }
 
 func Test_run_acb_counts_only_the_sales_before_a_no_cost_holding_sold_out_and_leaves_a_rebought_one_complete(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	replaceStore(t, home, soldOutAndRebought())
+	acbFixture(t, acbNonRegistered, soldOutAndRebought())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
+	stdout, stderr := mustRunACB(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
-		fmt.Sprintf("%-4s  %5s  %8s  %7s  %8s  %12s\n", "Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss")+
-		fmt.Sprintf("%-4s  %5s  %8s  %7s  %8s  %12s  %s\n", "2025", "2", "1,800.00", "0.00", "1,250.00", "550.00", "1 sale of shares with unknown cost")+
+		acbYearRow(8, "Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss", "")+
+		acbYearRow(8, "2025", "2", "1,800.00", "0.00", "1,250.00", "550.00", "1 sale of shares with unknown cost")+
 		"\nACB on 2026-03-12, in CAD\n\n"+
-		fmt.Sprintf("%-9s  %-6s  %6s  %6s  %13s\n", "Security", "Ticker", "Shares", "ACB", "ACB per share")+
-		unknownCostPositionLine("Acme Corp", "ACME", "5", "250.00", "50.0000", ""),
-		stdout.String())
-	assert.Equal(t, stderrWarnings(acmeAddedNoCostWarning), stderr.String())
+		acbPositionRow(9, 6, "Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
+		acbPositionRow(9, 6, "Acme Corp", "ACME", "5", "250.00", "50.0000", ""),
+		stdout)
+	assert.Equal(t, stderrWarnings(acmeAddedNoCostWarning), stderr)
 }
 
 const moneyFundOversoldWarning = `"Money Fund": the sale on 2017-01-12 in "CAD Brokerage" sold 10 more shares than the ` +
@@ -392,9 +346,7 @@ const moneyFundOversoldWarning = `"Money Fund": the sale on 2017-01-12 in "CAD B
 // oversoldRows is one non-registered brokerage whose Money Fund holding buys 100 for 100.00, sells 110 for
 // 110.00, then buys 15 for 15.00.
 func oversoldRows() store.Rows {
-	rows := spendRows([]store.Account{
-		{ID: "acct-cad", SourceID: 1, Name: "CAD Brokerage", Type: store.AccountTypeBrokerage, Currency: "CAD", Active: true},
-	})
+	rows := acbBrokerageRows()
 	rows.Securities = []store.Security{{ID: "sec-fund", SourceID: 1, Name: "Money Fund", Ticker: new("MNY"), Currency: new("CAD")}}
 	rows.InvestmentTransactions = []store.InvestmentTransaction{
 		acbTrade("inv-buy", 1, "acct-cad", "sec-fund", store.ActionBuy, "CAD", day(2017, time.January, 3), 100_000_000, -10_000),
@@ -431,15 +383,12 @@ type shortDoc struct {
 }
 
 func Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_next_buy_cover_the_short(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-cad\"]\n")
-	replaceStore(t, home, oversoldRows())
+	acbFixture(t, acbNonRegistered, oversoldRows())
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
+	stdout, stderr := mustRunACB(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc shortDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
 	require.Len(t, doc.Years, 1)
 	assert.Equal(t, 1, doc.Years[0].UnknownCostSales)
 	require.Len(t, doc.Years[0].Sales, 1)
@@ -454,17 +403,17 @@ func Test_run_acb_counts_shares_sold_beyond_the_pool_at_no_cost_and_lets_the_nex
 	assert.Equal(t, []string{"Money Fund", "5.000000", "5.00"},
 		[]string{doc.Securities[0].Security, doc.Securities[0].Shares, doc.Securities[0].ACB})
 	assert.False(t, doc.Securities[0].Incomplete)
-	assert.Equal(t, stderrWarnings(moneyFundOversoldWarning), stderr.String())
+	assert.Equal(t, stderrWarnings(moneyFundOversoldWarning), stderr)
 }
 
 func Test_run_acb_shows_a_buy_that_covers_a_short_at_the_pro_rata_cost_of_the_units_beyond_it(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", oversoldRows())
+	acbFixture(t, acbNonRegistered, oversoldRows())
 	w := [10]int{10, 13, 6, 6, 11, 4, 7, 11, 6, 12}
 
-	positions, _ := runACB(t)
-	history, stderr := runACB(t, "--security", "MNY")
+	positions, _ := mustRunACB(t)
+	history, stderr := mustRunACB(t, "--security", "MNY")
 
-	assert.Contains(t, positions, fmt.Sprintf("%-10s  %-6s  %6s  %4s  %13s\n", "Money Fund", "MNY", "5", "5.00", "1.0000"))
+	assert.Contains(t, positions, acbPositionRow(10, 4, "Money Fund", "MNY", "5", "5.00", "1.0000", ""))
 	assert.Contains(t, history, acbHistoryRowOf(w, [11]string{"2017-01-12", "CAD Brokerage", "sell", "110", "110.00 CAD", "", "110.00", "-10", "0.00", "10.00", "unknown cost"}))
 	assert.Contains(t, history, acbHistoryRowOf(w, [11]string{"2017-01-30", "CAD Brokerage", "buy", "15", "-15.00 CAD", "", "-15.00", "5", "5.00", ""}))
 	assert.Equal(t, stderrWarnings(moneyFundOversoldWarning), stderr)
@@ -494,13 +443,13 @@ func shortOpenRows() store.Rows {
 }
 
 func Test_run_acb_text_marks_the_oversold_sale_and_lists_no_short_position(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+	acbFixture(t, acbNonRegistered, shortOpenRows())
 
-	stdout, stderr := runACB(t)
+	stdout, stderr := mustRunACB(t)
 
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
 		acbYearLine("Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss")+
-		unknownCostYearLine("2017", "1", "1,222.84", "0.00", "100.00", "1,122.84", "1 sale of shares with unknown cost")+
+		acbYearRow(6, "2017", "1", "1,222.84", "0.00", "100.00", "1,122.84", "1 sale of shares with unknown cost")+
 		"\nACB on 2026-03-12, in CAD\n\n"+
 		"Security  Ticker  Shares  ACB  ACB per share\n", //nolint:dupword // the ACB column sits beside the ACB per share column
 		stdout)
@@ -508,9 +457,9 @@ func Test_run_acb_text_marks_the_oversold_sale_and_lists_no_short_position(t *te
 }
 
 func Test_run_acb_json_writes_a_short_position_with_negative_shares_and_no_acb_per_share(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+	acbFixture(t, acbNonRegistered, shortOpenRows())
 
-	stdout, stderr := runACB(t, "--json")
+	stdout, stderr := mustRunACB(t, "--json")
 
 	var doc shortDoc
 	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
@@ -526,10 +475,10 @@ func Test_run_acb_json_writes_a_short_position_with_negative_shares_and_no_acb_p
 }
 
 func Test_run_acb_year_marks_the_oversold_sale_unknown_cost(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+	acbFixture(t, acbNonRegistered, shortOpenRows())
 	w := [7]int{10, 8, 8, 8, 7, 6, 12}
 
-	stdout, stderr := runACB(t, "--year", "2017")
+	stdout, stderr := mustRunACB(t, "--year", "2017")
 
 	assert.Equal(t, "Sales in 2017, in CAD\n\n"+
 		acbSaleRowOf(w, [8]string{"Date", "Security", "Shares", "Proceeds", "Outlays", "ACB", "Gain or loss"})+
@@ -540,18 +489,18 @@ func Test_run_acb_year_marks_the_oversold_sale_unknown_cost(t *testing.T) {
 }
 
 func Test_run_acb_year_without_a_sale_still_warns_of_an_oversold_sale_in_another_year(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+	acbFixture(t, acbNonRegistered, shortOpenRows())
 
-	_, stderr := runACB(t, "--year", "2018")
+	_, stderr := mustRunACB(t, "--year", "2018")
 
 	assert.True(t, strings.HasSuffix(stderr, stderrWarnings(moneyFundShortWarning)), stderr)
 }
 
 func Test_run_acb_security_prints_negative_shares_held_grouped(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortOpenRows())
+	acbFixture(t, acbNonRegistered, shortOpenRows())
 	w := [10]int{10, 13, 6, 8, 12, 4, 8, 11, 6, 12}
 
-	stdout, stderr := runACB(t, "--security", "MNY")
+	stdout, stderr := mustRunACB(t, "--security", "MNY")
 
 	assert.Equal(t, "ACB history of \"Money Fund\" (MNY), in CAD\n\n"+
 		acbHistoryRowOf(w, acbHistoryHeaderCells)+
@@ -565,9 +514,9 @@ func Test_run_acb_names_a_removal_beyond_the_pool_after_its_removal_line(t *test
 	rows := shortOpenRows()
 	rows.InvestmentTransactions[1] = acbTrade("inv-remove", 2, "acct-cad", "sec-fund", store.ActionRemoveShares, "CAD",
 		day(2017, time.January, 12), -110_000_000, 0)
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", rows)
+	acbFixture(t, acbNonRegistered, rows)
 
-	_, stderr := runACB(t)
+	_, stderr := mustRunACB(t)
 
 	assert.Equal(t, stderrWarnings(moneyFundRemovalWarning, moneyFundRemovalOversoldWarning), stderr)
 }
@@ -592,7 +541,7 @@ func Test_run_acb_text_lists_no_position_and_skips_a_return_of_capital_once_a_sp
 		"[[acb.adjustment]]\nsecurity = \"sec-fund\"\ndate = 2017-06-01\nreturn-of-capital = 10.00\n",
 		splitSoldOutRows(100_000_000, 3_000_000, 33_333_333))
 
-	stdout, stderr := runACB(t)
+	stdout, stderr := mustRunACB(t)
 
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
 		"Year  Sales  Proceeds  Outlays       ACB  Gain or loss\n"+
@@ -606,9 +555,9 @@ func Test_run_acb_text_lists_no_position_and_skips_a_return_of_capital_once_a_sp
 }
 
 func Test_run_acb_json_counts_a_sale_of_every_share_of_a_split_pool_as_neither_oversold_nor_unknown_cost(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", splitSoldOutRows(1_000_000_000, 7_000_000, 142_857_143))
+	acbFixture(t, acbNonRegistered, splitSoldOutRows(1_000_000_000, 7_000_000, 142_857_143))
 
-	stdout, stderr := runACB(t, "--json")
+	stdout, stderr := mustRunACB(t, "--json")
 
 	var doc shortDoc
 	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
@@ -625,7 +574,7 @@ func Test_run_acb_skips_a_return_of_capital_while_the_pool_is_short_as_not_held(
 	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n\n"+
 		"[[acb.adjustment]]\nsecurity = \"sec-fund\"\ndate = 2017-02-01\nreturn-of-capital = 5.00\n", shortOpenRows())
 
-	stdout, stderr := runACB(t)
+	stdout, stderr := mustRunACB(t)
 
 	assert.Equal(t, stderrWarnings(
 		configShown+`: acb.adjustment item 1 is for "Money Fund", which no non-registered account holds on 2017-02-01; quarry skips it`,
@@ -644,11 +593,6 @@ const (
 	decemberSaleWarning2025 = "1 sale dated December 24–31, 2025: a sale settles a day or two after its trade date and counts " +
 		"for tax in the year it settles; check its date on your T5008"
 )
-
-// warningsPositionLine is one position table line, each cell as wide as this fixture's widest.
-func warningsPositionLine(security, ticker, shares, acb, perShare, suffix string) string {
-	return strings.TrimRight(fmt.Sprintf("%-24s  %-6s  %6s  %6s  %13s  %s", security, ticker, shares, acb, perShare, suffix), " ") + "\n"
-}
 
 // noRateSharedTickerRows is a USD and a CAD brokerage, each holding one of two securities that share ticker VTI;
 // the USD one is bought before the first rate, and both are part-sold in December 2025.
@@ -672,25 +616,22 @@ func noRateSharedTickerRows() store.Rows {
 }
 
 func Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, "[accounts]\nnon-registered = [\"acct-usd\", \"acct-cad\"]\n")
-	replaceStoreWithRates(t, home, noRateSharedTickerRows(), usdRate(day(2024, time.January, 2), 1_250_000))
+	acbFixture(t, "[accounts]\nnon-registered = [\"acct-usd\", \"acct-cad\"]\n", noRateSharedTickerRows(), usdRate(day(2024, time.January, 2), 1_250_000))
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb"}, holdingsClock())
+	stdout, stderr := mustRunACB(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
 		acbYearLine("Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss")+
 		acbYearLine("2025", "1", "600.00", "0.00", "400.00", "200.00")+
 		"\nACB on 2026-03-12, in CAD\n\n"+
-		fmt.Sprintf("%-24s  %-6s  %6s  %6s  %13s\n", "Security", "Ticker", "Shares", "ACB", "ACB per share")+
-		warningsPositionLine("Vanguard Total Stock", "VTI", "6", "0.00", "0.0000", "incomplete")+
-		warningsPositionLine("Vanguard Total Stock CAD", "VTI", "6", "600.00", "100.0000", ""),
-		stdout.String())
+		acbPositionRow(24, 6, "Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
+		acbPositionRow(24, 6, "Vanguard Total Stock", "VTI", "6", "0.00", "0.0000", "incomplete")+
+		acbPositionRow(24, 6, "Vanguard Total Stock CAD", "VTI", "6", "600.00", "100.0000", ""),
+		stdout)
 	assert.Equal(t, "quarry: warning: "+noRateWarningVTI+"\n"+
 		"quarry: warning: "+sharedTickerWarningVTI+"\n"+
 		"quarry: warning: "+decemberSaleWarning2025+"\n",
-		stderr.String())
+		stderr)
 }
 
 const noRateReturnOfCapitalConfig = `[accounts]
@@ -703,15 +644,12 @@ return-of-capital = 1000.00
 `
 
 func Test_run_acb_json_leaves_a_no_rate_security_out_of_the_years_and_warns(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, noRateReturnOfCapitalConfig)
-	replaceStoreWithRates(t, home, noRateSharedTickerRows(), usdRate(day(2024, time.January, 2), 1_250_000))
+	acbFixture(t, noRateReturnOfCapitalConfig, noRateSharedTickerRows(), usdRate(day(2024, time.January, 2), 1_250_000))
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"acb", "--json"}, holdingsClock())
+	stdout, _ := mustRunACB(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var doc acbDoc
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc), stdout.String())
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
 	require.Len(t, doc.Years, 1)
 	assert.Equal(t, 1, doc.Years[0].SaleCount)
 	assert.Equal(t, "600.00", doc.Years[0].Proceeds)
@@ -746,9 +684,7 @@ func acbSuperficialRows() store.Rows {
 }
 
 func Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_days(t *testing.T) {
-	home := newHome(t)
-	writeConfig(t, home, acbSuperficialConfig)
-	replaceStore(t, home, acbSuperficialRows())
+	acbFixture(t, acbSuperficialConfig, acbSuperficialRows())
 	var stdout, stderr, jsonOut, jsonErr bytes.Buffer
 
 	textExit := runWith(context.Background(), []string{"acb"}, spendEnvAt(&stdout, &stderr, holdingsClock()))
@@ -756,11 +692,11 @@ func Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_d
 
 	require.Equal(t, 0, textExit, stderr.String())
 	assert.Equal(t, "Realized capital gains by tax year, in CAD\n\n"+
-		fmt.Sprintf("%-4s  %5s  %8s  %7s  %8s  %12s\n", "Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss")+
-		fmt.Sprintf("%-4s  %5s  %8s  %7s  %8s  %12s  %s\n", "2025", "1", "600.00", "0.00", "1,000.00", "-400.00", "1 possible superficial loss")+
+		acbYearRow(8, "Year", "Sales", "Proceeds", "Outlays", "ACB", "Gain or loss", "")+
+		acbYearRow(8, "2025", "1", "600.00", "0.00", "1,000.00", "-400.00", "1 possible superficial loss")+
 		"\nACB on 2026-03-12, in CAD\n\n"+
-		fmt.Sprintf("%-9s  %-6s  %6s  %8s  %13s\n", "Security", "Ticker", "Shares", "ACB", "ACB per share")+
-		fmt.Sprintf("%-9s  %-6s  %6s  %8s  %13s\n", "Acme Corp", "ACME", "10", "1,000.00", "100.0000"),
+		acbPositionRow(9, 8, "Security", "Ticker", "Shares", "ACB", "ACB per share", "")+
+		acbPositionRow(9, 8, "Acme Corp", "ACME", "10", "1,000.00", "100.0000", ""),
 		stdout.String())
 	assert.Equal(t, stderrWarnings(superficialLossWarning), stderr.String())
 	require.Equal(t, 0, jsonExit, jsonErr.String())
@@ -811,9 +747,9 @@ func Test_run_acb_json_marks_an_oversold_loss_superficial_only_when_the_cover_le
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortCoveredRows(c.cover))
+			acbFixture(t, acbNonRegistered, shortCoveredRows(c.cover))
 
-			stdout, _ := runACB(t, "--json")
+			stdout, _ := mustRunACB(t, "--json")
 
 			doc := decodeACBYear(t, stdout)
 			require.Len(t, doc.Years, 1)
@@ -838,9 +774,9 @@ func shortSplitRows() store.Rows {
 }
 
 func Test_run_acb_json_doubles_a_short_position_a_split_multiplies(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortSplitRows())
+	acbFixture(t, acbNonRegistered, shortSplitRows())
 
-	stdout, _ := runACB(t, "--json")
+	stdout, _ := mustRunACB(t, "--json")
 
 	var doc shortDoc
 	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), stdout)
@@ -855,10 +791,10 @@ func Test_run_acb_json_doubles_a_short_position_a_split_multiplies(t *testing.T)
 }
 
 func Test_run_acb_security_prints_the_split_of_a_short_position_with_its_negative_shares_held(t *testing.T) {
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", shortSplitRows())
+	acbFixture(t, acbNonRegistered, shortSplitRows())
 	w := [10]int{10, 13, 6, 6, 11, 4, 7, 11, 6, 12}
 
-	stdout, _ := runACB(t, "--security", "MNY")
+	stdout, _ := mustRunACB(t, "--security", "MNY")
 
 	assert.Equal(t, "ACB history of \"Money Fund\" (MNY), in CAD\n\n"+
 		acbHistoryRowOf(w, acbHistoryHeaderCells)+
@@ -872,9 +808,9 @@ func Test_run_acb_json_lists_the_oversold_removal_warning_after_the_removal_warn
 	rows := shortOpenRows()
 	rows.InvestmentTransactions[1] = acbTrade("inv-remove", 2, "acct-cad", "sec-fund", store.ActionRemoveShares, "CAD",
 		day(2017, time.January, 12), -110_000_000, 0)
-	acbFixture(t, "[accounts]\nnon-registered = [\"acct-cad\"]\n", rows)
+	acbFixture(t, acbNonRegistered, rows)
 
-	stdout, stderr := runACB(t, "--json")
+	stdout, stderr := mustRunACB(t, "--json")
 
 	doc := decodeACBYear(t, stdout)
 	assert.Equal(t, []string{moneyFundRemovalWarning, moneyFundRemovalOversoldWarning}, doc.Warnings)
@@ -885,7 +821,7 @@ func Test_run_acb_security_marks_a_sale_that_is_both_a_possible_superficial_loss
 	acbFixture(t, acbRegisteredConfig, acbStackedRows())
 	w := [10]int{10, 13, 10, 6, 13, 4, 9, 11, 8, 12}
 
-	stdout, stderr := runACB(t, "--security", "ACME")
+	stdout, stderr := mustRunACB(t, "--security", "ACME")
 
 	assert.Equal(t, "ACB history of \"Acme Corp\" (ACME), in CAD\n\n"+
 		acbHistoryRowOf(w, acbHistoryHeaderCells)+

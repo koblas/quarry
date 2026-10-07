@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,9 +33,7 @@ func Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_tr
 	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
 	dividendsPK := b.Category(v9fixture.TagRow{Name: "Dividends", Type: new(int64(categoryKindIncome))})
 	tradesPK := b.Category(v9fixture.TagRow{Name: "Trades", Type: new(int64(categoryKindSystem))})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -59,14 +56,9 @@ func Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_tr
 	registerPK := b.Transaction(v9fixture.TransactionRow{Account: brokeragePK, Amount: "-20.00", PostedDate: &day})
 	registerEntry := b.Entry(v9fixture.EntryRow{Parent: registerPK, Amount: "-20.00", CategoryTag: tradesPK})
 
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	syncInvestmentFixture(t, home, b)
 
-	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 
 	txnID := func(pk int64) string { return fmt.Sprintf("txn-%d", pk) }
 	itxnID := func(pk int64) string { return fmt.Sprintf("itxn-%d", pk) }
@@ -92,9 +84,7 @@ func Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income(t *testing.T
 	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
 	dividendsPK := b.Category(v9fixture.TagRow{Name: "Dividends", Type: new(int64(categoryKindIncome))})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 
@@ -110,14 +100,9 @@ func Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income(t *testing.T
 	invest(investmentCodeReinvest, v9fixture.TransactionRow{Position: positionPK, Units: "0.5", Amount: "0.00"})
 	b.Lot(v9fixture.LotRow{Position: positionPK, LatestUnits: "0.5"})
 
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	syncInvestmentFixture(t, home, b)
 
-	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 	assert.Equal(t, map[string]string{fmt.Sprintf("txn-%d", dividendPK): "12.00"},
 		stringMap(t, db, `SELECT id, CAST(amount AS VARCHAR) FROM transactions`))
 	assert.Equal(t, map[string]string{"Dividends": "12.00"},
@@ -141,14 +126,9 @@ func Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_in
 	chequingLeg := b.Entry(v9fixture.EntryRow{Parent: chequingTxn, Amount: "-12.00", QuickenID: 2002, Transfer: "1001"})
 	miscPK := b.InvestmentTransaction(v9fixture.TransactionRow{Account: brokeragePK, Type: &miscIncomeCode, Amount: "5.00", PostedDate: &later})
 
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	syncInvestmentFixture(t, home, b)
 
-	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 	splitID := func(pk int64) string { return fmt.Sprintf("split-%d", pk) }
 	acctID := func(pk int64) string { return fmt.Sprintf("acct-%d", pk) }
 	syntheticID := fmt.Sprintf("split-itxn-%d", miscPK)
@@ -211,9 +191,7 @@ const (
 func syncInvestmentFixture(t *testing.T, home string, b *v9fixture.Builder) {
 	t.Helper()
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-
 	exitCode, _, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
-
 	require.Equal(t, 0, exitCode, stderr.String())
 }
 
@@ -264,9 +242,7 @@ func incomeAndTradesFixture() *v9fixture.Builder {
 // marginInterestFixture holds one March margin-interest charge and a system-category buy in Brokerage.
 func marginInterestFixture() *v9fixture.Builder {
 	b := v9fixture.NewBuilder()
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	acmePK := b.Security(v9fixture.SecurityRow{Name: "Acme Corp", Ticker: "ACME", Currency: "CAD"})
-	positionPK := b.Position(v9fixture.PositionRow{Account: brokeragePK, Security: acmePK})
+	brokeragePK, _, positionPK := brokerageHoldingAcme(b)
 	marginPK := b.Category(v9fixture.TagRow{Name: "Margin Interest", Type: new(int64(categoryKindExpense))})
 	tradesPK := b.Category(v9fixture.TagRow{Name: "Trades", Type: new(int64(categoryKindSystem))})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -279,9 +255,7 @@ func marginInterestFixture() *v9fixture.Builder {
 // cashFlowByCategory is v_cash_flow's total per category and flow, as "flow|amount".
 func cashFlowByCategory(t *testing.T, home string) map[string]string {
 	t.Helper()
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := openStoreReadOnly(t, home)
 	return stringMap(t, db, `SELECT category, flow || '|' || CAST(SUM(amount) AS VARCHAR) FROM v_cash_flow GROUP BY category, flow`)
 }
 

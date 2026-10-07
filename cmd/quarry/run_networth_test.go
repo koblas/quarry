@@ -14,14 +14,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// netWorthRowOf is one converted net worth table line with the type column typeW wide; the table ends a line at
+// its last non-blank cell.
+func netWorthRowOf(typeW int, typ, currency, balance, in string) string {
+	return strings.TrimRight(fmt.Sprintf("%-*s  %-8s  %8s  %8s", typeW, typ, currency, balance, in), " ") + "\n"
+}
+
+// netWorthNativeRowOf is netWorthRowOf without the In column.
+func netWorthNativeRowOf(typeW int, typ, currency, balance string) string {
+	return fmt.Sprintf("%-*s  %-8s  %8s\n", typeW, typ, currency, balance)
+}
+
 // netWorthLine is one converted net worth table line, each cell as wide as the fixture's widest.
 func netWorthLine(typ, currency, balance, in string) string {
-	return fmt.Sprintf("%-11s  %-8s  %8s  %8s\n", typ, currency, balance, in)
+	return netWorthRowOf(11, typ, currency, balance, in)
 }
 
 // netWorthNativeLine is netWorthLine without the In column.
 func netWorthNativeLine(typ, currency, balance string) string {
-	return fmt.Sprintf("%-11s  %-8s  %8s\n", typ, currency, balance)
+	return netWorthNativeRowOf(11, typ, currency, balance)
 }
 
 // seedNetWorthStore builds the net worth store (CAD and USD accounts, a USD brokerage, a USD rate from March 10) under a temp HOME.
@@ -66,10 +77,9 @@ func seedNetWorthStore(t *testing.T) {
 func Test_run_networth_prints_todays_balances_by_type_and_currency_with_a_total_in_the_reporting_currency(t *testing.T) {
 	seedNetWorthStore(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"networth"}, holdingsClock())
+	stdout, stderr := mustRunNetWorth(t)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Net worth on 2026-03-12, amounts in CAD\n\n"+
 		netWorthLine("Type", "Currency", "Balance", "In CAD")+
 		netWorthLine("brokerage", "USD", "920.00", "1,251.20")+
@@ -77,18 +87,15 @@ func Test_run_networth_prints_todays_balances_by_type_and_currency_with_a_total_
 		netWorthLine("chequing", "USD", "800.00", "1,088.00")+
 		netWorthLine("credit_card", "CAD", "-250.50", "-250.50")+
 		netWorthLine("Total", "", "", "3,113.70"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_lists_cad_and_usd_separately_with_one_total_each_in_native_mode(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--currency", "native"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--currency", "native")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Net worth on 2026-03-12\n\n"+
 		netWorthNativeLine("Type", "Currency", "Balance")+
 		netWorthNativeLine("brokerage", "USD", "920.00")+
@@ -97,7 +104,7 @@ func Test_run_networth_lists_cad_and_usd_separately_with_one_total_each_in_nativ
 		netWorthNativeLine("credit_card", "CAD", "-250.50")+
 		netWorthNativeLine("Total", "CAD", "774.50")+
 		netWorthNativeLine("Total", "USD", "1,720.00"),
-		stdout.String())
+		stdout)
 }
 
 const (
@@ -108,12 +115,12 @@ const (
 
 // netWorthAsOfLine is one converted table line of seedNetWorthAsOfStore's output, each cell as wide as its widest.
 func netWorthAsOfLine(typ, currency, balance, in string) string {
-	return fmt.Sprintf("%-9s  %-8s  %8s  %8s\n", typ, currency, balance, in)
+	return netWorthRowOf(9, typ, currency, balance, in)
 }
 
 // netWorthAsOfNativeLine is netWorthAsOfLine without the In column.
 func netWorthAsOfNativeLine(typ, currency, balance string) string {
-	return fmt.Sprintf("%-9s  %-8s  %8s\n", typ, currency, balance)
+	return netWorthNativeRowOf(9, typ, currency, balance)
 }
 
 // netWorthAsOfRefusal is the refusal of a future as-of or since, as net worth words it.
@@ -178,10 +185,8 @@ func Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_sinc
 	for _, c := range refusals {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"networth"}, c.args...),
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"networth"}, c.args...), holdingsClock())
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -191,10 +196,8 @@ func Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_sinc
 
 	t.Run("a future as-of with --json prints nothing to stdout", func(t *testing.T) {
 		t.Setenv("HOME", t.TempDir())
-		var stdout, stderr bytes.Buffer
 
-		exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2027", "--json"},
-			spendEnvAt(&stdout, &stderr, holdingsClock()))
+		exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"networth", "--as-of", "2027", "--json"}, holdingsClock())
 
 		assert.Equal(t, 2, exitCode)
 		assert.Empty(t, stdout.String())
@@ -212,10 +215,8 @@ func Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_sinc
 	for _, c := range controls {
 		t.Run(c.name, func(t *testing.T) {
 			seedNetWorthHistoryStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"networth"}, c.args...),
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"networth"}, c.args...), holdingsClock())
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
@@ -228,10 +229,8 @@ func Test_run_networth_values_every_counted_account_on_the_as_of_day(t *testing.
 	for _, asOf := range []string{"2025-12", "2025-12-31"} {
 		t.Run("as of "+asOf, func(t *testing.T) {
 			seedNetWorthAsOfStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{"networth", "--as-of", asOf},
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"networth", "--as-of", asOf}, holdingsClock())
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Empty(t, stderr.String())
@@ -248,13 +247,10 @@ func Test_run_networth_values_every_counted_account_on_the_as_of_day(t *testing.
 
 func Test_run_networth_lists_each_currency_on_the_as_of_day_in_native_mode(t *testing.T) {
 	seedNetWorthAsOfStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2025-12", "--currency", "native"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--as-of", "2025-12", "--currency", "native")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Net worth on 2025-12-31\n\n"+
 		netWorthAsOfNativeLine("Type", "Currency", "Balance")+
 		netWorthAsOfNativeLine("brokerage", "CAD", "920.00")+
@@ -262,17 +258,14 @@ func Test_run_networth_lists_each_currency_on_the_as_of_day_in_native_mode(t *te
 		netWorthAsOfNativeLine("chequing", "USD", "800.00")+
 		netWorthAsOfNativeLine("Total", "CAD", "2,045.00")+
 		netWorthAsOfNativeLine("Total", "USD", "800.00"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_json_as_of_sets_the_day_and_leaves_since_and_until_null(t *testing.T) {
 	seedNetWorthAsOfStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2025-12", "--json"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--as-of", "2025-12", "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var got struct {
 		AsOf  *string `json:"as_of"`
 		Since *string `json:"since"`
@@ -282,7 +275,7 @@ func Test_run_networth_json_as_of_sets_the_day_and_leaves_since_and_until_null(t
 			Totals []map[string]any `json:"totals"`
 		} `json:"dates"`
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.NotNil(t, got.AsOf)
 	assert.Equal(t, "2025-12-31", *got.AsOf)
 	assert.Nil(t, got.Since)
@@ -312,14 +305,11 @@ func seedUncountedOnlyStore(t *testing.T) {
 
 func Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2026-03-01"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--as-of", "2026-03-01")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "Net worth on 2026-03-01, amounts in CAD\n\nType  Currency  Balance  In CAD\n", stdout.String())
-	assert.Equal(t, beforeSnapshotWarning, stderr.String())
+	assert.Equal(t, "Net worth on 2026-03-01, amounts in CAD\n\nType  Currency  Balance  In CAD\n", stdout)
+	assert.Equal(t, beforeSnapshotWarning, stderr)
 }
 
 func Test_run_networth_before_the_first_transaction_lists_each_month_end_without_a_total_and_warns(t *testing.T) {
@@ -352,10 +342,8 @@ func Test_run_networth_before_the_first_transaction_lists_each_month_end_without
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			seedNetWorthStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"networth"}, c.args...),
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"networth"}, c.args...), holdingsClock())
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, c.wantStdout, stdout.String())
@@ -397,10 +385,8 @@ func Test_run_networth_json_before_the_first_transaction_keeps_the_empty_dates_a
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			seedNetWorthStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"networth", "--json"}, c.args...),
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"networth", "--json"}, c.args...), holdingsClock())
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			var got map[string]any
@@ -438,10 +424,8 @@ func Test_run_networth_says_no_account_in_the_reports_has_data_when_only_an_unco
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			seedUncountedOnlyStore(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), append([]string{"networth"}, c.args...),
-				spendEnvAt(&stdout, &stderr, holdingsClock()))
+			exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"networth"}, c.args...), holdingsClock())
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, c.wantStdout, stdout.String())
@@ -452,14 +436,11 @@ func Test_run_networth_says_no_account_in_the_reports_has_data_when_only_an_unco
 
 func Test_run_networth_on_the_first_balance_day_does_not_say_no_account_has_a_balance(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2026-03-02"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--as-of", "2026-03-02")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Contains(t, stdout.String(), "chequing")
-	assert.NotContains(t, stderr.String(), "no account has a balance")
+	assert.Contains(t, stdout, "chequing")
+	assert.NotContains(t, stderr, "no account has a balance")
 }
 
 // netWorthHistoryLine is one converted history table line over the chequing and credit_card columns.
@@ -495,19 +476,16 @@ func seedNetWorthHistoryStoreWithRates(t *testing.T, rates ...store.Rate) {
 
 func Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today(t *testing.T) {
 	seedNetWorthHistoryStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--since", "2026-01", "--until", "2027"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--since", "2026-01", "--until", "2027")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-03-12, amounts in CAD\n\n"+
 		netWorthHistoryLine("Month end", "chequing", "credit_card", "Total")+
 		netWorthHistoryLine("2026-01-31", "2,088.00", "-250.00", "1,838.00")+
 		netWorthHistoryLine("2026-02-28", "2,588.00", "-350.00", "2,238.00")+
 		netWorthHistoryLine("2026-03-12", "2,660.00", "-400.00", "2,260.00"),
-		stdout.String())
+		stdout)
 }
 
 // netWorthHistoryNativeLine is one native history table line over the chequing and credit_card columns.
@@ -559,57 +537,44 @@ func Test_run_networth_rejects_a_period_it_cannot_list(t *testing.T) {
 
 func Test_run_networth_lists_from_january_first_when_only_until_is_given(t *testing.T) {
 	seedNetWorthHistoryStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--until", "2026-02"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--until", "2026-02")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-02-28, amounts in CAD\n\n"+
 		netWorthHistoryLine("Month end", "chequing", "credit_card", "Total")+
 		netWorthHistoryLine("2026-01-31", "2,088.00", "-250.00", "1,838.00")+
 		netWorthHistoryLine("2026-02-28", "2,588.00", "-350.00", "2,238.00"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_lists_only_today_when_the_since_is_in_this_month(t *testing.T) {
 	seedNetWorthHistoryStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--since", "2026-03-05"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--since", "2026-03-05")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Net worth at each month end 2026-03-12 to 2026-03-12, amounts in CAD\n\n"+
 		netWorthHistoryLine("Month end", "chequing", "credit_card", "Total")+
 		netWorthHistoryLine("2026-03-12", "2,660.00", "-400.00", "2,260.00"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_lists_one_line_per_currency_with_a_total_each_in_native_mode(t *testing.T) {
 	seedNetWorthHistoryStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(),
-		[]string{"networth", "--since", "2026-01", "--until", "2026-01", "--currency", "native"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--since", "2026-01", "--until", "2026-01", "--currency", "native")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-01-31\n\n"+
 		netWorthHistoryNativeLine("Month end", "Currency", "chequing", "credit_card", "Total")+
 		netWorthHistoryNativeLine("2026-01-31", "CAD", "1,000.00", "-250.00", "750.00")+
 		netWorthHistoryNativeLine("2026-01-31", "USD", "800.00", "", "800.00"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_json_history_names_the_period_and_every_month_end(t *testing.T) {
 	seedNetWorthHistoryStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--json", "--since", "2026-01", "--until", "2027"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--json", "--since", "2026-01", "--until", "2027")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var got struct {
 		AsOf  *string `json:"as_of"`
 		Since string  `json:"since"`
@@ -618,7 +583,7 @@ func Test_run_networth_json_history_names_the_period_and_every_month_end(t *test
 			Date string `json:"date"`
 		} `json:"dates"`
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	assert.Nil(t, got.AsOf)
 	assert.Equal(t, "2026-01-01", got.Since)
 	assert.Equal(t, "2026-03-12", got.Until)
@@ -650,8 +615,8 @@ func seedLeftOutHoldingsRows(t *testing.T, rows store.Rows) string {
 	return home
 }
 
-// runNetWorthAtMarch12 runs networth with args at holdingsClock and returns its stdout and stderr.
-func runNetWorthAtMarch12(t *testing.T, args ...string) (string, string) {
+// mustRunNetWorth runs networth with args at holdingsClock and returns its stdout and stderr.
+func mustRunNetWorth(t *testing.T, args ...string) (string, string) {
 	t.Helper()
 
 	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), append([]string{"networth"}, args...), holdingsClock())
@@ -703,7 +668,7 @@ func Test_run_networth_history_counts_the_month_ends_on_which_an_account_held_an
 	rows.InvestmentTransactions[3].Date = time.Date(2026, time.January, 15, 0, 0, 0, 0, time.UTC)
 	seedLeftOutHoldingsRows(t, rows)
 
-	_, stderr := runNetWorthAtMarch12(t, "--since", "2026-01", "--until", "2027")
+	_, stderr := mustRunNetWorth(t, "--since", "2026-01", "--until", "2027")
 
 	assert.Equal(t, `quarry: warning: "Brokerage" holds a security with no price on 3 of the month ends listed, `+
 		`so its balance leaves it out on those days; enter prices in Quicken, then run quarry sync`+"\n"+
@@ -714,7 +679,7 @@ func Test_run_networth_json_lists_the_config_warning_before_the_holdings_warning
 	home := seedLeftOutHoldingsStore(t)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 
-	stdout, stderr := runNetWorthAtMarch12(t, "--json")
+	stdout, stderr := mustRunNetWorth(t, "--json")
 
 	var got struct {
 		Warnings []string `json:"warnings"`
@@ -731,7 +696,7 @@ func Test_run_networth_json_lists_the_config_warning_before_the_holdings_warning
 func Test_run_networth_in_native_currency_still_warns_about_a_holding_in_a_currency_quarry_does_not_convert(t *testing.T) {
 	seedLeftOutHoldingsStore(t)
 
-	_, stderr := runNetWorthAtMarch12(t, "--currency", "native")
+	_, stderr := mustRunNetWorth(t, "--currency", "native")
 
 	assert.Equal(t, leftOutNoPriceLine+"\n"+leftOutNoCurrencyLine+"\n"+leftOutOtherCurrencyLine+"\n", stderr)
 }
@@ -739,7 +704,7 @@ func Test_run_networth_in_native_currency_still_warns_about_a_holding_in_a_curre
 func Test_run_networth_as_of_a_day_before_the_prices_warns_that_every_holding_is_unpriced(t *testing.T) {
 	seedLeftOutHoldingsStore(t)
 
-	_, stderr := runNetWorthAtMarch12(t, "--as-of", "2026-03-05")
+	_, stderr := mustRunNetWorth(t, "--as-of", "2026-03-05")
 
 	assert.Equal(t, `quarry: warning: "Brokerage" holds 4 securities with no price on or before 2026-03-05, `+
 		`so its balance leaves them out; enter prices in Quicken, then run quarry sync`+"\n"+
@@ -756,7 +721,7 @@ func Test_run_networth_leaves_a_not_in_reports_accounts_unpriced_holding_out_of_
 	rows.InvestmentTransactions = append(rows.InvestmentTransactions, holdingsBuy("inv-hidden", 7, "acct-hidden", "sec-bare", "CAD", 1_000_000))
 	seedLeftOutHoldingsRows(t, rows)
 
-	_, stderr := runNetWorthAtMarch12(t)
+	_, stderr := mustRunNetWorth(t)
 
 	assert.Equal(t, leftOutNoPriceLine+"\n"+leftOutNoCurrencyLine+"\n"+leftOutOtherCurrencyLine+"\n", stderr)
 }
@@ -766,7 +731,7 @@ func Test_run_networth_warns_about_a_closed_accounts_unpriced_holding(t *testing
 	rows.InvestmentTransactions = append(rows.InvestmentTransactions, holdingsBuy("inv-old-bare", 7, "acct-old", "sec-bare", "CAD", 1_000_000))
 	seedLeftOutHoldingsRows(t, rows)
 
-	_, stderr := runNetWorthAtMarch12(t)
+	_, stderr := mustRunNetWorth(t)
 
 	assert.Equal(t, leftOutNoPriceLine+"\n"+
 		`quarry: warning: "Old RRSP" holds 1 security with no price on or before 2026-03-12, `+
@@ -779,7 +744,7 @@ func Test_run_networth_before_the_first_rate_prints_every_holding_warning_before
 	rows.InvestmentTransactions = append(rows.InvestmentTransactions, holdingsBuy("inv-vti-cad", 8, "acct-cad", "sec-vti", "CAD", 3_000_000))
 	seedLeftOutHoldingsRows(t, rows)
 
-	_, stderr := runNetWorthAtMarch12(t, "--as-of", "2026-03-09")
+	_, stderr := mustRunNetWorth(t, "--as-of", "2026-03-09")
 
 	assert.Equal(t, `quarry: warning: "Brokerage" holds 1 security with no price on or before 2026-03-09, `+
 		`so its balance leaves it out; enter a price in Quicken, then run quarry sync`+"\n"+
@@ -793,12 +758,11 @@ func Test_run_networth_before_the_first_rate_prints_every_holding_warning_before
 func Test_run_networth_json_keeps_a_zero_balance_row_and_counts_a_closed_account_but_not_one_left_out_of_reports(t *testing.T) {
 	seedNetWorthStore(t)
 
-	exitCode, stdout, stderr := runSpendCaptureAt(context.Background(), []string{"networth", "--json"}, holdingsClock())
+	stdout, stderr := mustRunNetWorth(t, "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	assert.Empty(t, stderr)
 	var got map[string]any
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	assert.Equal(t, map[string]any{
 		"as_of": "2026-03-12", "since": nil, "until": nil, "currency": "CAD",
 		"dates": []any{map[string]any{
@@ -818,12 +782,9 @@ func Test_run_networth_json_keeps_a_zero_balance_row_and_counts_a_closed_account
 
 func Test_run_networth_json_lists_each_currency_total_and_no_converted_balance_in_native_mode(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--json", "--currency", "native"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--json", "--currency", "native")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var got struct {
 		Currency string `json:"currency"`
 		Dates    []struct {
@@ -831,7 +792,7 @@ func Test_run_networth_json_lists_each_currency_total_and_no_converted_balance_i
 			Totals   []map[string]any `json:"totals"`
 		} `json:"dates"`
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Len(t, got.Dates, 1)
 	assert.Equal(t, "native", got.Currency)
 	assert.Equal(t, []map[string]any{
@@ -879,7 +840,7 @@ func seedNoRateHoldingStore(t *testing.T, rates ...store.Rate) {
 func Test_run_networth_before_the_first_rate_warns_that_a_usd_holding_in_a_cad_account_is_left_out(t *testing.T) {
 	seedNoRateHoldingStore(t, usdRate(holdingsDay(10), 1_360_000))
 
-	_, stderr := runNetWorthAtMarch12(t, "--as-of", "2026-02-28")
+	_, stderr := mustRunNetWorth(t, "--as-of", "2026-02-28")
 
 	assert.Equal(t, fmt.Sprintf(noRateHoldingBeforeFirstRate, "2026-02-28", "2026-03-10"), stderr)
 }
@@ -887,7 +848,7 @@ func Test_run_networth_before_the_first_rate_warns_that_a_usd_holding_in_a_cad_a
 func Test_run_networth_history_counts_the_month_ends_a_usd_holding_in_a_cad_account_lacked_a_rate(t *testing.T) {
 	seedNoRateHoldingStore(t, usdRate(holdingsDay(10), 1_360_000))
 
-	_, stderr := runNetWorthAtMarch12(t, "--since", "2026-01", "--until", "2026-03")
+	_, stderr := mustRunNetWorth(t, "--since", "2026-01", "--until", "2026-03")
 
 	assert.Equal(t, `quarry: warning: "Brokerage" holds a USD security on 2 of the month ends listed, before 2026-03-10, `+
 		`the first exchange rate in the store, so its CAD balance leaves it out on those days`+"\n", stderr)
@@ -896,7 +857,7 @@ func Test_run_networth_history_counts_the_month_ends_a_usd_holding_in_a_cad_acco
 func Test_run_networth_native_still_warns_that_a_usd_holding_in_a_cad_account_has_no_rate(t *testing.T) {
 	seedNoRateHoldingStore(t, usdRate(holdingsDay(10), 1_360_000))
 
-	_, stderr := runNetWorthAtMarch12(t, "--currency", "native", "--as-of", "2026-02-28")
+	_, stderr := mustRunNetWorth(t, "--currency", "native", "--as-of", "2026-02-28")
 
 	assert.Equal(t, fmt.Sprintf(noRateHoldingBeforeFirstRate, "2026-02-28", "2026-03-10"), stderr)
 }
@@ -904,7 +865,7 @@ func Test_run_networth_native_still_warns_that_a_usd_holding_in_a_cad_account_ha
 func Test_run_networth_in_a_store_with_no_rates_warns_of_the_holding_before_the_rate_line(t *testing.T) {
 	seedNoRateHoldingStore(t)
 
-	_, stderr := runNetWorthAtMarch12(t)
+	_, stderr := mustRunNetWorth(t)
 
 	assert.Equal(t, noRateHoldingNoRates+fmt.Sprintf(netWorthNoRatesNote, "USD", "CAD", "CAD"), stderr)
 }
@@ -937,29 +898,21 @@ func Test_run_accounts_in_a_store_with_no_rates_warns_of_the_holding_before_the_
 const netWorthBeforeFirstRateLine = "USD balances on 2026-03-05, before 2026-03-10, the first exchange rate in the store, " +
 	"are not converted to CAD and are left out of the CAD total; pass --currency native to list them"
 
-// netWorthNoRateLine is netWorthLine trimmed, for a line whose In column may be blank.
-func netWorthNoRateLine(typ, currency, balance, in string) string {
-	return strings.TrimRight(netWorthLine(typ, currency, balance, in), " \n") + "\n"
-}
-
 func Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2026-03-05"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--as-of", "2026-03-05")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "quarry: warning: "+netWorthBeforeFirstRateLine+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+netWorthBeforeFirstRateLine+"\n", stderr)
 	assert.Equal(t, "Net worth on 2026-03-05, amounts in CAD\n\n"+
-		netWorthNoRateLine("Type", "Currency", "Balance", "In CAD")+
-		netWorthNoRateLine("brokerage", "USD", "920.00", "no rate")+
-		netWorthNoRateLine("chequing", "CAD", "1,025.00", "1,025.00")+
-		netWorthNoRateLine("chequing", "USD", "800.00", "no rate")+
-		netWorthNoRateLine("credit_card", "CAD", "-250.50", "-250.50")+
-		netWorthNoRateLine("Total", "", "", "774.50")+
-		netWorthNoRateLine("Total", "USD", "1,720.00", ""),
-		stdout.String())
+		netWorthLine("Type", "Currency", "Balance", "In CAD")+
+		netWorthLine("brokerage", "USD", "920.00", "no rate")+
+		netWorthLine("chequing", "CAD", "1,025.00", "1,025.00")+
+		netWorthLine("chequing", "USD", "800.00", "no rate")+
+		netWorthLine("credit_card", "CAD", "-250.50", "-250.50")+
+		netWorthLine("Total", "", "", "774.50")+
+		netWorthLine("Total", "USD", "1,720.00", ""),
+		stdout)
 }
 
 // netWorthRateNote is the stderr warning that other balances, from when on, are not converted to reporting.
@@ -985,65 +938,53 @@ func seedNetWorthCADOnlyStore(t *testing.T) {
 
 func Test_run_networth_history_before_the_first_rate_totals_the_converting_rows_and_counts_the_month_ends(t *testing.T) {
 	seedNetWorthHistoryStoreWithRates(t, usdRate(day(2026, time.February, 15), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--since", "2026-01", "--until", "2026-03"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--since", "2026-01", "--until", "2026-03")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, netWorthRateNote("USD", "CAD", "on 1 month end before 2026-02-15,"), stderr.String())
+	assert.Equal(t, netWorthRateNote("USD", "CAD", "on 1 month end before 2026-02-15,"), stderr)
 	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-03-12, amounts in CAD\n\n"+
 		netWorthHistoryLine("Month end", "chequing", "credit_card", "Total")+
 		netWorthHistoryLine("2026-01-31", "1,000.00", "-250.00", "750.00")+
 		netWorthHistoryLine("2026-02-28", "2,588.00", "-350.00", "2,238.00")+
 		netWorthHistoryLine("2026-03-12", "2,660.00", "-400.00", "2,260.00"),
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_history_says_no_rate_in_the_total_of_a_month_end_whose_rows_all_need_a_rate(t *testing.T) {
 	seedNetWorthCADOnlyStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--since", "2026-01", "--until", "2026-02", "--currency", "USD"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--since", "2026-01", "--until", "2026-02", "--currency", "USD")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, fmt.Sprintf(netWorthNoRatesNote, "CAD", "USD", "USD"), stderr.String())
+	assert.Equal(t, fmt.Sprintf(netWorthNoRatesNote, "CAD", "USD", "USD"), stderr)
 	assert.Equal(t, "Net worth at each month end 2026-01-31 to 2026-02-28, amounts in USD\n\n"+
 		"Month end   chequing  credit_card    Total\n"+
 		"2026-01-31   no rate      no rate  no rate\n"+
 		"2026-02-28   no rate      no rate  no rate\n",
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_in_a_store_with_no_rates_warns_of_it_and_totals_the_usd_balances_apart(t *testing.T) {
 	seedNetWorthHistoryStoreWithRates(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2026-01-31"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--as-of", "2026-01-31")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, fmt.Sprintf(netWorthNoRatesNote, "USD", "CAD", "CAD"), stderr.String())
+	assert.Equal(t, fmt.Sprintf(netWorthNoRatesNote, "USD", "CAD", "CAD"), stderr)
 	assert.Equal(t, "Net worth on 2026-01-31, amounts in CAD\n\n"+
-		netWorthNoRateLine("Type", "Currency", "Balance", "In CAD")+
-		netWorthNoRateLine("chequing", "CAD", "1,000.00", "1,000.00")+
-		netWorthNoRateLine("chequing", "USD", "800.00", "no rate")+
-		netWorthNoRateLine("credit_card", "CAD", "-250.00", "-250.00")+
-		netWorthNoRateLine("Total", "", "", "750.00")+
-		netWorthNoRateLine("Total", "USD", "800.00", ""),
-		stdout.String())
+		netWorthLine("Type", "Currency", "Balance", "In CAD")+
+		netWorthLine("chequing", "CAD", "1,000.00", "1,000.00")+
+		netWorthLine("chequing", "USD", "800.00", "no rate")+
+		netWorthLine("credit_card", "CAD", "-250.00", "-250.00")+
+		netWorthLine("Total", "", "", "750.00")+
+		netWorthLine("Total", "USD", "800.00", ""),
+		stdout)
 }
 
 func Test_run_networth_in_usd_warns_of_cad_balances_before_the_first_rate_and_totals_them_apart(t *testing.T) {
 	seedNetWorthHistoryStoreWithRates(t, usdRate(day(2026, time.February, 15), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2026-01-31", "--currency", "USD"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--as-of", "2026-01-31", "--currency", "USD")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, netWorthRateNote("CAD", "USD", "on 2026-01-31, before 2026-02-15,"), stderr.String())
+	assert.Equal(t, netWorthRateNote("CAD", "USD", "on 2026-01-31, before 2026-02-15,"), stderr)
 	assert.Equal(t, "Net worth on 2026-01-31, amounts in USD\n\n"+
 		"Type         Currency   Balance   In USD\n"+
 		"chequing     CAD       1,000.00  no rate\n"+
@@ -1051,30 +992,24 @@ func Test_run_networth_in_usd_warns_of_cad_balances_before_the_first_rate_and_to
 		"credit_card  CAD        -250.00  no rate\n"+
 		"Total                             800.00\n"+
 		"Total        CAD         750.00\n",
-		stdout.String())
+		stdout)
 }
 
 func Test_run_networth_native_before_the_first_rate_has_no_warning_and_no_no_rate_cell(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2026-03-05", "--currency", "native"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, stderr := mustRunNetWorth(t, "--as-of", "2026-03-05", "--currency", "native")
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
-	assert.NotContains(t, stdout.String(), "no rate")
-	assert.Contains(t, stdout.String(), netWorthNativeLine("Total", "USD", "1,720.00"))
+	assert.Empty(t, stderr)
+	assert.NotContains(t, stdout, "no rate")
+	assert.Contains(t, stdout, netWorthNativeLine("Total", "USD", "1,720.00"))
 }
 
 func Test_run_networth_json_history_before_the_first_rate_totals_only_that_month_end_apart(t *testing.T) {
 	seedNetWorthHistoryStoreWithRates(t, usdRate(day(2026, time.February, 15), 1_360_000))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--since", "2026-01", "--until", "2026-03", "--json"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--since", "2026-01", "--until", "2026-03", "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var got struct {
 		Dates []struct {
 			Balances []map[string]any `json:"balances"`
@@ -1082,7 +1017,7 @@ func Test_run_networth_json_history_before_the_first_rate_totals_only_that_month
 		} `json:"dates"`
 		Warnings []string `json:"warnings"`
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Len(t, got.Dates, 3)
 	assert.Equal(t, []any{"1000.00", nil, "-250.00"}, convertedBalances(got.Dates[0].Balances))
 	assert.Equal(t, []map[string]any{
@@ -1095,12 +1030,9 @@ func Test_run_networth_json_history_before_the_first_rate_totals_only_that_month
 
 func Test_run_networth_json_before_the_first_rate_nulls_the_converted_balance_and_carries_the_total_apart(t *testing.T) {
 	seedNetWorthStore(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"networth", "--as-of", "2026-03-05", "--json"},
-		spendEnvAt(&stdout, &stderr, holdingsClock()))
+	stdout, _ := mustRunNetWorth(t, "--as-of", "2026-03-05", "--json")
 
-	require.Equal(t, 0, exitCode, stderr.String())
 	var got struct {
 		Dates []struct {
 			Balances []map[string]any `json:"balances"`
@@ -1108,7 +1040,7 @@ func Test_run_networth_json_before_the_first_rate_nulls_the_converted_balance_an
 		} `json:"dates"`
 		Warnings []string `json:"warnings"`
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Len(t, got.Dates, 1)
 	assert.Equal(t, []any{nil, "1025.00", nil, "-250.50", "0.00"}, convertedBalances(got.Dates[0].Balances))
 	assert.Equal(t, []map[string]any{
