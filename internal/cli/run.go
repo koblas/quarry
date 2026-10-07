@@ -53,6 +53,8 @@ type Env struct {
 	LoadConfig     ConfigLoader
 	ServeMCP       MCPServeFunc
 	RunTool        claudeplugin.Runner
+	LookPath       claudeplugin.LookPath
+	Home           string // the user's home directory, "" when unknown
 	IsTerminal     TerminalProbe
 	Now            func() time.Time
 }

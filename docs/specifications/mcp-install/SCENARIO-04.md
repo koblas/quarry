@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: Install warns when quarry is not on PATH
@@ -22,15 +22,15 @@ User-visible contract (`## Surface & Copy`, verbatim):
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/claude_install_test.go` `Test_claude_install_warns_when_quarry_is_not_on_the_path` — fake LookPath finds `claude` and fails `quarry`; nothing installed. Assert the stdout lines, the warning as the only stderr line, nil err. Must fail at the stderr assertion.
-- [ ] Step 2: signature-only stubs:
+- [x] Step 1: `internal/cli/claude_install_test.go` `Test_claude_install_warns_when_quarry_is_not_on_the_path` — fake LookPath finds `claude` and fails `quarry`; nothing installed. Assert the stdout lines, the warning as the only stderr line, nil err. Must fail at the stderr assertion.
+- [x] Step 2: signature-only stubs:
   - `claudeplugin.LookPath` type and `WithLookPath` (`claudeplugin.go:15-35`).
   - `Result.QuarryNotOnPath` (`:37-42`).
   - `cli.Env` fields `LookPath` and `Home` (`internal/cli/run.go:46-57`).
   - `newClaudeCommand` (`claude.go:13`) and `newClaudeInstallCommand` (`claude_install.go:13`) take both values. Call site `root.go:44` still passes no store, snapshots or config factory (BR-8).
 
 ### Build
-- [ ] Step 3: new `internal/platform/toolrun` — `doc.go`, `toolrun.go` `Run` + `*StartError{Path, Err}`, and `toolrun_test.go`.
+- [x] Step 3: new `internal/platform/toolrun` — `doc.go`, `toolrun.go` `Run` + `*StartError{Path, Err}`, and `toolrun_test.go`.
   - `Run` matches `claudeplugin.Runner`. It uses `exec.CommandContext` with nil Stdin (the null device) and one shared buffer for Stdout and Stderr.
   - Exit status N comes back with a nil err.
   - When `Start` fails and ctx is live, `Run` returns `*StartError` wrapping the `*fs.PathError` unchanged.
@@ -40,7 +40,7 @@ User-visible contract (`## Surface & Copy`, verbatim):
     - `Test_run_returns_the_exit_status_with_no_error` (0 and 3)
     - `Test_run_gives_the_child_an_empty_stdin`: the helper checks `os.SameFile(stdin, os.DevNull)`.
     - `Test_run_reports_a_file_it_cannot_start`: rows for a non-executable file (EACCES) and a missing path (ENOENT). Assert `errors.As` `*fs.PathError` and `StartError.Path`.
-- [ ] Step 4: `toolrun.go` — cancellation, signal, WaitDelay.
+- [x] Step 4: `toolrun.go` — cancellation, signal, WaitDelay.
   - Return `ctx.Err()` whenever ctx is done when `Start` or `Wait` returns an error. Check ctx before classifying a signal, because `CommandContext` kills with SIGKILL itself.
   - `*SignalError{Signal os.Signal}` when the child was signalled and ctx is live.
   - `cmd.WaitDelay` is a named const; tests pass it through an unexported `run(ctx, waitDelay, …)`, never a package var.
@@ -51,7 +51,7 @@ User-visible contract (`## Surface & Copy`, verbatim):
     - `Test_run_returns_the_context_error_when_cancelled_before_start` (not `*StartError`)
     - `Test_run_reports_a_signal_it_did_not_send`: the helper SIGKILLs itself; assert `Signal.String() == "killed"`.
     - `Test_run_returns_when_a_grandchild_holds_the_output_open`: the child exits 0 and a grandchild holds stdout. Assert status 0, nil err, and return within the bound.
-- [ ] Step 5: `internal/claudeplugin` — the LookPath port.
+- [x] Step 5: `internal/claudeplugin` — the LookPath port.
   - Code sites:
     - `claudeplugin.go:5-8`: `Runner` doc gains the signal and ctx error cases.
     - `claudeplugin.go:49-73`: `Install` checks `LookPath("claude")` before `readState`. On any error it returns new `ErrClaudeNotFound` wrapping the lookup error, decided on `err != nil` and never on `path == ""`.
@@ -64,7 +64,7 @@ User-visible contract (`## Surface & Copy`, verbatim):
     - `Test_install_runs_each_child_at_the_path_lookpath_found`
     - `Test_install_flags_quarry_missing_only_after_success`: control row where quarry is found; a failure row with no quarry lookup.
     - `Test_install_returns_the_start_error_from_a_step_unchanged`
-- [ ] Step 6: `internal/cli` — copy and wiring.
+- [x] Step 6: `internal/cli` — copy and wiring.
   - `claude_install.go:34-50` passes `WithLookPath(lookPath)`. It writes the warning after the R2 hint, using a new `const` beside `render_claude.go:12-22`.
   - `reportClaudeFailure` (`render_claude.go:57-78`) adds two arms:
     - `ErrClaudeNotFound` gives the install not-found refusal.
@@ -79,7 +79,7 @@ User-visible contract (`## Surface & Copy`, verbatim):
     - SCENARIO-25 test: path under `$HOME` gives `"~/…"`.
     - `Test_claude_install_reports_a_claude_it_cannot_run_after_adding_the_marketplace`: partial prefix, with `Added…` on stdout.
     - `Test_claude_install_reports_a_claude_it_cannot_run_at_a_path_outside_home`: home `""` and a path outside home, both printed raw.
-- [ ] Step 7: `cmd/quarry` — real wiring and fakes.
+- [x] Step 7: `cmd/quarry` — real wiring and fakes.
   - `run.go:189-203` `defaultEnv`: `RunTool: toolrun.Run`, `LookPath: exec.LookPath`, `Home` from `os.UserHomeDir` (`""` on error).
   - `main_test.go:27-31` `testEnv`: a RunTool fake that returns an error, and a LookPath fake that returns `&exec.Error{Err: exec.ErrNotFound}`, so no cmd/quarry test can start a child.
   - New `run_claude_wiring_test.go` `Test_the_shipped_claude_install_reports_a_claude_it_cannot_run`, modelled on `run_sync_wiring_test.go:24-43` (no `t.Parallel`):
@@ -88,10 +88,10 @@ User-visible contract (`## Surface & Copy`, verbatim):
     - Assert exit 1 and the exact line `…cannot run claude at "~/bin/claude" (exec format error)…`.
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. A gosec G204 on `toolrun.Run` gets a named `//nolint:gosec // <reason>`. Doc comments on `Run`, `StartError`, `SignalError`, `LookPath`, `WithLookPath`, `ErrClaudeNotFound`, `QuarryNotOnPath` and `Env.Home`.
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`. A gosec G204 on `toolrun.Run` gets a named `//nolint:gosec // <reason>`. Doc comments on `Run`, `StartError`, `SignalError`, `LookPath`, `WithLookPath`, `ErrClaudeNotFound`, `QuarryNotOnPath` and `Env.Home`.
 
 ### Verify
-- [ ] Step 9: run `verify.sh <start> ./internal/platform/toolrun/... ./internal/claudeplugin/... ./internal/cli/... ./cmd/quarry/...`, then `spec-check.py mcp-install`.
+- [x] Step 9: run `verify.sh <start> ./internal/platform/toolrun/... ./internal/claudeplugin/... ./internal/cli/... ./cmd/quarry/...`, then `spec-check.py mcp-install`.
   - Tick SCENARIO-04 on its Progress line, with folds 05 and 25 named and the acceptance test last.
   - Rewrite STATE.md and close the `name` Open debt.
 
@@ -122,3 +122,13 @@ User-visible contract (`## Surface & Copy`, verbatim):
 - `errNoStart` (`claude_install_test.go:28`) is a bare string error, the wrong shape for a cannot-run fake.
 
 ## Phase report
+
+Runs A, B1, B2, V done. Nothing committed. All steps ticked; `verify.sh b9a907a0` green; `spec-check.py mcp-install` OK.
+
+- V closed the checkpoint findings:
+  - toolrun: `Error()` strings pinned (`Test_start_error_names_the_file_and_the_cause`, `Test_signal_error_names_the_signal`); stdin test now swaps `os.Stdin` for an unwritten pipe; `Test_run_returns_at_the_shipped_wait_delay_when_a_grandchild_holds_the_output_open` goes through real `Run`.
+  - toolrun: dead `ErrWaitDelay` arm deleted (a clean exit with `ErrWaitDelay` now reads ExitCode 0); `state != nil` guard before `Sys()`; the final fallback return carries `// unreachable:`.
+  - LookPath fakes in claudeplugin and cli tests now return `*exec.Error`; the duplicate passthrough test is deleted; doc budgets trimmed (`Run`, `findClaude`, `reportClaudeFailure`); `Env.Home` documented.
+- Mutations (each restored; file byte-identical): `"cannot start "` string -> `Test_start_error_names_the_file_and_the_cause`; `"stopped by signal: "` -> `Test_signal_error_names_the_signal`; `cmd.Stdin = os.Stdin` -> `Test_run_gives_the_child_an_empty_stdin`; `Run` passing 0 delay -> `Test_run_returns_at_the_shipped_wait_delay_...` (10.00s).
+- Nil `ProcessState` (wait4 ECHILD) path is guarded but untested: no deterministic way to make wait4 fail. Recorded in STATE Open debts.
+- verify.sh: go build rc=0, go test rc=0, uncovered-diff rc=0 (0 uncovered, 1 declared unreachable), go test -race rc=0, golangci-lint rc=0 (0 issues). test-stats: cmd/quarry 1020 (+1), claudeplugin 19 (+5), cli 647 (+8), toolrun 12 (+12), TOTAL 1698 (+26).

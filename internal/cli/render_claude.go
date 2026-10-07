@@ -6,6 +6,9 @@ import (
 	"fmt"
 
 	"github.com/koblas/quarry/internal/claudeplugin"
+	"github.com/koblas/quarry/internal/platform/homepath"
+	"github.com/koblas/quarry/internal/platform/osreason"
+	"github.com/koblas/quarry/internal/platform/toolrun"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +22,11 @@ const (
 	installTurnedOffHint  = "the quarry plugin is installed but turned off; to turn it on, run claude plugin enable quarry@quarry"
 	installForeignRefusal = `Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub; ` +
 		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again"
+	installQuarryNotOnPathWarning = `warning: the plugin starts "quarry" from your PATH, and your PATH has none; ` +
+		"add the directory holding quarry to your PATH"
+	installClaudeNotFoundRefusal = "cannot find the claude command on your PATH; install Claude Code, then run quarry claude install again"
+
+	installAddedLead = "added the quarry marketplace, but "
 )
 
 // renderInstalled returns the stdout of a successful install: one line per step, then the
@@ -47,14 +55,36 @@ func renderInstallDone(res claudeplugin.Result) string {
 	return ""
 }
 
+// installDoneLead returns the lead of a failure line that follows the marketplace add this run, else "".
+func installDoneLead(res claudeplugin.Result) string {
+	if res.MarketplaceAdded {
+		return installAddedLead
+	}
+	return ""
+}
+
+// claudePath returns p as printed to the user: "~/..." under home, raw when home is unset.
+func claudePath(home, p string) string {
+	if home == "" {
+		return p
+	}
+	return homepath.Abbreviate(home, p)
+}
+
+// claudeCannotRunLine returns the line for a claude file that would not start, led by lead.
+func claudeCannotRunLine(verb, home, lead string, start *toolrun.StartError) string {
+	return fmt.Sprintf("%scannot run claude at %q (%s); check that it is Claude Code and that you can run it, then run quarry %s %s again",
+		lead, claudePath(home, start.Path), osreason.Reason(start.Err), claudeCommand, verb)
+}
+
 // writeClaudeLine writes "quarry: claude <verb>: <text>" to cmd's stderr.
 func writeClaudeLine(cmd *cobra.Command, verb, text string) {
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "quarry: %s %s: %s\n", claudeCommand, verb, text)
 }
 
-// reportClaudeFailure writes the steps already done to stdout, then err's report to stderr, and
-// returns ReportedError. A runner's own error comes back as a runtime error for the exit mapping to print.
-func reportClaudeFailure(cmd *cobra.Command, verb, done string, err error) error {
+// reportClaudeFailure writes the steps already done, then err's report, and returns ReportedError;
+// lead prefixes a line that follows a step that ran, and an unclassified error is a runtime error.
+func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err error) error {
 	if done != "" {
 		if werr := writeResult(cmd, []byte(done)); werr != nil {
 			return werr
@@ -72,6 +102,14 @@ func reportClaudeFailure(cmd *cobra.Command, verb, done string, err error) error
 	}
 	if errors.Is(err, claudeplugin.ErrForeignMarketplace) {
 		writeClaudeLine(cmd, verb, installForeignRefusal)
+		return ReportedError{}
+	}
+	if errors.Is(err, claudeplugin.ErrClaudeNotFound) {
+		writeClaudeLine(cmd, verb, installClaudeNotFoundRefusal)
+		return ReportedError{}
+	}
+	if start, ok := errors.AsType[*toolrun.StartError](err); ok {
+		writeClaudeLine(cmd, verb, claudeCannotRunLine(verb, home, lead, start))
 		return ReportedError{}
 	}
 	return &runtimeError{err: err}

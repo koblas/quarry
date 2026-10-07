@@ -5,10 +5,16 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
+	"os/exec"
+	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
+	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/platform/toolrun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,6 +43,7 @@ type toolReply struct {
 // toolCalls is a fake RunTool that records each call's arguments and answers
 // from replies keyed by them; an unscripted call prints an empty JSON list and exits 0.
 type toolCalls struct {
+	names   []string
 	argv    []string
 	replies map[string]toolReply
 }
@@ -49,8 +56,9 @@ func (f *toolCalls) reply(argv string, r toolReply) *toolCalls {
 	return f
 }
 
-func (f *toolCalls) run(_ context.Context, _ string, args ...string) ([]byte, int, error) {
+func (f *toolCalls) run(_ context.Context, name string, args ...string) ([]byte, int, error) {
 	argv := strings.Join(args, " ")
+	f.names = append(f.names, name)
 	f.argv = append(f.argv, argv)
 	r, ok := f.replies[argv]
 	if !ok {
@@ -67,11 +75,175 @@ func (f *toolCalls) lists(marketplaces, plugins string) *toolCalls {
 // runClaude runs quarry with args over tool and returns what it printed and returned.
 func runClaude(t *testing.T, tool *toolCalls, args ...string) (string, string, error) {
 	t.Helper()
+	return runClaudeFinding(t, tool, nil, args...)
+}
+
+// runClaudeFinding is runClaude with lookPath as the process's command lookup.
+func runClaudeFinding(t *testing.T, tool *toolCalls, lookPath claudeplugin.LookPath, args ...string) (string, string, error) {
+	t.Helper()
+	return runClaudeAt(t, tool, lookPath, "", args...)
+}
+
+// runClaudeAt is runClaudeFinding with home as the user's home directory.
+func runClaudeAt(t *testing.T, tool *toolCalls, lookPath claudeplugin.LookPath, home string, args ...string) (string, string, error) {
+	t.Helper()
 	var out, errOut bytes.Buffer
 
-	err := cli.Execute(t.Context(), args, cli.Env{Stdout: &out, Stderr: &errOut, RunTool: tool.run})
+	err := cli.Execute(t.Context(), args, cli.Env{Stdout: &out, Stderr: &errOut, RunTool: tool.run, LookPath: lookPath, Home: home})
 
 	return out.String(), errOut.String(), err
+}
+
+// findsAllBut is a LookPath that resolves every command except those named in missing.
+func findsAllBut(missing ...string) claudeplugin.LookPath {
+	return func(file string) (string, error) {
+		if slices.Contains(missing, file) {
+			return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+		}
+		return "/opt/bin/" + file, nil
+	}
+}
+
+func Test_claude_install_warns_when_quarry_is_not_on_the_path(t *testing.T) {
+	tool := &toolCalls{}
+
+	stdout, stderr, err := runClaudeFinding(t, tool, findsAllBut("quarry"), "claude", "install")
+
+	require.NoError(t, err)
+	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
+		"Installed the quarry plugin (skill and MCP server) for all your projects.\n"+
+		"Restart Claude Code to load it.\n", stdout)
+	assert.Equal(t, `quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
+		"add the directory holding quarry to your PATH\n", stderr)
+}
+
+// findsAt is a LookPath that resolves every command to path.
+func findsAt(path string) claudeplugin.LookPath {
+	return func(string) (string, error) { return path, nil }
+}
+
+// cannotStart is the error toolrun returns when the file at path is not executable.
+func cannotStart(path string) error {
+	return &toolrun.StartError{Path: path, Err: &fs.PathError{Op: "fork/exec", Path: path, Err: syscall.EACCES}}
+}
+
+func Test_claude_install_warns_after_the_turned_off_hint(t *testing.T) {
+	tool := (&toolCalls{}).lists(ourMarketplace, userPluginOff)
+
+	stdout, stderr, err := runClaudeFinding(t, tool, findsAllBut("quarry"), "claude", "install")
+
+	require.NoError(t, err)
+	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
+		"The quarry plugin is already installed for all your projects.\n", stdout)
+	assert.Equal(t, "quarry: claude install: the quarry plugin is installed but turned off; "+
+		"to turn it on, run claude plugin enable quarry@quarry\n"+
+		`quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
+		"add the directory holding quarry to your PATH\n", stderr)
+}
+
+func Test_claude_install_warns_when_quarry_is_not_on_the_path_and_nothing_ran(t *testing.T) {
+	tool := (&toolCalls{}).lists(ourMarketplace, userPluginOn)
+
+	stdout, stderr, err := runClaudeFinding(t, tool, findsAllBut("quarry"), "claude", "install")
+
+	require.NoError(t, err)
+	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
+		"The quarry plugin is already installed for all your projects.\n", stdout)
+	assert.Equal(t, `quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
+		"add the directory holding quarry to your PATH\n", stderr)
+}
+
+func Test_claude_install_runs_claude_at_the_path_it_was_found(t *testing.T) {
+	cases := []struct {
+		name     string
+		lookPath claudeplugin.LookPath
+		want     string
+	}{
+		{name: "the resolved path", lookPath: findsAt("/opt/bin/claude"), want: "/opt/bin/claude"},
+		{name: "the bare name when nothing resolves it", lookPath: nil, want: "claude"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tool := &toolCalls{}
+
+			_, _, err := runClaudeFinding(t, tool, c.lookPath, "claude", "install")
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{c.want, c.want, c.want, c.want}, tool.names)
+		})
+	}
+}
+
+func Test_claude_install_refuses_when_claude_is_not_on_the_path(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		err  error
+	}{
+		{name: "not found", err: &exec.Error{Name: "claude", Err: exec.ErrNotFound}},
+		{name: "found in the current directory", path: "./claude", err: &exec.Error{Name: "claude", Err: exec.ErrDot}},
+		{name: "not executable", err: &exec.Error{Name: "claude", Err: fs.ErrPermission}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tool := &toolCalls{}
+			lookPath := func(string) (string, error) { return c.path, c.err }
+
+			stdout, stderr, err := runClaudeFinding(t, tool, lookPath, "claude", "install")
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Empty(t, tool.argv)
+			assert.Empty(t, stdout)
+			assert.Equal(t, "quarry: claude install: cannot find the claude command on your PATH; "+
+				"install Claude Code, then run quarry claude install again\n", stderr)
+		})
+	}
+}
+
+func Test_claude_install_reports_a_claude_it_cannot_run(t *testing.T) {
+	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart("/home/ada/bin/claude")})
+
+	stdout, stderr, err := runClaudeAt(t, tool, findsAt("/home/ada/bin/claude"), "/home/ada", "claude", "install")
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Empty(t, stdout)
+	assert.Equal(t, `quarry: claude install: cannot run claude at "~/bin/claude" (permission denied); `+
+		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
+}
+
+func Test_claude_install_reports_a_claude_it_cannot_run_after_adding_the_marketplace(t *testing.T) {
+	tool := (&toolCalls{}).reply(installPluginArgv, toolReply{err: cannotStart("/home/ada/bin/claude")})
+
+	stdout, stderr, err := runClaudeAt(t, tool, findsAt("/home/ada/bin/claude"), "/home/ada", "claude", "install")
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n", stdout)
+	assert.Equal(t, `quarry: claude install: added the quarry marketplace, but cannot run claude at "~/bin/claude" (permission denied); `+
+		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
+}
+
+func Test_claude_install_reports_a_claude_it_cannot_run_at_a_path_outside_home(t *testing.T) {
+	cases := []struct {
+		name string
+		home string
+	}{
+		{name: "home is unset", home: ""},
+		{name: "the path is not under home", home: "/home/ada"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart("/opt/claude")})
+
+			_, stderr, err := runClaudeAt(t, tool, findsAt("/opt/claude"), c.home, "claude", "install")
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, `quarry: claude install: cannot run claude at "/opt/claude" (permission denied); `+
+				"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
+		})
+	}
 }
 
 func Test_claude_install_runs_both_steps_when_nothing_is_installed(t *testing.T) {

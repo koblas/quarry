@@ -8,8 +8,11 @@ import (
 	"strings"
 )
 
-// claudeCommand is the command every child runs.
-const claudeCommand = "claude"
+// The commands Install looks up.
+const (
+	claudeCommand = "claude"
+	quarryCommand = "quarry"
+)
 
 // The list commands and quarry's own identity; arguments are space-separated.
 const (
@@ -21,6 +24,9 @@ const (
 	pluginID        = "quarry@quarry"
 	userScope       = "user"
 )
+
+// ErrClaudeNotFound reports that the claude command cannot be found; no step runs.
+var ErrClaudeNotFound = errors.New("claude is not on your PATH")
 
 // ErrForeignMarketplace reports a Claude Code marketplace named "quarry" that
 // is not quarry's own; no step runs when it is found.
@@ -57,12 +63,12 @@ type state struct {
 
 // readState runs the marketplace list, then the plugin list, and classifies them.
 // A marketplace-list failure skips the plugin list; a foreign marketplace is reported last.
-func (s *Server) readState(ctx context.Context) (state, error) {
-	marketplaces, err := s.list(ctx, marketplaceListArgs, "name")
+func (s *Server) readState(ctx context.Context, claude string) (state, error) {
+	marketplaces, err := s.list(ctx, claude, marketplaceListArgs, "name")
 	if err != nil {
 		return state{}, err
 	}
-	plugins, err := s.list(ctx, pluginListArgs, "id", "scope")
+	plugins, err := s.list(ctx, claude, pluginListArgs, "id", "scope")
 	if err != nil {
 		return state{}, err
 	}
@@ -94,8 +100,8 @@ func (s *Server) readState(ctx context.Context) (state, error) {
 
 // list runs one list command and decodes its JSON array of objects, requiring
 // each entry to carry every key in required as a string.
-func (s *Server) list(ctx context.Context, args string, required ...string) ([]map[string]any, error) {
-	out, err := s.run(ctx, args)
+func (s *Server) list(ctx context.Context, claude, args string, required ...string) ([]map[string]any, error) {
+	out, err := s.run(ctx, claude, args)
 	if err != nil {
 		return nil, err
 	}
@@ -125,10 +131,10 @@ func (s *Server) list(ctx context.Context, args string, required ...string) ([]m
 	return entries, nil
 }
 
-// run runs one claude child and returns its combined output. The Runner's own
-// error comes back as is; a non-zero exit comes back as *ExitError.
-func (s *Server) run(ctx context.Context, args string) ([]byte, error) {
-	out, status, err := s.runner(ctx, claudeCommand, strings.Fields(args)...)
+// run runs one child of the claude command and returns its combined output. The
+// Runner's own error comes back as is; a non-zero exit comes back as *ExitError.
+func (s *Server) run(ctx context.Context, claude, args string) ([]byte, error) {
+	out, status, err := s.runner(ctx, claude, strings.Fields(args)...)
 	if err != nil {
 		return nil, err
 	}

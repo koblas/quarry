@@ -10,7 +10,7 @@ const installCommand = "install"
 
 // newClaudeInstallCommand builds claude install: it refuses arguments, then --json, then has the
 // plugin Server add quarry's marketplace and install its plugin, reporting each step on stdout.
-func newClaudeInstallCommand(runTool claudeplugin.Runner, jsonOut *bool) *cobra.Command {
+func newClaudeInstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   installCommand,
 		Short: "Install quarry's plugin (skill and MCP server) in Claude Code",
@@ -35,16 +35,19 @@ starts "quarry" from your PATH. Restart Claude Code to load it.`,
 			if *jsonOut {
 				return UsageError{msg: claudeCommand + " " + installCommand + " prints no JSON; drop --json"}
 			}
-			srv := claudeplugin.NewServer(claudeplugin.WithRunner(runTool))
+			srv := claudeplugin.NewServer(claudeplugin.WithRunner(runTool), claudeplugin.WithLookPath(lookPath))
 			res, err := srv.Install(cmd.Context())
 			if err != nil {
-				return reportClaudeFailure(cmd, installCommand, renderInstallDone(res), err)
+				return reportClaudeFailure(cmd, installCommand, home, installDoneLead(res), renderInstallDone(res), err)
 			}
 			if err := writeResult(cmd, []byte(renderInstalled(res))); err != nil {
 				return err
 			}
 			if res.UserCopyOff {
 				writeClaudeLine(cmd, installCommand, installTurnedOffHint)
+			}
+			if res.QuarryNotOnPath {
+				writeClaudeLine(cmd, installCommand, installQuarryNotOnPathWarning)
 			}
 			return nil
 		},

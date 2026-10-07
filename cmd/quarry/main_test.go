@@ -4,7 +4,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os/exec"
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
@@ -23,10 +25,15 @@ func fixedRates() duckstore.Option {
 	return duckstore.WithRates(fakeRates{rates: []store.Rate{rate}})
 }
 
-// testEnv is defaultEnv with its sync fetching through fixedRates.
+// errNoChildren is what testEnv's RunTool returns: no test may start a child process.
+var errNoChildren = errors.New("test wiring starts no child process")
+
+// testEnv is defaultEnv with its sync fetching through fixedRates and no way to find or start a child.
 func testEnv(stdout, stderr io.Writer) cli.Env {
 	env := defaultEnv(stdout, stderr)
 	env.NewServer = newServerFactory(fixedRates())
+	env.RunTool = func(context.Context, string, ...string) ([]byte, int, error) { return nil, -1, errNoChildren }
+	env.LookPath = func(file string) (string, error) { return "", &exec.Error{Name: file, Err: exec.ErrNotFound} }
 	return env
 }
 

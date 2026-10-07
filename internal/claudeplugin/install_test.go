@@ -1,6 +1,8 @@
 package claudeplugin_test
 
 import (
+	"io/fs"
+	"os/exec"
 	"testing"
 
 	"github.com/koblas/quarry/internal/claudeplugin"
@@ -155,4 +157,91 @@ func Test_install_returns_the_runner_error_from_a_step_unchanged(t *testing.T) {
 			assert.Equal(t, c.want, res)
 		})
 	}
+}
+
+func Test_install_runs_each_child_as_claude_when_no_lookpath_is_set(t *testing.T) {
+	fake := newFakeClaude("[]", "[]")
+
+	_, err := newServer(t, fake).Install(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"claude", "claude", "claude", "claude"}, fake.names)
+}
+
+func Test_install_runs_each_child_at_the_path_lookpath_found(t *testing.T) {
+	fake := newFakeClaude("[]", "[]")
+	path := newFakePath()
+	path.results["claude"] = found{path: "/home/ada/.local/bin/claude"}
+	const at = "/home/ada/.local/bin/claude"
+
+	_, err := newServerFinding(t, fake, path).Install(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{at, at, at, at}, fake.names)
+	assert.Equal(t, []string{marketplaceList, pluginList, addMarketplace, installPlugin}, fake.calls)
+}
+
+func Test_install_refuses_before_any_child_when_claude_is_not_found(t *testing.T) {
+	cases := []struct {
+		name   string
+		result found
+	}{
+		{"claude is not in any PATH directory", found{err: &exec.Error{Name: "claude", Err: exec.ErrNotFound}}},
+		{"claude resolves only relative to the current directory", found{path: "./claude", err: &exec.Error{Name: "claude", Err: exec.ErrDot}}},
+		{"claude is in a directory the user cannot search", found{err: &exec.Error{Name: "claude", Err: fs.ErrPermission}}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := newFakeClaude("[]", "[]")
+			path := newFakePath()
+			path.results["claude"] = c.result
+
+			res, err := newServerFinding(t, fake, path).Install(t.Context())
+
+			require.ErrorIs(t, err, claudeplugin.ErrClaudeNotFound)
+			require.ErrorIs(t, err, c.result.err)
+			assert.Equal(t, claudeplugin.Result{}, res)
+			assert.Empty(t, fake.calls)
+			assert.Equal(t, []string{"claude"}, path.asked)
+		})
+	}
+}
+
+func Test_install_flags_quarry_missing_from_the_path_only_after_the_steps_succeed(t *testing.T) {
+	cases := []struct {
+		name   string
+		result found
+		want   bool
+	}{
+		{"quarry is found", found{path: "/opt/bin/quarry"}, false},
+		{"quarry is not found", found{err: &exec.Error{Name: "quarry", Err: exec.ErrNotFound}}, true},
+		{"quarry resolves only relative to the current directory", found{path: "./quarry", err: &exec.Error{Name: "quarry", Err: exec.ErrDot}}, true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := newFakePath()
+			path.results["quarry"] = c.result
+
+			res, err := newServerFinding(t, newFakeClaude(oursMarketplace, userPlugin), path).Install(t.Context())
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, res.QuarryNotOnPath)
+			assert.Equal(t, []string{"claude", "quarry"}, path.asked)
+		})
+	}
+}
+
+func Test_install_does_not_look_for_quarry_when_a_step_fails(t *testing.T) {
+	fake := newFakeClaude("[]", "[]")
+	fake.answer(installPlugin, reply{err: errBoom})
+	path := newFakePath()
+	path.results["quarry"] = found{err: &exec.Error{Name: "quarry", Err: exec.ErrNotFound}}
+
+	res, err := newServerFinding(t, fake, path).Install(t.Context())
+
+	require.Error(t, err)
+	assert.False(t, res.QuarryNotOnPath)
+	assert.Equal(t, []string{"claude"}, path.asked)
 }

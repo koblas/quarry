@@ -29,11 +29,12 @@ type reply struct {
 	err    error
 }
 
-// fakeClaude is a Runner that records each call's argv and answers from
-// replies keyed by argv; an unscripted argv succeeds with empty output.
+// fakeClaude is a Runner that records each call's name and argv and answers
+// from replies keyed by argv; an unscripted argv succeeds with empty output.
 type fakeClaude struct {
 	replies map[string]reply
 	calls   []string
+	names   []string
 }
 
 // newFakeClaude scripts the two lists with the given JSON bodies.
@@ -46,8 +47,9 @@ func newFakeClaude(marketplaces, plugins string) *fakeClaude {
 
 func (f *fakeClaude) answer(argv string, r reply) { f.replies[argv] = r }
 
-func (f *fakeClaude) run(_ context.Context, _ string, args ...string) ([]byte, int, error) {
+func (f *fakeClaude) run(_ context.Context, name string, args ...string) ([]byte, int, error) {
 	argv := strings.Join(args, " ")
+	f.names = append(f.names, name)
 	f.calls = append(f.calls, argv)
 	r := f.replies[argv]
 	return []byte(r.output), r.status, r.err
@@ -56,4 +58,35 @@ func (f *fakeClaude) run(_ context.Context, _ string, args ...string) ([]byte, i
 func newServer(t *testing.T, f *fakeClaude) *claudeplugin.Server {
 	t.Helper()
 	return claudeplugin.NewServer(claudeplugin.WithRunner(f.run))
+}
+
+// found is a lookPath result: the path and error exec.LookPath would return.
+type found struct {
+	path string
+	err  error
+}
+
+// fakePath is a LookPath that records each file asked for. A file with no
+// entry in results resolves to binDir/<file>.
+type fakePath struct {
+	results map[string]found
+	asked   []string
+}
+
+const binDir = "/opt/bin/"
+
+func newFakePath() *fakePath { return &fakePath{results: map[string]found{}} }
+
+func (f *fakePath) look(file string) (string, error) {
+	f.asked = append(f.asked, file)
+	if r, ok := f.results[file]; ok {
+		return r.path, r.err
+	}
+	return binDir + file, nil
+}
+
+// newServerFinding is newServer with the commands looked up through path.
+func newServerFinding(t *testing.T, f *fakeClaude, path *fakePath) *claudeplugin.Server {
+	t.Helper()
+	return claudeplugin.NewServer(claudeplugin.WithRunner(f.run), claudeplugin.WithLookPath(path.look))
 }
