@@ -10,47 +10,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_import_refuses_a_split_with_more_than_2_decimal_places_when_its_transaction_is_valid(t *testing.T) {
+func Test_import_sets_split_memo_when_present(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "12.345"})
+	acctPK := newChequing(b)
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", Note: "split memo"})
 
-	reason, _ := importRefused(t, b)
+	fake, _ := importOK(t, b)
 
-	assert.Equal(t,
-		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
-		reason)
+	require.Len(t, fake.Rows.Splits, 1)
+	require.NotNil(t, fake.Rows.Splits[0].Memo)
+	assert.Equal(t, "split memo", *fake.Rows.Splits[0].Memo)
 }
 
-func Test_import_refuses_a_split_with_an_amount_too_large_for_quarry(t *testing.T) {
+// The transaction's own amount is valid in every case, so only the split is refused.
+func Test_import_refuses_a_split_amount_quarry_cannot_read(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "10000000000000.5"})
+	const prefix = `a split of a transaction on 2024-03-02 in "Visa Infinite" `
+	cases := []struct {
+		name   string
+		amount string
+		want   string
+	}{
+		{name: "more_than_2_decimal_places", amount: "12.345", want: prefix + "has an amount of 12.345, which has more than 2 decimal places"},
+		{name: "too_large_for_quarry", amount: "10000000000000.5", want: prefix + "has an amount of 10000000000000.5, which is too large for quarry's amounts"},
+		{name: "text_amount", amount: "not-a-number", want: prefix + "has an amount that is not a number"},
+		{name: "no_amount", amount: "", want: prefix + "has no amount"},
+	}
 
-	reason, _ := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := newVisa(b)
+			posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+			txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
+			b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: c.amount})
 
-	assert.Equal(t,
-		`a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
-		reason)
-}
+			reason, _ := importRefused(t, b)
 
-func Test_import_refuses_a_split_with_no_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `a split of a transaction on 2024-03-02 in "Visa Infinite" has no amount`, reason)
+			assert.Equal(t, c.want, reason)
+		})
+	}
 }
 
 func Test_import_skips_a_split_with_no_parent_transaction(t *testing.T) {
@@ -76,19 +79,6 @@ func Test_import_skips_a_split_with_no_parent_whatever_its_amount(t *testing.T) 
 
 	require.Len(t, fake.Rows.Splits, 1)
 	assert.Equal(t, "split-"+itoa(keptPK), fake.Rows.Splits[0].ID)
-}
-
-func Test_import_refuses_a_split_with_a_text_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "not-a-number"})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `a split of a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
 }
 
 func Test_import_refuses_a_split_with_a_blob_amount(t *testing.T) {
@@ -133,36 +123,33 @@ func Test_import_skips_a_split_whose_parent_transaction_does_not_exist(t *testin
 	assert.Empty(t, fake.Rows.Splits)
 }
 
-// A split's category reference to a deleted category stores NULL.
-func Test_import_nulls_a_splits_category_when_the_category_is_deleted(t *testing.T) {
+func Test_import_nulls_a_splits_category_it_cannot_resolve(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newChequing(b)
-	deletedCatPK := b.Category(v9fixture.TagRow{Name: "Old", Type: new(int64(1)), Deleted: true})
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: deletedCatPK})
+	cases := []struct {
+		name     string
+		category func(b *v9fixture.Builder) int64
+	}{
+		{name: "when_the_category_is_deleted", category: func(b *v9fixture.Builder) int64 {
+			return b.Category(v9fixture.TagRow{Name: "Old", Type: new(int64(1)), Deleted: true})
+		}},
+		{name: "when_the_category_does_not_exist", category: func(*v9fixture.Builder) int64 { return 999 }},
+	}
 
-	fake, _ := importOK(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := newChequing(b)
+			posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+			txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+			b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: c.category(b)})
 
-	require.Len(t, fake.Rows.Splits, 1)
-	assert.Nil(t, fake.Rows.Splits[0].CategoryID)
-}
+			fake, _ := importOK(t, b)
 
-// A split's category reference to no category row at all stores NULL,
-// the same as a deleted one.
-func Test_import_nulls_a_splits_category_when_the_category_does_not_exist(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newChequing(b)
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", CategoryTag: 999})
-
-	fake, _ := importOK(t, b)
-
-	require.Len(t, fake.Rows.Splits, 1)
-	assert.Nil(t, fake.Rows.Splits[0].CategoryID)
+			require.Len(t, fake.Rows.Splits, 1)
+			assert.Nil(t, fake.Rows.Splits[0].CategoryID)
+		})
+	}
 }
 
 // A split_tags link to a deleted tag is dropped, not stored with a
@@ -237,21 +224,6 @@ func Test_import_drops_a_split_tag_link_with_no_tag(t *testing.T) {
 	fake, _ := importOKFrom(t, dataPath)
 
 	assert.Equal(t, []store.SplitTag{{SplitID: "split-" + itoa(entryPK), TagID: "tag-" + itoa(tagPK)}}, fake.Rows.SplitTags)
-}
-
-func Test_import_sets_split_memo_when_present(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newChequing(b)
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00", Note: "split memo"})
-
-	fake, _ := importOK(t, b)
-
-	require.Len(t, fake.Rows.Splits, 1)
-	require.NotNil(t, fake.Rows.Splits[0].Memo)
-	assert.Equal(t, "split memo", *fake.Rows.Splits[0].Memo)
 }
 
 func Test_import_skips_a_split_tag_link_whose_split_has_no_parent_transaction(t *testing.T) {

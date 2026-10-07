@@ -38,40 +38,34 @@ func Test_import_replaces_the_store_when_the_balance_check_passes(t *testing.T) 
 	assert.Equal(t, 1, fake.replaceCalls)
 }
 
-// A reconciled sum one cent short of its statement is reported with the
-// exact quarry/quicken/difference cents involved.
 func Test_import_reports_an_account_whose_reconciled_sum_differs_from_its_statement(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := chequingWithOneReconciledTxn(b, "100.00")
-	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.01"})
+	cases := []struct {
+		name                     string
+		reconciled, statement    string
+		quarry, quicken, differs int64
+	}{
+		{name: "one_cent_short", reconciled: "100.00", statement: "100.01", quarry: 10000, quicken: 10001, differs: -1},
+		{name: "one_cent_over", reconciled: "100.01", statement: "100.00", quarry: 10001, quicken: 10000, differs: 1},
+	}
 
-	result, _ := importFailingValidation(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := chequingWithOneReconciledTxn(b, c.reconciled)
+			feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
+			b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: c.statement})
 
-	require.Len(t, result.Validation.Balances.Mismatched, 1)
-	mismatch := result.Validation.Balances.Mismatched[0]
-	assert.Equal(t, int64(10000), mismatch.Quarry)
-	assert.Equal(t, int64(10001), mismatch.Quicken)
-	assert.Equal(t, int64(-1), mismatch.Difference)
-}
+			result, _ := importFailingValidation(t, b)
 
-// The control for the case above in the other direction: a reconciled sum
-// one cent OVER its statement is reported too, not just a short one.
-func Test_import_reports_an_account_whose_reconciled_sum_exceeds_its_statement(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := chequingWithOneReconciledTxn(b, "100.01")
-	feb := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &feb, EndingBalance: "100.00"})
-
-	result, _ := importFailingValidation(t, b)
-
-	require.Len(t, result.Validation.Balances.Mismatched, 1)
-	mismatch := result.Validation.Balances.Mismatched[0]
-	assert.Equal(t, int64(10001), mismatch.Quarry)
-	assert.Equal(t, int64(10000), mismatch.Quicken)
-	assert.Equal(t, int64(1), mismatch.Difference)
+			require.Len(t, result.Validation.Balances.Mismatched, 1)
+			mismatch := result.Validation.Balances.Mismatched[0]
+			assert.Equal(t, c.quarry, mismatch.Quarry)
+			assert.Equal(t, c.quicken, mismatch.Quicken)
+			assert.Equal(t, c.differs, mismatch.Difference)
+		})
+	}
 }
 
 // A non-reconciled transaction must not count toward the reconciled sum:
@@ -134,42 +128,44 @@ func Test_import_checks_closed_and_inactive_accounts_like_any_other(t *testing.T
 	}
 }
 
-// A transaction's splits one cent short of its amount is reported with the
-// exact amount/splits_total cents involved, and its payee's name.
 func Test_import_reports_a_transaction_whose_splits_do_not_sum_to_its_amount(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newChequing(b)
-	payeePK := b.Payee(v9fixture.PayeeRow{Name: "Costco"})
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &posted, Payee: payeePK})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "99.99"})
+	cases := []struct {
+		name        string
+		payee       func(b *v9fixture.Builder) int64
+		split       string
+		splitsTotal int64
+		wantPayee   string
+	}{
+		{
+			name: "one_cent_short", payee: func(b *v9fixture.Builder) int64 { return b.Payee(v9fixture.PayeeRow{Name: "Costco"}) },
+			split: "99.99", splitsTotal: 9999, wantPayee: "Costco",
+		},
+		{
+			name: "one_cent_over_with_no_payee", payee: func(*v9fixture.Builder) int64 { return 0 },
+			split: "100.01", splitsTotal: 10001, wantPayee: "",
+		},
+	}
 
-	result, _ := importFailingValidation(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := newChequing(b)
+			payeePK := c.payee(b)
+			posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+			txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &posted, Payee: payeePK})
+			b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: c.split})
 
-	require.Len(t, result.Validation.Splits.Mismatched, 1)
-	mismatch := result.Validation.Splits.Mismatched[0]
-	assert.Equal(t, int64(10000), mismatch.Amount)
-	assert.Equal(t, int64(9999), mismatch.SplitsTotal)
-	assert.Equal(t, "Costco", mismatch.Payee)
-}
+			result, _ := importFailingValidation(t, b)
 
-// The control for the case above in the other direction: splits one cent
-// OVER a transaction's amount are reported too, not just a short sum.
-func Test_import_reports_a_transaction_whose_splits_exceed_its_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newChequing(b)
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &posted})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.01"})
-
-	result, _ := importFailingValidation(t, b)
-
-	require.Len(t, result.Validation.Splits.Mismatched, 1)
-	mismatch := result.Validation.Splits.Mismatched[0]
-	assert.Equal(t, int64(10000), mismatch.Amount)
-	assert.Equal(t, int64(10001), mismatch.SplitsTotal)
+			require.Len(t, result.Validation.Splits.Mismatched, 1)
+			mismatch := result.Validation.Splits.Mismatched[0]
+			assert.Equal(t, int64(10000), mismatch.Amount)
+			assert.Equal(t, c.splitsTotal, mismatch.SplitsTotal)
+			assert.Equal(t, c.wantPayee, mismatch.Payee)
+		})
+	}
 }
 
 // mismatchedBalanceAccount adds an account whose reconciled sum never
@@ -318,13 +314,13 @@ func holdingOf(acctPK, secPK int64) store.ShareMismatch {
 	return store.ShareMismatch{AccountID: fmt.Sprintf("acct-%d", acctPK), SecurityID: fmt.Sprintf("sec-%d", secPK), Quarry: 1, Quicken: 0}
 }
 
-func importShareMismatches(t *testing.T, b *v9fixture.Builder, mismatched ...store.ShareMismatch) []store.ShareMismatch {
-	t.Helper()
+func importShareMismatches(tb testing.TB, b *v9fixture.Builder, mismatched ...store.ShareMismatch) []store.ShareMismatch {
+	tb.Helper()
 	fake := &fakeStore{shareCheck: store.ShareCheck{Checked: len(mismatched), Mismatched: mismatched}}
 
-	result, err := importBuilt(t, fake, b)
+	result, err := importBuilt(tb, fake, b)
 
-	require.ErrorIs(t, err, store.ErrValidationFailed)
+	require.ErrorIs(tb, err, store.ErrValidationFailed)
 	return result.Validation.Shares.Mismatched
 }
 
@@ -392,81 +388,68 @@ func Test_import_leaves_labels_empty_when_a_mismatched_holding_resolves_to_no_ro
 	assert.Equal(t, []store.ShareMismatch{{AccountID: "acct-7", SecurityID: "sec-8", Quarry: 1, Difference: 1}}, got)
 }
 
-func Test_import_sorts_mismatched_holdings_by_account_name_before_account_source_id(t *testing.T) {
+// Each case hands the share check its holdings in the reverse of the order Import must report them in.
+func Test_import_sorts_mismatched_holdings(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	zeta := b.Account(v9fixture.AccountRow{Name: "Zeta", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	alpha := b.Account(v9fixture.AccountRow{Name: "Alpha", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	sec := b.Security(v9fixture.SecurityRow{Name: "Fund"})
+	cases := []struct {
+		name     string
+		holdings func(b *v9fixture.Builder) []store.ShareMismatch
+		want     []string
+	}{
+		{name: "by_account_name_before_account_source_id", holdings: func(b *v9fixture.Builder) []store.ShareMismatch {
+			zeta := b.Account(v9fixture.AccountRow{Name: "Zeta", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			alpha := b.Account(v9fixture.AccountRow{Name: "Alpha", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			sec := b.Security(v9fixture.SecurityRow{Name: "Fund"})
+			return []store.ShareMismatch{holdingOf(zeta, sec), holdingOf(alpha, sec)}
+		}, want: []string{"acct-2/sec-1", "acct-1/sec-1"}},
+		{name: "of_equally_named_accounts_by_numeric_account_source_id", holdings: func(b *v9fixture.Builder) []store.ShareMismatch {
+			fillerAccounts(b, 8)
+			nine := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			ten := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			sec := b.Security(v9fixture.SecurityRow{Name: "Fund"})
+			return []store.ShareMismatch{holdingOf(ten, sec), holdingOf(nine, sec)}
+		}, want: []string{"acct-9/sec-1", "acct-10/sec-1"}},
+		{name: "of_one_account_by_security_name_before_security_source_id", holdings: func(b *v9fixture.Builder) []store.ShareMismatch {
+			acct := newBrokerage(b)
+			zeta := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
+			alpha := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
+			return []store.ShareMismatch{holdingOf(acct, zeta), holdingOf(acct, alpha)}
+		}, want: []string{"acct-1/sec-2", "acct-1/sec-1"}},
+		{name: "of_equally_named_securities_by_numeric_security_source_id", holdings: func(b *v9fixture.Builder) []store.ShareMismatch {
+			acct := newBrokerage(b)
+			fillerSecurities(b, 8)
+			nine := b.Security(v9fixture.SecurityRow{Name: "Same Fund"})
+			ten := b.Security(v9fixture.SecurityRow{Name: "Same Fund"})
+			return []store.ShareMismatch{holdingOf(acct, ten), holdingOf(acct, nine)}
+		}, want: []string{"acct-1/sec-9", "acct-1/sec-10"}},
+		{name: "by_account_name_even_when_security_names_order_the_other_way", holdings: func(b *v9fixture.Builder) []store.ShareMismatch {
+			zetaAcct := b.Account(v9fixture.AccountRow{Name: "Zeta", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			alphaAcct := b.Account(v9fixture.AccountRow{Name: "Alpha", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			zetaSec := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
+			alphaSec := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
+			return []store.ShareMismatch{holdingOf(zetaAcct, alphaSec), holdingOf(alphaAcct, zetaSec)}
+		}, want: []string{"acct-2/sec-1", "acct-1/sec-2"}},
+		{name: "by_account_source_id_even_when_security_names_order_the_other_way", holdings: func(b *v9fixture.Builder) []store.ShareMismatch {
+			fillerAccounts(b, 8)
+			nine := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			ten := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
+			zetaSec := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
+			alphaSec := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
+			return []store.ShareMismatch{holdingOf(ten, alphaSec), holdingOf(nine, zetaSec)}
+		}, want: []string{"acct-9/sec-1", "acct-10/sec-2"}},
+	}
 
-	got := importShareMismatches(t, b, holdingOf(zeta, sec), holdingOf(alpha, sec))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			holdings := c.holdings(b)
 
-	assert.Equal(t, []string{"acct-2/sec-1", "acct-1/sec-1"}, holdingIDs(got))
-}
+			got := importShareMismatches(t, b, holdings...)
 
-func Test_import_sorts_mismatched_holdings_of_equally_named_accounts_by_numeric_account_source_id(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	fillerAccounts(b, 8)
-	nine := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	ten := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	sec := b.Security(v9fixture.SecurityRow{Name: "Fund"})
-
-	got := importShareMismatches(t, b, holdingOf(ten, sec), holdingOf(nine, sec))
-
-	assert.Equal(t, []string{"acct-9/sec-1", "acct-10/sec-1"}, holdingIDs(got))
-}
-
-func Test_import_sorts_mismatched_holdings_of_one_account_by_security_name_before_security_source_id(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acct := newBrokerage(b)
-	zeta := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
-	alpha := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
-
-	got := importShareMismatches(t, b, holdingOf(acct, zeta), holdingOf(acct, alpha))
-
-	assert.Equal(t, []string{"acct-1/sec-2", "acct-1/sec-1"}, holdingIDs(got))
-}
-
-func Test_import_sorts_mismatched_holdings_of_equally_named_securities_by_numeric_security_source_id(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acct := newBrokerage(b)
-	fillerSecurities(b, 8)
-	nine := b.Security(v9fixture.SecurityRow{Name: "Same Fund"})
-	ten := b.Security(v9fixture.SecurityRow{Name: "Same Fund"})
-
-	got := importShareMismatches(t, b, holdingOf(acct, ten), holdingOf(acct, nine))
-
-	assert.Equal(t, []string{"acct-1/sec-9", "acct-1/sec-10"}, holdingIDs(got))
-}
-
-func Test_import_sorts_mismatched_holdings_by_account_name_even_when_security_names_order_the_other_way(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	zetaAcct := b.Account(v9fixture.AccountRow{Name: "Zeta", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	alphaAcct := b.Account(v9fixture.AccountRow{Name: "Alpha", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	zetaSec := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
-	alphaSec := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
-
-	got := importShareMismatches(t, b, holdingOf(zetaAcct, alphaSec), holdingOf(alphaAcct, zetaSec))
-
-	assert.Equal(t, []string{"acct-2/sec-1", "acct-1/sec-2"}, holdingIDs(got))
-}
-
-func Test_import_sorts_mismatched_holdings_by_account_source_id_even_when_security_names_order_the_other_way(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	fillerAccounts(b, 8)
-	nine := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	ten := b.Account(v9fixture.AccountRow{Name: "Same", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	zetaSec := b.Security(v9fixture.SecurityRow{Name: "Zeta Fund"})
-	alphaSec := b.Security(v9fixture.SecurityRow{Name: "Alpha Fund"})
-
-	got := importShareMismatches(t, b, holdingOf(ten, alphaSec), holdingOf(nine, zetaSec))
-
-	assert.Equal(t, []string{"acct-9/sec-1", "acct-10/sec-2"}, holdingIDs(got))
+			assert.Equal(t, c.want, holdingIDs(got))
+		})
+	}
 }
 
 func Test_import_reports_a_mismatched_holdings_difference_as_quarry_minus_quicken_clamped_to_int64(t *testing.T) {

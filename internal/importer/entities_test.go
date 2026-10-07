@@ -4,10 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/importer"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // WithEntity overrides all three away from their default numbers; Import
@@ -27,28 +25,33 @@ func Test_import_resolves_entities_by_name_from_z_primarykey(t *testing.T) {
 	assert.Len(t, fake.Rows.Transactions, 1)
 }
 
-func Test_import_refuses_when_one_required_entity_is_missing(t *testing.T) {
+func Test_import_refuses_when_required_entities_are_missing(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder().WithoutEntity("UserTag")
-	fake := &fakeStore{}
+	cases := []struct {
+		name    string
+		builder func() *v9fixture.Builder
+		want    string
+	}{
+		{
+			name: "one_entity", builder: func() *v9fixture.Builder { return v9fixture.NewBuilder().WithoutEntity("UserTag") },
+			want: "the snapshot has no UserTag entity, which quarry needs to read Quicken's records",
+		},
+		{
+			name: "several_entities", builder: func() *v9fixture.Builder {
+				return v9fixture.NewBuilder().WithoutEntity("CategoryTag").WithoutEntity("UserTag")
+			},
+			want: "the snapshot has no CategoryTag or UserTag entity, which quarry needs to read Quicken's records",
+		},
+	}
 
-	_, err := importBuilt(t, fake, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := c.builder()
 
-	var unmappable *importer.UnmappableError
-	require.ErrorAs(t, err, &unmappable)
-	assert.Equal(t, "the snapshot has no UserTag entity, which quarry needs to read Quicken's records", unmappable.Reason)
-}
+			reason, _ := importRefused(t, b)
 
-func Test_import_refuses_when_several_required_entities_are_missing(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder().WithoutEntity("CategoryTag").WithoutEntity("UserTag")
-	fake := &fakeStore{}
-
-	_, err := importBuilt(t, fake, b)
-
-	var unmappable *importer.UnmappableError
-	require.ErrorAs(t, err, &unmappable)
-	assert.Equal(t,
-		"the snapshot has no CategoryTag or UserTag entity, which quarry needs to read Quicken's records",
-		unmappable.Reason)
+			assert.Equal(t, c.want, reason)
+		})
+	}
 }

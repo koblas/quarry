@@ -10,36 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_import_refuses_a_transaction_with_more_than_2_decimal_places(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.345", PostedDate: &posted})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t,
-		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
-		reason)
-}
-
-func Test_import_refuses_a_transaction_with_an_amount_too_large_for_quarry(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "10000000000000.5", PostedDate: &posted})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t,
-		`a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
-		reason)
-}
-
-// The amount is quoted as SQLite renders the stored REAL.
-func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testing.T) {
+// An exponent-form amount is quoted as SQLite renders the stored REAL.
+func Test_import_refuses_a_transaction_amount_quarry_cannot_hold(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name   string
@@ -47,11 +19,19 @@ func Test_import_refuses_an_exponent_form_amount_by_the_exponents_sign(t *testin
 		want   string
 	}{
 		{
-			name: "a small negative exponent has too many decimals", amount: "0.00001",
+			name: "more_than_2_decimal_places", amount: "12.345",
+			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 12.345, which has more than 2 decimal places`,
+		},
+		{
+			name: "too_large_for_quarry", amount: "10000000000000.5",
+			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 10000000000000.5, which is too large for quarry's amounts`,
+		},
+		{
+			name: "a_small_negative_exponent_has_too_many_decimals", amount: "0.00001",
 			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 1.0e-05, which has more than 2 decimal places`,
 		},
 		{
-			name: "a positive exponent is too large", amount: "1e20",
+			name: "a_positive_exponent_is_too_large", amount: "1e20",
 			want: `a transaction on 2024-03-02 in "Visa Infinite" has an amount of 1.0e+20, which is too large for quarry's amounts`,
 		},
 	}
@@ -197,25 +177,26 @@ func Test_import_refuses_a_transaction_with_no_amount(t *testing.T) {
 
 func Test_import_refuses_a_transaction_with_no_date(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "12.34"})
+	cases := []struct {
+		name   string
+		amount string
+	}{
+		{name: "with_an_amount", amount: "12.34"},
+		{name: "with_no_amount_either", amount: ""},
+	}
 
-	reason, _ := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := newVisa(b)
+			txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: c.amount})
 
-	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, reason)
-}
+			reason, _ := importRefused(t, b)
 
-// No date wins over no amount when both are missing.
-func Test_import_refuses_a_transaction_with_no_date_and_no_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, reason)
+			assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has no date`, reason)
+		})
+	}
 }
 
 // Both rows are excluded by the SQL row filter itself, before any
@@ -326,57 +307,63 @@ func Test_import_orders_transactions_by_register_date(t *testing.T) {
 	assert.Equal(t, int64(100), fake.Rows.Transactions[1].Amount)
 }
 
-func Test_import_refuses_a_transaction_with_a_text_amount(t *testing.T) {
+func Test_import_refuses_a_transaction_amount_that_is_not_a_number(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "not-a-number", PostedDate: &posted})
+	cases := []struct {
+		name   string
+		amount string
+	}{
+		{name: "text_amount", amount: "not-a-number"},
+		{name: "whitespace_amount", amount: "   "},
+	}
 
-	reason, _ := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := newVisa(b)
+			posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+			b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: c.amount, PostedDate: &posted})
 
-	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
-	assert.NotContains(t, reason, "too large")
+			reason, _ := importRefused(t, b)
+
+			assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
+			assert.NotContains(t, reason, "too large")
+		})
+	}
 }
 
-func Test_import_refuses_a_transaction_with_a_whitespace_amount(t *testing.T) {
+func Test_import_refuses_a_transaction_amount_stored_as_neither_integer_nor_real(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "   ", PostedDate: &posted})
+	cases := []struct {
+		name      string
+		overwrite func(tb testing.TB, dataPath string, txnPK int64)
+	}{
+		{name: "empty_text_amount", overwrite: func(tb testing.TB, dataPath string, txnPK int64) {
+			tb.Helper()
+			setColumnEmptyText(tb, dataPath, "ZTRANSACTION", "ZAMOUNT", txnPK)
+		}},
+		{name: "blob_amount", overwrite: func(tb testing.TB, dataPath string, txnPK int64) {
+			tb.Helper()
+			setColumnBlob(tb, dataPath, "ZTRANSACTION", "ZAMOUNT", txnPK, []byte{0xde, 0xad, 0xbe, 0xef})
+		}},
+	}
 
-	reason, _ := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := newVisa(b)
+			posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+			txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "0.00", PostedDate: &posted})
+			dataPath := snapshotPath(t, b)
+			c.overwrite(t, dataPath, txnPK)
 
-	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
-}
+			reason, _ := importRefusedFrom(t, dataPath)
 
-func Test_import_refuses_a_transaction_with_an_empty_text_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "0.00", PostedDate: &posted})
-	dataPath := snapshotPath(t, b)
-	setColumnEmptyText(t, dataPath, "ZTRANSACTION", "ZAMOUNT", txnPK)
-
-	reason, _ := importRefusedFrom(t, dataPath)
-
-	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
-}
-
-func Test_import_refuses_a_transaction_with_a_blob_amount(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "0.00", PostedDate: &posted})
-	dataPath := snapshotPath(t, b)
-	setColumnBlob(t, dataPath, "ZTRANSACTION", "ZAMOUNT", txnPK, []byte{0xde, 0xad, 0xbe, 0xef})
-
-	reason, _ := importRefusedFrom(t, dataPath)
-
-	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
+			assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has an amount that is not a number`, reason)
+		})
+	}
 }
 
 // A text/blob amount with no date falls back to the source-id subject, the
@@ -390,19 +377,6 @@ func Test_import_refuses_a_dateless_transaction_with_a_text_amount(t *testing.T)
 	reason, _ := importRefused(t, b)
 
 	assert.Equal(t, `a transaction in "Visa Infinite" (source id `+itoa(txnPK)+`) has an amount that is not a number`, reason)
-}
-
-// A genuinely NULL amount stays reason 10, never reason 11.
-func Test_import_null_amount_is_reason_10_not_reason_11(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newVisa(b)
-	posted := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
-	b.Transaction(v9fixture.TransactionRow{Account: acctPK, PostedDate: &posted})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `a transaction on 2024-03-02 in "Visa Infinite" has no amount`, reason)
 }
 
 // A transaction in a deleted account, and its splits, are dropped
@@ -434,34 +408,32 @@ func Test_import_skips_a_transaction_whose_account_does_not_exist(t *testing.T) 
 	assert.Equal(t, keptPK, fake.Rows.Transactions[0].SourceID)
 }
 
-// A transaction's payee reference to a deleted payee stores NULL.
-func Test_import_nulls_a_transactions_payee_when_the_payee_is_deleted(t *testing.T) {
+func Test_import_nulls_a_transactions_payee_it_cannot_resolve(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newChequing(b)
-	deletedPayeePK := b.Payee(v9fixture.PayeeRow{Name: "Old Shop", Deleted: true})
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	transactionWithEntry(b, v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: deletedPayeePK})
+	cases := []struct {
+		name  string
+		payee func(b *v9fixture.Builder) int64
+	}{
+		{name: "when_the_payee_is_deleted", payee: func(b *v9fixture.Builder) int64 {
+			return b.Payee(v9fixture.PayeeRow{Name: "Old Shop", Deleted: true})
+		}},
+		{name: "when_the_payee_does_not_exist", payee: func(*v9fixture.Builder) int64 { return 999 }},
+	}
 
-	fake, _ := importOK(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acctPK := newChequing(b)
+			posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+			transactionWithEntry(b, v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: c.payee(b)})
 
-	require.Len(t, fake.Rows.Transactions, 1)
-	assert.Nil(t, fake.Rows.Transactions[0].PayeeID)
-}
+			fake, _ := importOK(t, b)
 
-// A transaction's payee reference to no payee row at all stores NULL,
-// the same as a deleted one.
-func Test_import_nulls_a_transactions_payee_when_the_payee_does_not_exist(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acctPK := newChequing(b)
-	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	transactionWithEntry(b, v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted, Payee: 999})
-
-	fake, _ := importOK(t, b)
-
-	require.Len(t, fake.Rows.Transactions, 1)
-	assert.Nil(t, fake.Rows.Transactions[0].PayeeID)
+			require.Len(t, fake.Rows.Transactions, 1)
+			assert.Nil(t, fake.Rows.Transactions[0].PayeeID)
+		})
+	}
 }
 
 func Test_import_maps_cleared_and_reconciled_transaction_status(t *testing.T) {

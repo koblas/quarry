@@ -8,24 +8,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_import_refuses_an_account_with_an_unsupported_currency(t *testing.T) {
+func Test_import_refuses_an_account_with_a_value_quarry_does_not_map(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Euro Savings", Type: "CHECKING", Currency: "EUR", Active: true})
+	cases := []struct {
+		name string
+		row  v9fixture.AccountRow
+		want string
+	}{
+		{
+			name: "unsupported_currency", row: v9fixture.AccountRow{Name: "Euro Savings", Type: "CHECKING", Currency: "EUR", Active: true},
+			want: `account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`,
+		},
+		{
+			name: "unmapped_type", row: v9fixture.AccountRow{Name: "X", Type: "ZZZ", Currency: "CAD", Active: true},
+			want: `account "X" has type ZZZ, which quarry does not map yet`,
+		},
+	}
 
-	reason, _ := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			b.Account(c.row)
 
-	assert.Equal(t, `account "Euro Savings" uses currency EUR; quarry supports CAD and USD accounts`, reason)
-}
+			reason, _ := importRefused(t, b)
 
-func Test_import_refuses_an_account_with_an_unmapped_type(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "X", Type: "ZZZ", Currency: "CAD", Active: true})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `account "X" has type ZZZ, which quarry does not map yet`, reason)
+			assert.Equal(t, c.want, reason)
+		})
+	}
 }
 
 func Test_import_refuses_an_account_with_no_name(t *testing.T) {
@@ -38,24 +48,28 @@ func Test_import_refuses_an_account_with_no_name(t *testing.T) {
 	assert.Equal(t, `an account (source id `+itoa(acctPK)+`) has no name`, reason)
 }
 
-func Test_import_refuses_an_account_with_no_type(t *testing.T) {
+func Test_import_refuses_an_account_missing_a_required_field(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Currency: "CAD", Active: true})
+	cases := []struct {
+		name string
+		row  v9fixture.AccountRow
+		want string
+	}{
+		{name: "no_type", row: v9fixture.AccountRow{Name: "Chequing", Currency: "CAD", Active: true}, want: `account "Chequing" has no type`},
+		{name: "no_currency", row: v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Active: true}, want: `account "Chequing" has no currency`},
+	}
 
-	reason, _ := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			b.Account(c.row)
 
-	assert.Equal(t, `account "Chequing" has no type`, reason)
-}
+			reason, _ := importRefused(t, b)
 
-func Test_import_refuses_an_account_with_no_currency(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Active: true})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `account "Chequing" has no currency`, reason)
+			assert.Equal(t, c.want, reason)
+		})
+	}
 }
 
 // A deleted account with a bad currency and no type must not be reported:

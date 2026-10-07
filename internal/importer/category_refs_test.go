@@ -10,10 +10,10 @@ import (
 
 const missingPK = 9999
 
-func importReferencedCategories(t *testing.T, b *v9fixture.Builder) []string {
-	t.Helper()
+func importReferencedCategories(tb testing.TB, b *v9fixture.Builder) []string {
+	tb.Helper()
 
-	fake, _ := importOK(t, b)
+	fake, _ := importOK(tb, b)
 
 	return fake.Rows.ReferencedCategoryIDs
 }

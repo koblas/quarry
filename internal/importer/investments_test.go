@@ -67,13 +67,26 @@ func Test_import_refuses_an_investment_transaction_with_no_action_code(t *testin
 
 func Test_import_refuses_an_investment_transaction_with_neither_a_posted_nor_an_entered_date(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00"})
+	cases := []struct {
+		name          string
+		units, amount string
+	}{
+		{name: "readable_values", amount: "1.00"},
+		{name: "before_any_other_fault", units: "n/a", amount: "n/a"},
+	}
 
-	reason, _ := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Units: c.units, Amount: c.amount})
 
-	assert.Equal(t, fmt.Sprintf(`an investment transaction in "Brokerage" (source id %d) has no date`, pk), reason)
+			reason, _ := importRefused(t, b)
+
+			assert.Equal(t, fmt.Sprintf(`an investment transaction in "Brokerage" (source id %d) has no date`, pk), reason)
+		})
+	}
 }
 
 func Test_import_ignores_an_unreadable_action_code_in_a_deleted_account(t *testing.T) {
@@ -130,30 +143,34 @@ func Test_import_dates_an_investment_transaction_by_its_posted_day_else_its_ente
 	}
 }
 
-func Test_import_leaves_a_deleted_investment_transaction_out(t *testing.T) {
+func Test_import_leaves_out_an_investment_row_it_does_not_import(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	keptPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
-	b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay, Deleted: true})
+	cases := []struct {
+		name string
+		row  func(accountPK int64) v9fixture.TransactionRow
+	}{
+		{name: "deleted_row", row: func(accountPK int64) v9fixture.TransactionRow {
+			return v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay, Deleted: true}
+		}},
+		{name: "row_of_another_entity", row: func(accountPK int64) v9fixture.TransactionRow {
+			return v9fixture.TransactionRow{Entity: 999, Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay}
+		}},
+	}
 
-	fake, _ := importOK(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			keptPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
+			b.InvestmentTransaction(c.row(accountPK))
 
-	require.Len(t, fake.Rows.InvestmentTransactions, 1)
-	assert.Equal(t, keptPK, fake.Rows.InvestmentTransactions[0].SourceID)
-}
+			fake, _ := importOK(t, b)
 
-func Test_import_leaves_out_an_investment_row_of_another_entity(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	keptPK := investmentWithEntry(b, v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Amount: "1.00", PostedDate: &investDay})
-	b.InvestmentTransaction(v9fixture.TransactionRow{Entity: 999, Account: accountPK, Type: buyCode, Amount: "2.00", PostedDate: &investDay})
-
-	fake, _ := importOK(t, b)
-
-	require.Len(t, fake.Rows.InvestmentTransactions, 1)
-	assert.Equal(t, keptPK, fake.Rows.InvestmentTransactions[0].SourceID)
+			require.Len(t, fake.Rows.InvestmentTransactions, 1)
+			assert.Equal(t, keptPK, fake.Rows.InvestmentTransactions[0].SourceID)
+		})
+	}
 }
 
 func Test_import_resolves_the_security_of_an_investment_transaction_through_its_position(t *testing.T) {
@@ -470,17 +487,6 @@ func Test_import_refuses_a_blob_share_count(t *testing.T) {
 	assert.Equal(t, `an investment transaction on 2026-03-01 in "Brokerage" has a share count that is not a number`, reason)
 }
 
-func Test_import_refuses_an_undated_investment_transaction_before_any_other_fault(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	pk := b.InvestmentTransaction(v9fixture.TransactionRow{Account: accountPK, Type: buyCode, Units: "n/a", Amount: "n/a"})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, fmt.Sprintf(`an investment transaction in "Brokerage" (source id %d) has no date`, pk), reason)
-}
-
 func Test_import_snaps_float_residue_in_shares_to_the_nearest_millionth(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
@@ -597,80 +603,65 @@ func Test_import_fails_on_a_split_with_an_unreadable_ratio(t *testing.T) {
 	}
 }
 
-func Test_import_shows_a_REAL_stored_zero_split_side_as_a_plain_zero(t *testing.T) {
+func Test_import_shows_a_REAL_or_blob_split_side_as_stored_in_its_refusal(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: newAcme(b)})
-	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
-		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "1",
-	})
-	dataPath := snapshotPath(t, b)
-	execOn(t, dataPath, "UPDATE ZTRANSACTION SET ZNUMERATOR = 1.5, ZDENOMINATOR = 0.0 WHERE Z_PK = ?", pk)
+	const prefix = `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read `
+	cases := []struct {
+		name   string
+		update string
+		want   string
+	}{
+		{name: "a_REAL_stored_zero_as_a_plain_zero", update: "UPDATE ZTRANSACTION SET ZNUMERATOR = 1.5, ZDENOMINATOR = 0.0 WHERE Z_PK = ?", want: prefix + "(1.5:0)"},
+		{name: "a_blob_numerator_as_blob", update: "UPDATE ZTRANSACTION SET ZNUMERATOR = X'00FF41' WHERE Z_PK = ?", want: prefix + "(blob:12)"},
+		{name: "a_blob_denominator_as_blob", update: "UPDATE ZTRANSACTION SET ZDENOMINATOR = X'00FF41' WHERE Z_PK = ?", want: prefix + "(1:blob)"},
+	}
 
-	reason, _ := importRefusedFrom(t, dataPath)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: newAcme(b)})
+			pk := b.InvestmentTransaction(v9fixture.TransactionRow{
+				Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "12",
+			})
+			dataPath := snapshotPath(t, b)
+			execOn(t, dataPath, c.update, pk)
 
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1.5:0)`, reason)
+			reason, _ := importRefusedFrom(t, dataPath)
+
+			assert.Equal(t, c.want, reason)
+		})
+	}
 }
 
-func Test_import_shows_a_blob_split_side_as_blob(t *testing.T) {
+func Test_import_names_no_security_in_the_refusal_of_a_split_without_an_imported_security(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: newAcme(b)})
-	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
-		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "12",
-	})
-	dataPath := snapshotPath(t, b)
-	execOn(t, dataPath, "UPDATE ZTRANSACTION SET ZNUMERATOR = X'00FF41' WHERE Z_PK = ?", pk)
+	cases := []struct {
+		name     string
+		position func(b *v9fixture.Builder, accountPK int64) int64
+	}{
+		{name: "whose_security_is_not_imported", position: func(b *v9fixture.Builder, accountPK int64) int64 {
+			goneSecurityPK := b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
+			return b.Position(v9fixture.PositionRow{Account: accountPK, Security: goneSecurityPK})
+		}},
+		{name: "with_no_security", position: func(*v9fixture.Builder, int64) int64 { return 0 }},
+	}
 
-	reason, _ := importRefusedFrom(t, dataPath)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			accountPK := newBrokerage(b)
+			b.InvestmentTransaction(v9fixture.TransactionRow{
+				Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: c.position(b, accountPK), Numerator: "1", Denominator: "0",
+			})
 
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (blob:12)`, reason)
-}
+			reason, _ := importRefused(t, b)
 
-func Test_import_shows_a_blob_split_denominator_as_blob(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: newAcme(b)})
-	pk := b.InvestmentTransaction(v9fixture.TransactionRow{
-		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "12",
-	})
-	dataPath := snapshotPath(t, b)
-	execOn(t, dataPath, "UPDATE ZTRANSACTION SET ZDENOMINATOR = X'00FF41' WHERE Z_PK = ?", pk)
-
-	reason, _ := importRefusedFrom(t, dataPath)
-
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" of "Acme Corp" has a ratio quarry cannot read (1:blob)`, reason)
-}
-
-func Test_import_names_no_security_in_the_refusal_of_a_split_whose_security_is_not_imported(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	goneSecurityPK := b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
-	positionPK := b.Position(v9fixture.PositionRow{Account: accountPK, Security: goneSecurityPK})
-	b.InvestmentTransaction(v9fixture.TransactionRow{
-		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Position: positionPK, Numerator: "1", Denominator: "0",
-	})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" has a ratio quarry cannot read (1:0)`, reason)
-}
-
-func Test_import_names_no_security_in_the_refusal_of_a_split_with_no_security(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	accountPK := newBrokerage(b)
-	b.InvestmentTransaction(v9fixture.TransactionRow{
-		Account: accountPK, Type: new(int64(23)), PostedDate: &investDay, Amount: "0", Numerator: "1", Denominator: "0",
-	})
-
-	reason, _ := importRefused(t, b)
-
-	assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" has a ratio quarry cannot read (1:0)`, reason)
+			assert.Equal(t, `a stock split on 2026-03-01 in "Brokerage" has a ratio quarry cannot read (1:0)`, reason)
+		})
+	}
 }
 
 func Test_import_ignores_the_ratio_of_a_row_that_is_not_a_split(t *testing.T) {
@@ -685,15 +676,15 @@ func Test_import_ignores_the_ratio_of_a_row_that_is_not_a_split(t *testing.T) {
 }
 
 // cashRowOf returns the transactions row of the investment transaction at source pk, by its id.
-func cashRowOf(t *testing.T, fake *fakeStore, pk int64) store.Transaction {
-	t.Helper()
+func cashRowOf(tb testing.TB, fake *fakeStore, pk int64) store.Transaction {
+	tb.Helper()
 	id := fmt.Sprintf("txn-%d", pk)
 	for _, txn := range fake.Rows.Transactions {
 		if txn.ID == id {
 			return txn
 		}
 	}
-	require.Failf(t, "no cash row", "transactions has no %s, only %v", id, transactionIDs(fake))
+	require.Failf(tb, "no cash row", "transactions has no %s, only %v", id, transactionIDs(fake))
 	return store.Transaction{}
 }
 

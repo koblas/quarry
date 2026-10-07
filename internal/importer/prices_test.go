@@ -83,79 +83,70 @@ func Test_import_orders_prices_by_security_then_day(t *testing.T) {
 	}, priceLines(fake))
 }
 
-func Test_import_keeps_a_valid_quote_when_a_higher_source_id_quote_has_no_price(t *testing.T) {
+func Test_import_keeps_a_valid_quote_over_another_quote_that_does_not_count(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acmePK := newAcme(b)
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "20"})
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: ""})
-	newChequing(b)
+	cases := []struct {
+		name  string
+		other func(acmePK int64) v9fixture.SecurityQuoteRow
+	}{
+		{name: "when_a_higher_source_id_quote_has_no_price", other: func(acmePK int64) v9fixture.SecurityQuoteRow {
+			return v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: ""}
+		}},
+		{name: "when_a_higher_source_id_quote_is_deleted", other: func(acmePK int64) v9fixture.SecurityQuoteRow {
+			return v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "10", Deleted: true}
+		}},
+		{name: "when_the_other_is_a_quote_row_of_another_entity", other: func(acmePK int64) v9fixture.SecurityQuoteRow {
+			return v9fixture.SecurityQuoteRow{Entity: 999, Security: acmePK, QuoteDate: &priceDay2, ClosingPrice: "10"}
+		}},
+	}
 
-	fake, _ := importOK(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acmePK := newAcme(b)
+			b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "20"})
+			b.SecurityQuote(c.other(acmePK))
+			newChequing(b)
 
-	assert.Equal(t, []string{priceLine(acmePK, priceDay1, 20_000_000)}, priceLines(fake))
+			fake, _ := importOK(t, b)
+
+			assert.Equal(t, []string{priceLine(acmePK, priceDay1, 20_000_000)}, priceLines(fake))
+		})
+	}
 }
 
-func Test_import_keeps_a_valid_quote_when_a_higher_source_id_quote_is_deleted(t *testing.T) {
+func Test_import_leaves_out_a_quote_it_cannot_place(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acmePK := newAcme(b)
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "20"})
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "10", Deleted: true})
-	newChequing(b)
+	cases := []struct {
+		name  string
+		quote func(b *v9fixture.Builder)
+	}{
+		{name: "with_no_date", quote: func(b *v9fixture.Builder) {
+			b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: newAcme(b), QuoteDate: nil, ClosingPrice: "20"})
+		}},
+		{name: "with_no_security", quote: func(b *v9fixture.Builder) {
+			newAcme(b)
+			b.SecurityQuote(v9fixture.SecurityQuoteRow{QuoteDate: &priceDay1, ClosingPrice: "20"})
+		}},
+		{name: "of_a_deleted_security_even_when_unreadable", quote: func(b *v9fixture.Builder) {
+			gonePK := b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
+			b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: gonePK, QuoteDate: &priceDay1, ClosingPrice: "not a price"})
+		}},
+	}
 
-	fake, _ := importOK(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			c.quote(b)
+			newChequing(b)
 
-	assert.Equal(t, []string{priceLine(acmePK, priceDay1, 20_000_000)}, priceLines(fake))
-}
+			fake, _ := importOK(t, b)
 
-func Test_import_leaves_out_a_quote_with_no_date(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acmePK := newAcme(b)
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: nil, ClosingPrice: "20"})
-	newChequing(b)
-
-	fake, _ := importOK(t, b)
-
-	assert.Empty(t, fake.Rows.Prices)
-}
-
-func Test_import_leaves_out_a_quote_with_no_security(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	newAcme(b)
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{QuoteDate: &priceDay1, ClosingPrice: "20"})
-	newChequing(b)
-
-	fake, _ := importOK(t, b)
-
-	assert.Empty(t, fake.Rows.Prices)
-}
-
-func Test_import_leaves_out_a_quote_row_of_another_entity(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acmePK := newAcme(b)
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "20"})
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Entity: 999, Security: acmePK, QuoteDate: &priceDay2, ClosingPrice: "10"})
-	newChequing(b)
-
-	fake, _ := importOK(t, b)
-
-	assert.Equal(t, []string{priceLine(acmePK, priceDay1, 20_000_000)}, priceLines(fake))
-}
-
-func Test_import_leaves_out_the_quotes_of_a_deleted_security_even_when_unreadable(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	gonePK := b.Security(v9fixture.SecurityRow{Name: "Gone Inc", Ticker: "GONE", Currency: "CAD", Deleted: true})
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: gonePK, QuoteDate: &priceDay1, ClosingPrice: "not a price"})
-	newChequing(b)
-
-	fake, _ := importOK(t, b)
-
-	assert.Empty(t, fake.Rows.Prices)
+			assert.Empty(t, fake.Rows.Prices)
+		})
+	}
 }
 
 func Test_import_keeps_a_zero_price(t *testing.T) {
@@ -184,30 +175,31 @@ func Test_import_imports_securities_without_prices_when_the_snapshot_has_no_quot
 	assert.Zero(t, result.Counts.Prices)
 }
 
-func Test_import_refuses_a_price_that_is_not_a_number(t *testing.T) {
+func Test_import_refuses_a_price_quarry_cannot_read(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acmePK := newAcme(b)
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "n/a"})
-	newChequing(b)
+	cases := []struct {
+		name  string
+		price string
+		want  string
+	}{
+		{name: "not_a_number", price: "n/a", want: `a price of "Acme Corp" on 2026-03-15 is not a number`},
+		{name: "too_large_for_quarry", price: "1000000000000", want: `a price of "Acme Corp" on 2026-03-15 is 1000000000000, which is too large for quarry's prices`},
+	}
 
-	reason, fake := importRefused(t, b)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			acmePK := newAcme(b)
+			b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: c.price})
+			newChequing(b)
 
-	assert.Equal(t, `a price of "Acme Corp" on 2026-03-15 is not a number`, reason)
-	assert.Zero(t, fake.replaceCalls)
-}
+			reason, fake := importRefused(t, b)
 
-func Test_import_refuses_a_price_too_large_for_quarry(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	acmePK := newAcme(b)
-	b.SecurityQuote(v9fixture.SecurityQuoteRow{Security: acmePK, QuoteDate: &priceDay1, ClosingPrice: "1000000000000"})
-	newChequing(b)
-
-	reason, fake := importRefused(t, b)
-
-	assert.Equal(t, `a price of "Acme Corp" on 2026-03-15 is 1000000000000, which is too large for quarry's prices`, reason)
-	assert.Zero(t, fake.replaceCalls)
+			assert.Equal(t, c.want, reason)
+			assert.Zero(t, fake.replaceCalls)
+		})
+	}
 }
 
 func Test_import_refuses_an_unreadable_price_that_a_later_quote_of_the_day_supersedes(t *testing.T) {

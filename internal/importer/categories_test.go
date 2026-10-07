@@ -59,16 +59,16 @@ func Test_import_reads_every_payee_and_user_tag(t *testing.T) {
 
 // categorizedSplit adds one balanced transaction whose only split points at
 // catPK to b, imports the snapshot, and returns the store it wrote to.
-func categorizedSplit(t *testing.T, b *v9fixture.Builder, catPK int64) *fakeStore {
-	t.Helper()
+func categorizedSplit(tb testing.TB, b *v9fixture.Builder, catPK int64) *fakeStore {
+	tb.Helper()
 	acctPK := newChequing(b)
 	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "5.00", PostedDate: &posted})
 	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "5.00", CategoryTag: catPK})
 
-	fake, _ := importOK(t, b)
+	fake, _ := importOK(tb, b)
 
-	require.Len(t, fake.Rows.Splits, 1)
+	require.Len(tb, fake.Rows.Splits, 1)
 	return fake
 }
 
@@ -84,27 +84,33 @@ func Test_import_stores_a_split_on_uncategorized_with_no_category(t *testing.T) 
 	assert.Equal(t, "Uncategorized", fake.Rows.Categories[0].FullPath)
 }
 
-func Test_import_keeps_an_expense_category_named_uncategorized(t *testing.T) {
+func Test_import_keeps_a_category_named_uncategorized_that_is_not_the_top_level_system_one(t *testing.T) {
 	t.Parallel()
-	b := v9fixture.NewBuilder()
-	catPK := b.Category(v9fixture.TagRow{Name: "Uncategorized", Type: new(int64(1))})
+	cases := []struct {
+		name     string
+		category func(b *v9fixture.Builder) int64
+	}{
+		{name: "expense_category", category: func(b *v9fixture.Builder) int64 {
+			return b.Category(v9fixture.TagRow{Name: "Uncategorized", Type: new(int64(1))})
+		}},
+		{name: "system_subcategory", category: func(b *v9fixture.Builder) int64 {
+			parentPK := b.Category(v9fixture.TagRow{Name: "Parent", Type: new(int64(0))})
+			return b.Category(v9fixture.TagRow{Name: "Uncategorized", Type: new(int64(0)), ParentCategory: parentPK})
+		}},
+	}
 
-	fake := categorizedSplit(t, b, catPK)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			catPK := c.category(b)
 
-	require.NotNil(t, fake.Rows.Splits[0].CategoryID)
-	assert.Equal(t, "cat-"+itoa(catPK), *fake.Rows.Splits[0].CategoryID)
-}
+			fake := categorizedSplit(t, b, catPK)
 
-func Test_import_keeps_a_system_subcategory_named_uncategorized(t *testing.T) {
-	t.Parallel()
-	b := v9fixture.NewBuilder()
-	parentPK := b.Category(v9fixture.TagRow{Name: "Parent", Type: new(int64(0))})
-	catPK := b.Category(v9fixture.TagRow{Name: "Uncategorized", Type: new(int64(0)), ParentCategory: parentPK})
-
-	fake := categorizedSplit(t, b, catPK)
-
-	require.NotNil(t, fake.Rows.Splits[0].CategoryID)
-	assert.Equal(t, "cat-"+itoa(catPK), *fake.Rows.Splits[0].CategoryID)
+			require.NotNil(t, fake.Rows.Splits[0].CategoryID)
+			assert.Equal(t, "cat-"+itoa(catPK), *fake.Rows.Splits[0].CategoryID)
+		})
+	}
 }
 
 // A category's full_path drops a deleted parent and stops there,
