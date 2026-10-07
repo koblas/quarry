@@ -489,7 +489,7 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-01a: Investment cash joins transactions — `cmd/quarry/run_investment_cash_test.go` `Test_run_sync_gives_each_investment_transaction_that_moves_cash_a_row_in_transactions`
 - [x] SCENARIO-01b: Investment cash rows pair transfers and keep entry-less transactions — `cmd/quarry/run_investment_cash_test.go` `Test_run_sync_pairs_an_investment_transfer_entry_and_gives_an_entry_less_investment_one_uncategorized_split`
 - [x] SCENARIO-02: Reinvested dividend moves no cash — delivered by SCENARIO-01a — `cmd/quarry/run_investment_cash_test.go` `Test_run_sync_gives_a_reinvested_dividend_no_row_and_no_income`
-- [x] SCENARIO-05: Findings ignore investment cash rows — delivered by SCENARIO-01b — `cmd/quarry/run_findings_investment_cash_test.go` `Test_run_findings_leaves_investment_cash_rows_out_of_duplicate_and_unlinked_transfer`
+- [x] SCENARIO-05: Findings ignore investment cash rows — delivered by SCENARIO-01b — `cmd/quarry/run_findings_test.go` `Test_run_findings_leaves_investment_cash_rows_out_of_duplicate_and_unlinked_transfer`
 - [x] SCENARIO-03: Investment income counts in cash flow — `cmd/quarry/run_investment_cash_test.go` `Test_run_cashflow_counts_investment_dividends_interest_and_capital_gains_as_income_and_buys_and_sells_as_neither`
 - [x] SCENARIO-04: Margin interest counts as spending — delivered by SCENARIO-03 — `cmd/quarry/run_investment_cash_test.go` `Test_run_spend_counts_investment_margin_interest_as_spending`
 - [x] SCENARIO-06: Daily balances combine cash and holdings — `cmd/quarry/run_balances_daily_view_test.go` `Test_run_sql_combines_cash_and_valued_holdings_from_v_balances_daily`

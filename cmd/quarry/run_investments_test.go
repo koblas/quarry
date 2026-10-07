@@ -49,17 +49,6 @@ func syncCleanly(t *testing.T, home string, b *v9fixture.Builder) string {
 	return stdout.String()
 }
 
-// openStoreReadOnly opens the store under home read-only until the test ends.
-func openStoreReadOnly(t *testing.T, home string) *duckdb.DB {
-	t.Helper()
-
-	db, err := duckdb.OpenReadOnly(t.Context(), storePathUnder(home))
-
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 func Test_run_sync_imports_securities_and_their_prices(t *testing.T) {
 	home := newHome(t)
 

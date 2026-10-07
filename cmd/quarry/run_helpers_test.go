@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
@@ -450,4 +451,13 @@ func runSpendCapture(ctx context.Context, args []string) (int, *bytes.Buffer, *b
 func runSpendCaptureAt(ctx context.Context, args []string, now time.Time) (int, *bytes.Buffer, *bytes.Buffer) {
 	var stdout, stderr bytes.Buffer
 	return runWith(ctx, args, spendEnvAt(&stdout, &stderr, now)), &stdout, &stderr
+}
+
+// openStoreReadOnly opens the store under home read-only until the test ends.
+func openStoreReadOnly(tb testing.TB, home string) *duckdb.DB {
+	tb.Helper()
+	db, err := duckdb.OpenReadOnly(tb.Context(), storePathUnder(home))
+	require.NoError(tb, err)
+	tb.Cleanup(func() { _ = db.Close() })
+	return db
 }

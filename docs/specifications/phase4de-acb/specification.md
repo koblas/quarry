@@ -584,7 +584,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 
 - [x] SCENARIO-01: Accounts show their classification — `internal/cli/accounts_test.go` `Test_accounts_show_their_classification`
 - [x] SCENARIO-02: A malformed classification is refused — `cmd/quarry/run_config_test.go` `Test_run_refuses_an_account_number_in_an_accounts_list_masked`
-- [x] SCENARIO-04: Unclassified investment accounts are findings — `cmd/quarry/run_findings_unclassified_test.go` `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it`
+- [x] SCENARIO-04: Unclassified investment accounts are findings — `cmd/quarry/run_findings_test.go` `Test_run_findings_lists_an_unclassified_account_until_the_config_classifies_it`
 - [x] SCENARIO-05: Finding counts include unclassified accounts — `cmd/quarry/run_status_test.go` `Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it`
 - [x] SCENARIO-03: An id that names no account is warned — delivered by SCENARIO-05 — `cmd/quarry/run_accounts_test.go` `Test_run_accounts_and_findings_warn_a_listed_id_that_names_no_account`
 - [x] SCENARIO-06: Sync imports Quicken's cost basis — `cmd/quarry/run_investments_test.go` `Test_run_sync_keeps_quickens_cost_basis_and_stores_null_for_none`
@@ -596,7 +596,7 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-11: Return of capital and reinvested distributions — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_lowers_and_raises_the_acb_by_the_adjustments_and_counts_return_of_capital_above_it_as_a_gain`
 - [x] SCENARIO-12: Possible superficial losses are marked — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_marks_a_loss_sale_rebought_in_a_registered_account_within_30_days`
 - [x] SCENARIO-13a: Shares added with no cost leave ACB incomplete — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_marks_an_incomplete_security_and_its_sales_after_shares_added_with_no_cost`
-- [x] SCENARIO-13b: Shares added with no cost are findings — `cmd/quarry/run_findings_shares_without_cost_test.go` `Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them`
+- [x] SCENARIO-13b: Shares added with no cost are findings — `cmd/quarry/run_findings_test.go` `Test_run_findings_lists_shares_added_with_no_cost_as_status_sync_and_mcp_count_them`
 - [x] SCENARIO-14: ACB data-quality warnings — `cmd/quarry/run_acb_pool_test.go` `Test_run_acb_warns_of_a_no_rate_trade_a_shared_ticker_and_a_december_sale`
 - [x] SCENARIO-15: Sales of one tax year — `cmd/quarry/run_acb_test.go` `Test_run_acb_year_lists_that_years_sales_one_by_one_with_a_total`
 - [x] SCENARIO-18: Nothing to show — delivered by SCENARIO-15 — `cmd/quarry/run_acb_test.go` `Test_run_acb_warns_when_no_non_registered_account_has_traded`
