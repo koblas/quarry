@@ -9,6 +9,7 @@
 | SCENARIO-14 (+15, 16) | test-first | A, B1, V (+ orchestrator: 2 rulings) | 0/0/2/0 | folded into V (Pruned.Snapshots pin on cannot-tell arm; doc trim) |
 | SCENARIO-10 (+11) | test-first | A, B1, checkpoint-fix, V (+ orchestrator: 4 plan rulings, BR-C8 checkpoint ruling) | 0/3/2/1 | yes (BR-C8 shared manifest kept — production; reds by mutation, not test-first) + folded into V (2 pin-only MAJORs: unreadable manifest path, --json manifest on-disk name; doc trim; upper-case orphan row) |
 | SCENARIO-12a | code-first | A, B1, V (sized LIGHT; planned by architect — >3 ruled lines; + orchestrator: change 10 ruling) | 0/2/2/1 | folded into V (2 pin-only MAJORs: --from latest F3 row, F5 cmd cells; 2 comment trims) |
+| SCENARIO-12b | code-first (light) | L, V (+ orchestrator: light lane kept — one ruling, four sites) | 0/0/0/1 | folded into V (snapshotExt doc) |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
