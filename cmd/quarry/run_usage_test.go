@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -97,7 +96,7 @@ func Test_run_help_says_only_one_writer_runs_at_a_time(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
@@ -134,8 +133,7 @@ func Test_run_refuses_from_with_quicken_or_without_a_value(t *testing.T) {
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, c.wantStderr, stderr.String())
-			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
-			assert.ErrorIs(t, statErr, os.ErrNotExist)
+			assertNoSnapshotsDir(t, home)
 		})
 	}
 }
@@ -159,8 +157,7 @@ func Test_run_refuses_an_empty_or_whitespace_quicken_flag_as_a_usage_error_even_
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, "quarry: flag needs an argument: --quicken; Run 'quarry sync --help' for usage.\n", stderr.String())
-			_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
-			assert.ErrorIs(t, statErr, os.ErrNotExist)
+			assertNoSnapshotsDir(t, home)
 		})
 	}
 }
@@ -225,7 +222,7 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
@@ -240,7 +237,7 @@ func Test_run_rejects_usage_errors(t *testing.T) {
 func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
 	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "acb", "summary"} {
 		t.Run(command, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), []string{command, "--currency"})
 
@@ -252,7 +249,7 @@ func Test_run_read_commands_need_a_value_for_the_currency_flag(t *testing.T) {
 }
 
 func Test_run_holdings_needs_a_value_for_the_as_of_flag(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	newHome(t)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--as-of"})
 
@@ -262,7 +259,7 @@ func Test_run_holdings_needs_a_value_for_the_as_of_flag(t *testing.T) {
 }
 
 func Test_run_holdings_has_no_all_flag(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	newHome(t)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"holdings", "--all"})
 
@@ -314,7 +311,7 @@ func Test_run_usage_hint_names_the_matched_command(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
@@ -395,11 +392,7 @@ func Test_run_help_and_usage_errors_do_not_need_home(t *testing.T) {
 	}
 	for _, c := range usageErrors {
 		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			env := testEnv(&stdout, &stderr)
-			env.Stdin = strings.NewReader(c.stdin)
-
-			exitCode := runWith(context.Background(), c.args, env)
+			exitCode, stdout, stderr := runCaptureWithStdin(c.args, c.stdin)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -429,6 +422,14 @@ func Test_runProcess_returns_the_usage_exit_code_for_an_unknown_command(t *testi
 
 	assert.Equal(t, 2, exitCode)
 	assert.Equal(t, "quarry: unknown command \"frob\" for \"quarry\"; Run 'quarry --help' for usage.\n", stderr.String())
+}
+
+// runCaptureWithStdin is runCapture with stdin as the command's standard input.
+func runCaptureWithStdin(args []string, stdin string) (int, *bytes.Buffer, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	env := testEnv(&stdout, &stderr)
+	env.Stdin = strings.NewReader(stdin)
+	return runWith(context.Background(), args, env), &stdout, &stderr
 }
 
 const badCurrencyFlag = "quarry: --currency must be CAD, USD or native\n"
@@ -486,11 +487,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			env := testEnv(&stdout, &stderr)
-			env.Stdin = strings.NewReader(c.stdin)
-
-			exitCode := runWith(context.Background(), c.args, env)
+			exitCode, stdout, stderr := runCaptureWithStdin(c.args, c.stdin)
 
 			assert.Equal(t, 2, exitCode)
 			assert.Empty(t, stdout.String())
@@ -502,7 +499,7 @@ func Test_run_read_commands_reject_bad_usage(t *testing.T) {
 func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
 	for _, command := range []string{"spend", "cashflow", "recurring", "anomalies", "accounts", "holdings", "networth", "summary"} {
 		t.Run(command, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runCapture(context.Background(), []string{command, "--currency", "EUR"})
 
@@ -514,11 +511,9 @@ func Test_run_read_commands_refuse_a_bad_currency_flag(t *testing.T) {
 }
 
 func Test_run_sql_refuses_a_multi_line_query_that_starts_with_a_dash_as_an_unknown_flag(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	var stdout, stderr bytes.Buffer
-	env := testEnv(&stdout, &stderr)
+	newHome(t)
 
-	exitCode := runWith(context.Background(), []string{"sql", "-- monthly totals\nSELECT 1"}, env)
+	exitCode, stdout, stderr := runCaptureWithStdin([]string{"sql", "-- monthly totals\nSELECT 1"}, "")
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
@@ -526,7 +521,7 @@ func Test_run_sql_refuses_a_multi_line_query_that_starts_with_a_dash_as_an_unkno
 }
 
 func Test_run_findings_rejects_a_bad_status_before_looking_for_a_store(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	newHome(t)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings", "--status", "closed"})
 

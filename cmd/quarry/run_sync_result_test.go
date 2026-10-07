@@ -31,6 +31,99 @@ type failingWriter struct{ err error }
 
 func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 
+// runWithFailingStdout runs args with every write to stdout failing with err, returning the exit code and stderr.
+func runWithFailingStdout(args []string, err error) (int, string) {
+	var stderr bytes.Buffer
+	return run(context.Background(), args, failingWriter{err: err}, &stderr), stderr.String()
+}
+
+// referenceMatch is the Schema line's text when the snapshot matches the schema reference exactly.
+const referenceMatch = "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)"
+
+// syncArtifacts are the files the one sync under a home left, and the digests read from the snapshot.
+type syncArtifacts struct {
+	snapshotPath, manifestPath, storePath string
+	size                                  int64
+	sha256                                string
+}
+
+// readSyncArtifacts finds the one snapshot and manifest under home and digests the snapshot.
+func readSyncArtifacts(t *testing.T, home string) syncArtifacts {
+	t.Helper()
+	snapshotsDir := snapshotsDirUnder(home)
+	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
+	raw, err := os.ReadFile(snapshotPath)
+	require.NoError(t, err)
+	info, err := os.Stat(snapshotPath)
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	return syncArtifacts{
+		snapshotPath: snapshotPath, manifestPath: manifestPath, storePath: storePathUnder(home),
+		size: info.Size(), sha256: hex.EncodeToString(sum[:]),
+	}
+}
+
+// head is the five lines every sync's stdout opens with: the snapshot, its manifest, the source bundle,
+// the size beside accounts (such as "2 accounts") and the digest.
+func (a syncArtifacts) head(t *testing.T, home, bundleDir, accounts string) string {
+	t.Helper()
+	return fmt.Sprintf("%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, %s\n%-10s%s\n",
+		"Snapshot", abbreviated(t, a.snapshotPath, home),
+		"Manifest", abbreviated(t, a.manifestPath, home),
+		"Source", abbreviated(t, bundleDir, home),
+		"Size", megabytes(a.size), accounts,
+		"SHA-256", a.sha256,
+	)
+}
+
+// reconcileAccount gives account one reconciled transaction of amount on date and a statement of that
+// day ending at ending, so the two agree only when ending equals amount.
+func reconcileAccount(b *v9fixture.Builder, account int64, date time.Time, amount, ending string) {
+	reconcileTxn(b, account, date, amount)
+	b.Reconcile(v9fixture.ReconcileRow{Account: account, EndDate: &date, EndingBalance: ending})
+}
+
+// reconcileTxn gives account one reconciled single-entry transaction of amount on date, with no statement.
+func reconcileTxn(b *v9fixture.Builder, account int64, date time.Time, amount string) {
+	reconciled := int64(2)
+	txn := b.Transaction(v9fixture.TransactionRow{Account: account, Amount: amount, PostedDate: &date, Status: &reconciled})
+	b.Entry(v9fixture.EntryRow{Parent: txn, Amount: amount})
+}
+
+// assertNoSnapshotsDir requires that no sync has made the snapshots directory under home.
+func assertNoSnapshotsDir(t *testing.T, home string) {
+	t.Helper()
+	_, err := os.Stat(snapshotsDirUnder(home))
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+// validationFailedLine is the refusal a failed validation prints on stderr, after the block on stdout:
+// what names the failures, such as "1 transaction does not equal the sum of its splits".
+func validationFailedLine(t *testing.T, home string, art syncArtifacts, what string) string {
+	t.Helper()
+	return "quarry: validation failed: " + what + "; " +
+		abbreviated(t, art.storePath, home) + " was not changed; each difference is listed on stdout; " +
+		"fix them in Quicken and run quarry sync, or run quarry sync --from " +
+		snapshotID(art.snapshotPath) + " after updating quarry\n"
+}
+
+// readManifestFields decodes the one manifest under home as a JSON object.
+func readManifestFields(t *testing.T, home string) map[string]json.RawMessage {
+	t.Helper()
+	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".json"))
+	require.NoError(t, err)
+	return mustJSONFields(t, raw)
+}
+
+// mustJSONFields decodes raw as a JSON object, failing t when it is not one.
+func mustJSONFields(t *testing.T, raw []byte) map[string]json.RawMessage {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &fields))
+	return fields
+}
+
 func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
@@ -40,25 +133,11 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	info, err := os.Stat(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
-
-	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
-	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
-		"Snapshot", abbreviated(t, snapshotPath, home),
-		"Manifest", abbreviated(t, manifestPath, home),
-		"Source", abbreviated(t, bundle.Dir, home),
-		"Size", megabytes(info.Size()),
-		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
-		"Store", abbreviated(t, storePath, home),
+	art := readSyncArtifacts(t, home)
+	want := art.head(t, home, bundle.Dir, "2 accounts") + fmt.Sprintf(
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"Schema", referenceMatch,
+		"Store", abbreviated(t, art.storePath, home),
 		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "no accounts to check; 2 never reconciled",
 		"Splits", "no transactions to check",
@@ -75,7 +154,7 @@ func Test_run_writes_a_verified_snapshot_and_reports_success(t *testing.T) {
 func Test_run_removes_leftover_partials_silently_before_syncing(t *testing.T) {
 	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotsDir := snapshotsDirUnder(home)
 	require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
 	leftover := filepath.Join(snapshotsDir, ".20260101T000000Z.sqlite.partial")
 	require.NoError(t, os.WriteFile(leftover, []byte("crash debris"), 0o600))
@@ -103,18 +182,15 @@ func Test_run_points_to_from_when_writing_stdout_fails_after_the_build(t *testin
 	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 	writeErr := errNoSpace
-	var stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)
+	exitCode, stderr := runWithFailingStdout([]string{"sync", "--quicken", bundle.Dir}, writeErr)
 
 	assert.Equal(t, 1, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	onlyFileWithSuffix(t, snapshotsDir, ".json")
+	art := readSyncArtifacts(t, home)
 	assert.Equal(t,
 		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; run quarry sync --from "+
-			snapshotID(snapshotPath)+" --json to see it again\n",
-		stderr.String())
+			snapshotID(art.snapshotPath)+" --json to see it again\n",
+		stderr)
 }
 
 func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
@@ -125,15 +201,9 @@ func Test_run_prints_the_manifest_as_json_with_the_json_flag(t *testing.T) {
 
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	manifestBytes, err := os.ReadFile(manifestPath)
-	require.NoError(t, err)
-	var manifest map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(manifestBytes, &manifest))
+	manifest := readManifestFields(t, home)
 
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	parsed := mustJSONFields(t, stdout.Bytes())
 	assert.ElementsMatch(t, []string{"snapshot", "schema", "store", "pruned", "warnings"}, slices.Collect(maps.Keys(parsed)))
 	assert.JSONEq(t, string(manifest["snapshot"]), string(parsed["snapshot"]))
 	assert.JSONEq(t, string(manifest["schema"]), string(parsed["schema"]))
@@ -179,15 +249,9 @@ func Test_run_reports_the_store_result_alongside_the_manifest_as_json(t *testing
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	manifestBytes, err := os.ReadFile(manifestPath)
-	require.NoError(t, err)
-	var manifest map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(manifestBytes, &manifest))
+	manifest := readManifestFields(t, home)
 
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	parsed := mustJSONFields(t, stdout.Bytes())
 	assert.JSONEq(t, string(manifest["snapshot"]), string(parsed["snapshot"]))
 	assert.JSONEq(t, string(manifest["schema"]), string(parsed["schema"]))
 
@@ -232,11 +296,8 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Closed: true})
 	visaPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	reconciled := int64(2)
 
-	balancedTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: balancedTxn, Amount: "100.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &day, EndingBalance: "100.01"})
+	reconcileAccount(b, chequingPK, day, "100.00", "100.01")
 
 	oneSidedTxn := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "-5.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: oneSidedTxn, Amount: "-5.00", QuickenID: 3001, Transfer: "Old Visa"})
@@ -251,16 +312,12 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 
 	assert.Equal(t, 1, exitCode)
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	storePath := storePathUnder(home)
 
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	parsed := mustJSONFields(t, stdout.Bytes())
 	assert.JSONEq(t, "[]", string(parsed["warnings"]))
 
-	var store map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(parsed["store"], &store))
+	store := mustJSONFields(t, parsed["store"])
 	var built bool
 	require.NoError(t, json.Unmarshal(store["built"], &built))
 	assert.False(t, built)
@@ -269,8 +326,7 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	require.NoError(t, json.Unmarshal(store["path"], &path))
 	assert.Equal(t, storePath, path)
 
-	var balances map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(store["balances"], &balances))
+	balances := mustJSONFields(t, store["balances"])
 	var balanceMismatched []map[string]any
 	require.NoError(t, json.Unmarshal(balances["mismatched"], &balanceMismatched))
 	require.Len(t, balanceMismatched, 1)
@@ -281,25 +337,21 @@ func Test_run_prints_the_unbuilt_store_as_json_when_validation_fails(t *testing.
 	assert.Equal(t, true, balanceMismatched[0]["closed"])
 	assert.Equal(t, false, balanceMismatched[0]["active"])
 
-	var splits map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(store["splits"], &splits))
+	splits := mustJSONFields(t, store["splits"])
 	var splitMismatched []map[string]any
 	require.NoError(t, json.Unmarshal(splits["mismatched"], &splitMismatched))
 	require.Len(t, splitMismatched, 1)
 	assert.Equal(t, "-212.40", splitMismatched[0]["amount"])
 	assert.Equal(t, "-202.40", splitMismatched[0]["splits_total"])
 
-	var transfers map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(store["transfers"], &transfers))
+	transfers := mustJSONFields(t, store["transfers"])
 	var oneSided []map[string]any
 	require.NoError(t, json.Unmarshal(transfers["one_sided"], &oneSided))
 	assert.Len(t, oneSided, 1)
 
 	assert.Equal(t,
-		"quarry: validation failed: 1 of 1 account does not match Quicken's last reconciled balance and "+
-			"1 transaction does not equal the sum of its splits; "+abbreviated(t, storePath, home)+
-			" was not changed; each difference is listed on stdout; fix them in Quicken and run quarry sync, "+
-			"or run quarry sync --from "+snapshotID(snapshotPath)+" after updating quarry\n",
+		validationFailedLine(t, home, readSyncArtifacts(t, home), "1 of 1 account does not match Quicken's last reconciled balance and "+
+			"1 transaction does not equal the sum of its splits"),
 		stderr.String())
 }
 
@@ -310,24 +362,18 @@ func Test_run_points_at_from_json_when_stdout_fails_writing_a_failed_validation_
 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	reconciled := int64(2)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "100.01"})
+	reconcileAccount(b, acctPK, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "100.00", "100.01")
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 	writeErr := errNoSpace
-	var stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"}, failingWriter{err: writeErr}, &stderr)
+	exitCode, stderr := runWithFailingStdout([]string{"sync", "--quicken", bundle.Dir, "--json"}, writeErr)
 
 	assert.Equal(t, 1, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	snapshotPath := onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite")
 	assert.Equal(t,
 		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; run quarry sync --from "+
 			snapshotID(snapshotPath)+" --json to see it again\n",
-		stderr.String())
+		stderr)
 }
 
 // Two never-reconciled accounts with opposite closed/active flags, so a
@@ -346,12 +392,9 @@ func Test_run_lists_never_reconciled_accounts_in_json_and_succeeds(t *testing.T)
 	require.Equal(t, 0, exitCode)
 	assert.Empty(t, stderr.String())
 
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
-	var store map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(parsed["store"], &store))
-	var balances map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(store["balances"], &balances))
+	parsed := mustJSONFields(t, stdout.Bytes())
+	store := mustJSONFields(t, parsed["store"])
+	balances := mustJSONFields(t, store["balances"])
 
 	wantNeverReconciled := fmt.Sprintf(
 		`[{"id":"acct-%d","name":"Alpha Wallet","currency":"CAD","closed":false,"active":false},`+
@@ -369,23 +412,12 @@ func Test_run_reports_a_schema_mismatch(t *testing.T) {
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 1, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	info, err := os.Stat(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
+	art := readSyncArtifacts(t, home)
+	snapshotPath, manifestPath := art.snapshotPath, art.manifestPath
 
-	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 1 account\n%-10s%s\n%-10s%s\n"+
+	want := art.head(t, home, bundle.Dir, "1 account") + fmt.Sprintf(
+		"%-10s%s\n"+
 			"  - table   %s\n  - column  %s.%s\n  - column  %s.%s\n  + column  %s.%s\n",
-		"Snapshot", abbreviated(t, snapshotPath, home),
-		"Manifest", abbreviated(t, manifestPath, home),
-		"Source", abbreviated(t, bundle.Dir, home),
-		"Size", megabytes(info.Size()),
-		"SHA-256", hex.EncodeToString(sum[:]),
 		"Schema", "DIFFERS from reference hardkoded/quicken-skills@752107b+quarry.1: "+
 			"1 table and 2 columns missing, 1 column not in reference",
 		v9fixture.MissingSchemaDroppedTable,
@@ -409,7 +441,7 @@ func Test_run_reports_a_schema_mismatch(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, false, schema["verified"])
 
-	_, err = os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb"))
+	_, err = os.Stat(storePathUnder(home))
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -420,31 +452,19 @@ func Test_run_reports_extra_schema_only_as_a_warning(t *testing.T) {
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	info, err := os.Stat(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
+	art := readSyncArtifacts(t, home)
+	manifestPath := art.manifestPath
 
-	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
-	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 1 account\n%-10s%s\n%-10s%s\n"+
+	want := art.head(t, home, bundle.Dir, "1 account") + fmt.Sprintf(
+		"%-10s%s\n"+
 			"  + table   %s\n  + column  %s.%s\n  + column  %s.%s\n"+
 			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
-		"Snapshot", abbreviated(t, snapshotPath, home),
-		"Manifest", abbreviated(t, manifestPath, home),
-		"Source", abbreviated(t, bundle.Dir, home),
-		"Size", megabytes(info.Size()),
-		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns), "+
+		"Schema", referenceMatch+", "+
 			"plus 1 table and 2 columns not in it",
 		v9fixture.ExtraSchemaAddedTable,
 		v9fixture.ExtraSchemaAddedColumnTable1, v9fixture.ExtraSchemaAddedColumn1,
 		v9fixture.ExtraSchemaAddedColumnTable2, v9fixture.ExtraSchemaAddedColumn2,
-		"Store", abbreviated(t, storePath, home),
+		"Store", abbreviated(t, art.storePath, home),
 		"Rows", "0 transactions, 0 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "no accounts to check; 1 never reconciled",
 		"Splits", "no transactions to check",
@@ -474,15 +494,9 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir, "--json"})
 
 	require.Equal(t, 1, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	manifestBytes, err := os.ReadFile(manifestPath)
-	require.NoError(t, err)
-	var manifest map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(manifestBytes, &manifest))
+	manifest := readManifestFields(t, home)
 
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	parsed := mustJSONFields(t, stdout.Bytes())
 	assert.JSONEq(t, string(manifest["snapshot"]), string(parsed["snapshot"]))
 	assert.JSONEq(t, string(manifest["schema"]), string(parsed["schema"]))
 	assert.JSONEq(t, string(manifest["warnings"]), string(parsed["warnings"]))
@@ -507,10 +521,9 @@ func Test_run_reports_a_schema_mismatch_as_json(t *testing.T) {
 func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
 	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	var syncStdout, syncStderr bytes.Buffer
-	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	syncExit, syncStdout, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	require.Equal(t, 1, syncExit)
+	id := snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id})
 
@@ -519,23 +532,21 @@ func Test_run_reports_a_schema_mismatch_with_from(t *testing.T) {
 	assert.Equal(t, "quarry: schema check failed: snapshot "+id+" of Home.quicken is missing 1 table and 2 columns "+
 		"that the schema reference expects; quarry cannot import it until its schema reference is updated\n",
 		stderr.String())
-	_, err := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb"))
+	_, err := os.Stat(storePathUnder(home))
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func Test_run_reports_a_schema_mismatch_with_from_as_json(t *testing.T) {
 	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
-	var syncStdout, syncStderr bytes.Buffer
-	require.Equal(t, 1, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &syncStdout, &syncStderr))
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
+	syncExit, _, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+	require.Equal(t, 1, syncExit)
+	id := snapshotID(onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite"))
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", id, "--json"})
 
 	require.Equal(t, 1, exitCode)
-	var parsed map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &parsed))
+	parsed := mustJSONFields(t, stdout.Bytes())
 	storeValue, present := parsed["store"]
 	require.True(t, present, "the store key must be present even when the import was not attempted")
 	assert.JSONEq(t, "null", string(storeValue))
@@ -557,18 +568,15 @@ func Test_run_keeps_the_snapshot_message_when_writing_stdout_fails_on_a_schema_m
 	home := newHome(t)
 	bundle := v9fixture.MissingSchemaBundle(t, filepath.Join(home, "Documents"))
 	writeErr := errNoSpace
-	var stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)
+	exitCode, stderr := runWithFailingStdout([]string{"sync", "--quicken", bundle.Dir}, writeErr)
 
 	assert.Equal(t, 1, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	onlyFileWithSuffix(t, snapshotsDir, ".json")
+	art := readSyncArtifacts(t, home)
 	assert.Equal(t,
 		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; the snapshot is kept at "+
-			abbreviated(t, snapshotPath, home)+" and its .json manifest holds the full result\n",
-		stderr.String())
+			abbreviated(t, art.snapshotPath, home)+" and its .json manifest holds the full result\n",
+		stderr)
 }
 
 // Chequing's stale and deleted-newer statements, and its non-reconciled
@@ -584,12 +592,8 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Brokerage", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
 
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	reconciled := int64(2)
 
-	reconciledTxnPK := b.Transaction(v9fixture.TransactionRow{
-		Account: chequingPK, Amount: "100.00", PostedDate: &day, Status: &reconciled,
-	})
-	b.Entry(v9fixture.EntryRow{Parent: reconciledTxnPK, Amount: "100.00"})
+	reconcileTxn(b, chequingPK, day, "100.00")
 	unclearedTxnPK := b.Transaction(v9fixture.TransactionRow{Account: chequingPK, Amount: "50.00", PostedDate: &day})
 	b.Entry(v9fixture.EntryRow{Parent: unclearedTxnPK, Amount: "50.00"})
 
@@ -600,17 +604,8 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &mar, EndingBalance: "1.00", Deleted: true})
 	b.Reconcile(v9fixture.ReconcileRow{Account: chequingPK, EndDate: &feb, EndingBalance: "100.00"})
 
-	closedTxnPK := b.Transaction(v9fixture.TransactionRow{
-		Account: closedPK, Amount: "25.00", PostedDate: &day, Status: &reconciled,
-	})
-	b.Entry(v9fixture.EntryRow{Parent: closedTxnPK, Amount: "25.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: closedPK, EndDate: &day, EndingBalance: "25.00"})
-
-	walletTxnPK := b.Transaction(v9fixture.TransactionRow{
-		Account: walletPK, Amount: "10.00", PostedDate: &day, Status: &reconciled,
-	})
-	b.Entry(v9fixture.EntryRow{Parent: walletTxnPK, Amount: "10.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: walletPK, EndDate: &day, EndingBalance: "10.00"})
+	reconcileAccount(b, closedPK, day, "25.00", "25.00")
+	reconcileAccount(b, walletPK, day, "10.00", "10.00")
 
 	_ = savingsPK
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
@@ -621,24 +616,12 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	info, err := os.Stat(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
-	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
+	art := readSyncArtifacts(t, home)
+	storePath := art.storePath
 
-	want := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 5 accounts\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
-		"Snapshot", abbreviated(t, snapshotPath, home),
-		"Manifest", abbreviated(t, manifestPath, home),
-		"Source", abbreviated(t, bundle.Dir, home),
-		"Size", megabytes(info.Size()),
-		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
+	want := art.head(t, home, bundle.Dir, "5 accounts") + fmt.Sprintf(
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"Schema", referenceMatch,
 		"Store", abbreviated(t, storePath, home),
 		"Rows", "4 transactions, 4 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "3 accounts match Quicken's last reconciled balance; 1 never reconciled and 1 investment account's cash not checked",
@@ -650,7 +633,7 @@ func Test_run_checks_balances_and_split_sums_before_swapping_the_store_in(t *tes
 	)
 	require.Equal(t, want, stdout.String())
 
-	_, err = os.Stat(storePath)
+	_, err := os.Stat(storePath)
 	require.NoError(t, err)
 }
 
@@ -678,40 +661,22 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
 	matchingPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD", Active: true})
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	reconciled := int64(2)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "100.01"})
-	matchingTxnPK := b.Transaction(v9fixture.TransactionRow{Account: matchingPK, Amount: "10.00", PostedDate: &day, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: matchingTxnPK, Amount: "10.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: matchingPK, EndDate: &day, EndingBalance: "10.00"})
+	reconcileAccount(b, acctPK, day, "100.00", "100.01")
+	reconcileAccount(b, matchingPK, day, "10.00", "10.00")
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	assert.Equal(t, 1, exitCode)
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	info, err := os.Stat(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
-	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
+	art := readSyncArtifacts(t, home)
+	storePath := art.storePath
 
 	label := "Chequing (CAD)"
 	row := mismatchRow(len(label)+2, len("100.00"), len("100.01"), len("-0.01"), label, "2026-03-01", "100.00", "100.01", "-0.01")
-	wantStdout := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 2 accounts\n%-10s%s\n%-10s%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
-		"Snapshot", abbreviated(t, snapshotPath, home),
-		"Manifest", abbreviated(t, manifestPath, home),
-		"Source", abbreviated(t, bundle.Dir, home),
-		"Size", megabytes(info.Size()),
-		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
+	wantStdout := art.head(t, home, bundle.Dir, "2 accounts") + fmt.Sprintf(
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"Schema", referenceMatch,
 		"Store", "NOT BUILT (no store at "+abbreviated(t, storePath, home)+" yet)",
 		"Rows", "2 transactions, 2 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "DIFFER for 1 of 2 accounts",
@@ -723,13 +688,10 @@ func Test_run_refuses_a_balance_mismatch_and_leaves_no_store(t *testing.T) {
 	assert.Equal(t, wantStdout, stdout.String())
 
 	assert.Equal(t,
-		"quarry: validation failed: 1 of 2 accounts does not match Quicken's last reconciled balance; "+
-			abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
-			"fix them in Quicken and run quarry sync, or run quarry sync --from "+
-			snapshotID(snapshotPath)+" after updating quarry\n",
+		validationFailedLine(t, home, art, "1 of 2 accounts does not match Quicken's last reconciled balance"),
 		stderr.String())
 
-	_, err = os.Stat(storePath)
+	_, err := os.Stat(storePath)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -740,24 +702,18 @@ func Test_run_points_at_from_json_when_stdout_fails_rendering_a_failed_validatio
 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	reconciled := int64(2)
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "100.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "100.01"})
+	reconcileAccount(b, acctPK, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "100.00", "100.01")
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 	writeErr := errNoSpace
-	var stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, failingWriter{err: writeErr}, &stderr)
+	exitCode, stderr := runWithFailingStdout([]string{"sync", "--quicken", bundle.Dir}, writeErr)
 
 	assert.Equal(t, 1, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
+	snapshotPath := onlyFileWithSuffix(t, snapshotsDirUnder(home), ".sqlite")
 	assert.Equal(t,
 		"quarry: cannot write the result to stdout: "+writeErr.Error()+"; run quarry sync --from "+
 			snapshotID(snapshotPath)+" --json to see it again\n",
-		stderr.String())
+		stderr)
 }
 
 // A failing sync leaves an existing store byte-identical; the failed-validation block
@@ -765,9 +721,8 @@ func Test_run_points_at_from_json_when_stdout_fails_rendering_a_failed_validatio
 func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *testing.T) {
 	home := newHome(t)
 
-	storeDir := filepath.Join(home, "Library", "Application Support", "quarry")
-	require.NoError(t, os.MkdirAll(storeDir, 0o700))
-	storePath := filepath.Join(storeDir, "quarry.duckdb")
+	storePath := storePathUnder(home)
+	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
 	sentinel := []byte("previous store bytes, untouched by a failing sync")
 	require.NoError(t, os.WriteFile(storePath, sentinel, 0o600))
 
@@ -775,22 +730,10 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	usPK := b.Account(v9fixture.AccountRow{Name: "US Chequing", Type: "CHECKING", Currency: "USD", Active: true})
 	visaPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Closed: true})
 	savingsPK := b.Account(v9fixture.AccountRow{Name: "Savings", Type: "SAVINGS", Currency: "CAD"})
-	reconciled := int64(2)
 
-	usDay := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
-	usTxnPK := b.Transaction(v9fixture.TransactionRow{Account: usPK, Amount: "8310.00", PostedDate: &usDay, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: usTxnPK, Amount: "8310.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: usPK, EndDate: &usDay, EndingBalance: "8300.00"})
-
-	visaDay := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
-	visaTxnPK := b.Transaction(v9fixture.TransactionRow{Account: visaPK, Amount: "-1204.17", PostedDate: &visaDay, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: visaTxnPK, Amount: "-1204.17"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: visaPK, EndDate: &visaDay, EndingBalance: "-1184.17"})
-
-	savingsDay := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
-	savingsTxnPK := b.Transaction(v9fixture.TransactionRow{Account: savingsPK, Amount: "50.00", PostedDate: &savingsDay, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: savingsTxnPK, Amount: "50.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: savingsPK, EndDate: &savingsDay, EndingBalance: "60.00"})
+	reconcileAccount(b, usPK, time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), "8310.00", "8300.00")
+	reconcileAccount(b, visaPK, time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC), "-1204.17", "-1184.17")
+	reconcileAccount(b, savingsPK, time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), "50.00", "60.00")
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
 
@@ -798,14 +741,7 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 
 	assert.Equal(t, 1, exitCode)
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	info, err := os.Stat(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
+	art := readSyncArtifacts(t, home)
 
 	labelWidth := maxLen("US Chequing (USD)", "Visa Infinite (CAD, closed)", "Savings (CAD, inactive)") + 2
 	quarryWidth := maxLen("8,310.00", "-1,204.17", "50.00")
@@ -813,15 +749,9 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	diffWidth := maxLen("10.00", "-20.00", "-10.00")
 
 	// Sorted by account name (byte order): Savings, US Chequing, Visa Infinite.
-	wantStdout := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 3 accounts\n%-10s%s\n%-10s%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%s\n%s\n%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
-		"Snapshot", abbreviated(t, snapshotPath, home),
-		"Manifest", abbreviated(t, manifestPath, home),
-		"Source", abbreviated(t, bundle.Dir, home),
-		"Size", megabytes(info.Size()),
-		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
+	wantStdout := art.head(t, home, bundle.Dir, "3 accounts") + fmt.Sprintf(
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%s\n%s\n%s\n%-10s%s\n%-10s%s\n%-10s%s\n",
+		"Schema", referenceMatch,
 		"Store", "NOT REBUILT ("+abbreviated(t, storePath, home)+" unchanged)",
 		"Rows", "3 transactions, 3 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "DIFFER for 3 of 3 accounts",
@@ -838,10 +768,7 @@ func Test_run_leaves_the_previous_store_byte_identical_after_a_failing_sync(t *t
 	assert.Equal(t, wantStdout, stdout.String())
 
 	assert.Equal(t,
-		"quarry: validation failed: 3 of 3 accounts do not match Quicken's last reconciled balance; "+
-			abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
-			"fix them in Quicken and run quarry sync, or run quarry sync --from "+
-			snapshotID(snapshotPath)+" after updating quarry\n",
+		validationFailedLine(t, home, art, "3 of 3 accounts do not match Quicken's last reconciled balance"),
 		stderr.String())
 
 	got, err := os.ReadFile(storePath)
@@ -856,12 +783,8 @@ func Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block(t *t
 
 	b := v9fixture.NewBuilder()
 	acctPK := b.Account(v9fixture.AccountRow{Name: "Visa Infinite", Type: "CREDITCARD", Currency: "CAD", Active: true})
-	reconciled := int64(2)
 
-	day := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	matchingTxnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "100.00", PostedDate: &day, Status: &reconciled})
-	b.Entry(v9fixture.EntryRow{Parent: matchingTxnPK, Amount: "100.00"})
-	b.Reconcile(v9fixture.ReconcileRow{Account: acctPK, EndDate: &day, EndingBalance: "100.00"})
+	reconcileAccount(b, acctPK, time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), "100.00", "100.00")
 
 	splitDay := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
 	mismatchedTxnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "-212.40", PostedDate: &splitDay})
@@ -873,25 +796,12 @@ func Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block(t *t
 
 	assert.Equal(t, 1, exitCode)
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
-	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
-	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
-	raw, err := os.ReadFile(snapshotPath)
-	require.NoError(t, err)
-	info, err := os.Stat(snapshotPath)
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
-	storePath := filepath.Join(home, "Library", "Application Support", "quarry", "quarry.duckdb")
+	art := readSyncArtifacts(t, home)
+	storePath := art.storePath
 
-	wantStdout := fmt.Sprintf(
-		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s, 1 account\n%-10s%s\n%-10s%s\n"+
-			"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n%-10s%s\n",
-		"Snapshot", abbreviated(t, snapshotPath, home),
-		"Manifest", abbreviated(t, manifestPath, home),
-		"Source", abbreviated(t, bundle.Dir, home),
-		"Size", megabytes(info.Size()),
-		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
+	wantStdout := art.head(t, home, bundle.Dir, "1 account") + fmt.Sprintf(
+		"%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%-10s%s\n%s\n%-10s%s\n%-10s%s\n",
+		"Schema", referenceMatch,
 		"Store", "NOT BUILT (no store at "+abbreviated(t, storePath, home)+" yet)",
 		"Rows", "2 transactions, 2 splits, 0 transfers, 0 payees, 0 categories, 0 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "1 account matches Quicken's last reconciled balance",
@@ -902,13 +812,10 @@ func Test_run_lists_mismatched_splits_in_the_failed_validation_stdout_block(t *t
 	)
 	assert.Equal(t, wantStdout, stdout.String())
 	assert.Equal(t,
-		"quarry: validation failed: 1 transaction does not equal the sum of its splits; "+
-			abbreviated(t, storePath, home)+" was not changed; each difference is listed on stdout; "+
-			"fix them in Quicken and run quarry sync, or run quarry sync --from "+
-			snapshotID(snapshotPath)+" after updating quarry\n",
+		validationFailedLine(t, home, art, "1 transaction does not equal the sum of its splits"),
 		stderr.String())
 
-	_, err = os.Stat(storePath)
+	_, err := os.Stat(storePath)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -927,8 +834,7 @@ func Test_run_refuses_an_encrypted_bundle(t *testing.T) {
 	assert.Equal(t, "quarry: "+abbreviated(t, bundleDir, home)+
 		" is encrypted, so Quicken does not have it open; open it in Quicken, then run quarry sync again\n",
 		stderr.String())
-	_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
-	assert.ErrorIs(t, statErr, os.ErrNotExist)
+	assertNoSnapshotsDir(t, home)
 }
 
 // A WAL-formatted bundle with no live -wal file must be refused before Sync
@@ -949,8 +855,7 @@ func Test_run_refuses_a_bundle_that_is_not_open_in_quicken(t *testing.T) {
 	after, err := os.ReadDir(bundle.Dir)
 	require.NoError(t, err)
 	assert.Equal(t, entryNames(before), entryNames(after))
-	_, statErr := os.Stat(filepath.Join(home, "Library", "Application Support", "quarry", "snapshots"))
-	assert.ErrorIs(t, statErr, os.ErrNotExist)
+	assertNoSnapshotsDir(t, home)
 }
 
 // entryNames returns entries' names in order.
@@ -971,7 +876,7 @@ func Test_run_refuses_a_snapshots_directory_that_is_not_writable(t *testing.T) {
 	}
 	home := newHome(t)
 	bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotsDir := snapshotsDirUnder(home)
 	require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
 	t.Cleanup(func() { _ = os.Chmod(snapshotsDir, 0o700) })
 	require.NoError(t, os.Chmod(snapshotsDir, 0o500))
@@ -1055,7 +960,7 @@ func Test_run_refuses_a_bundle_whose_snapshot_content_is_rejected(t *testing.T) 
 			lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n")
 			require.Len(t, lines, 1)
 			assert.Equal(t, c.wantLine(t, bundleDir, home), lines[0])
-			snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+			snapshotsDir := snapshotsDirUnder(home)
 			entries, err := os.ReadDir(snapshotsDir)
 			require.NoError(t, err)
 			assert.Empty(t, entries)

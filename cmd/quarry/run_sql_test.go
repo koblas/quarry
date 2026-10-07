@@ -24,16 +24,14 @@ import (
 )
 
 func Test_run_sql_prints_the_query_result_as_a_table(t *testing.T) {
-	home := newHome(t)
-	syncAccountsFixture(t, home)
 	const query = `SELECT source_id AS id, name, holdings_value,
 		CASE WHEN source_id = 1 THEN 'line one' || chr(10) || 'tab' || chr(9) || 'cr' || chr(13) END AS note
 		FROM v_account_balances ORDER BY source_id`
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", query})
+	exitCode, stdout, stderr := runSQLArgsOnBuiltStore(t, query)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Empty(t, stderr)
 	assert.Equal(t, ""+
 		"id  name           holdings_value  note\n"+
 		" 1  Chequing                 NULL  line one\\ntab\\tcr\\r\n"+
@@ -41,38 +39,29 @@ func Test_run_sql_prints_the_query_result_as_a_table(t *testing.T) {
 		" 3  Old Savings              NULL  NULL\n"+ //nolint:dupword // adjacent NULL cells are the expected row
 		" 4  RRSP                     0.00  NULL\n"+
 		" 5  Visa Infinite            NULL  NULL\n", //nolint:dupword // adjacent NULL cells are the expected row
-		stdout.String())
+		stdout)
 }
 
 func Test_run_sql_prints_only_the_header_for_zero_rows(t *testing.T) {
-	home := newHome(t)
-	syncAccountsFixture(t, home)
+	exitCode, stdout, stderr := runSQLArgsOnBuiltStore(t, "SELECT name, balance FROM v_account_balances WHERE false")
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "SELECT name, balance FROM v_account_balances WHERE false"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "name  balance\n", stdout.String())
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "name  balance\n", stdout)
 }
 
 func Test_run_sql_prints_at_most_limit_rows(t *testing.T) {
-	home := newHome(t)
-	syncAccountsFixture(t, home)
+	exitCode, stdout, stderr := runSQLArgsOnBuiltStore(t, "--limit", "2", "SELECT source_id FROM accounts ORDER BY source_id")
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--limit", "2", "SELECT source_id FROM accounts ORDER BY source_id"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "source_id\n        1\n        2\n", stdout.String())
-	assert.Equal(t, "quarry: warning: showing the first 2 rows; the query returned more; pass --limit 0 to print every row\n", stderr.String())
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "source_id\n        1\n        2\n", stdout)
+	assert.Equal(t, "quarry: warning: showing the first 2 rows; the query returned more; pass --limit 0 to print every row\n", stderr)
 }
 
 func Test_run_sql_reads_the_query_from_stdin(t *testing.T) {
 	home := newHome(t)
 	syncAccountsFixture(t, home)
-	var stdout, stderr bytes.Buffer
-	env := testEnv(&stdout, &stderr)
-	env.Stdin = strings.NewReader("SELECT name\nFROM accounts\nWHERE source_id = 1;\n")
 
-	exitCode := runWith(context.Background(), []string{"sql", "-"}, env)
+	exitCode, stdout, stderr := runCaptureWithStdin([]string{"sql", "-"}, "SELECT name\nFROM accounts\nWHERE source_id = 1;\n")
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -206,10 +195,7 @@ const (
 // runSQLOnBuiltStore syncs the accounts fixture under a fresh HOME, then runs sql query against it.
 func runSQLOnBuiltStore(t *testing.T, query string) (int, string, string) {
 	t.Helper()
-	home := newHome(t)
-	syncAccountsFixture(t, home)
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", query})
-	return exitCode, stdout.String(), stderr.String()
+	return runSQLArgsOnBuiltStore(t, query)
 }
 
 func fileSum(t *testing.T, path string) [sha256.Size]byte {
@@ -232,16 +218,14 @@ func exitCodeWithin(t *testing.T, exited <-chan int, timeout time.Duration) int 
 }
 
 func Test_run_sql_csv_prints_null_as_an_empty_field_and_an_empty_string_as_a_quoted_pair(t *testing.T) {
-	home := newHome(t)
-	syncAccountsFixture(t, home)
 	const query = `SELECT source_id, holdings_value,
 		CASE WHEN source_id = 1 THEN '' WHEN source_id = 2 THEN 'US, "x"' END AS note
 		FROM v_account_balances ORDER BY source_id`
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", query})
+	exitCode, stdout, stderr := runSQLArgsOnBuiltStore(t, "--csv", query)
 
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Empty(t, stderr.String())
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Empty(t, stderr)
 	assert.Equal(t, ""+
 		"source_id,holdings_value,note\n"+
 		"1,,\"\"\n"+
@@ -249,24 +233,21 @@ func Test_run_sql_csv_prints_null_as_an_empty_field_and_an_empty_string_as_a_quo
 		"3,,\n"+
 		"4,0.00,\n"+
 		"5,,\n",
-		stdout.String())
+		stdout)
 }
 
 func Test_run_sql_csv_writes_a_row_of_one_null_column_as_a_quoted_pair_a_csv_reader_keeps(t *testing.T) {
-	home := newHome(t)
-	syncAccountsFixture(t, home)
+	exitCode, stdout, stderr := runSQLArgsOnBuiltStore(t, "--csv", "SELECT holdings_value FROM v_account_balances WHERE source_id = 1")
 
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", "SELECT holdings_value FROM v_account_balances WHERE source_id = 1"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	assert.Equal(t, "holdings_value\n\"\"\n", stdout.String())
-	records, err := csv.NewReader(strings.NewReader(stdout.String())).ReadAll()
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, "holdings_value\n\"\"\n", stdout)
+	records, err := csv.NewReader(strings.NewReader(stdout)).ReadAll()
 	require.NoError(t, err)
 	assert.Equal(t, [][]string{{"holdings_value"}, {""}}, records)
 }
 
 func Test_run_sql_csv_with_json_exits_2_naming_the_two_flags(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	newHome(t)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sql", "--csv", "--json", "SELECT 1"})
 

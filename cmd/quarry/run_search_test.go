@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -192,10 +193,7 @@ func searchStore() store.Rows {
 }
 
 func Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_splits(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, searchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json"})
+	exitCode, stdout, stderr := runSearchOver(t, searchStore(), []string{"search", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -252,13 +250,18 @@ func Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_
 	}, decodeSearchJSON(t, stdout.String()))
 }
 
+// runSearchOver replaces the store under a fresh HOME with rows, then runs args, returning the exit
+// code, stdout and stderr.
+func runSearchOver(t *testing.T, rows store.Rows, args []string) (int, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+	replaceStore(t, newHome(t), rows)
+	return runSpendCapture(context.Background(), args)
+}
+
 // searchedJSON runs quarry search --json with args against rows and returns the document, requiring exit 0.
 func searchedJSON(t *testing.T, rows store.Rows, args ...string) searchJSONDoc {
 	t.Helper()
-	home := newHome(t)
-	replaceStore(t, home, rows)
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"search", "--json"}, args...))
+	exitCode, stdout, stderr := runSearchOver(t, rows, append([]string{"search", "--json"}, args...))
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	return decodeSearchJSON(t, stdout.String())
@@ -353,7 +356,7 @@ func Test_run_search_json_lists_closed_account_and_usd_transactions_in_their_own
 }
 
 func Test_run_search_refuses_a_since_that_is_not_a_date_before_opening_the_store(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	newHome(t)
 
 	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--since", "2024-13"})
 
@@ -363,7 +366,7 @@ func Test_run_search_refuses_a_since_that_is_not_a_date_before_opening_the_store
 }
 
 func Test_run_search_refuses_a_since_after_the_until(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	newHome(t)
 
 	exitCode, _, stderr := runSpendCapture(context.Background(), []string{"search", "--since", "2025", "--until", "2024"})
 
@@ -372,10 +375,7 @@ func Test_run_search_refuses_a_since_after_the_until(t *testing.T) {
 }
 
 func Test_run_search_prints_the_transactions_table(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, searchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search"})
+	exitCode, stdout, stderr := runSearchOver(t, searchStore(), []string{"search"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())
@@ -468,10 +468,7 @@ func Test_run_search_json_echoes_the_text_as_given_and_null_when_none_was_given(
 }
 
 func Test_run_search_shows_a_split_memo_only_match_in_the_memo_cell(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, textSearchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "tip"})
+	exitCode, stdout, stderr := runSearchOver(t, textSearchStore(), []string{"search", "tip"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	want := "Transactions matching \"tip\" in all accounts, all dates\n\n" +
@@ -540,7 +537,7 @@ func Test_run_search_refuses_two_texts_and_blank_text_before_reading_anything(t 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
@@ -640,10 +637,7 @@ func Test_run_search_json_echoes_min_and_max_normalized_and_null_when_absent(t *
 }
 
 func Test_run_search_text_names_the_amount_range_in_the_caption(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, amountSearchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--min", "100", "--max", "1000"})
+	exitCode, stdout, stderr := runSearchOver(t, amountSearchStore(), []string{"search", "--min", "100", "--max", "1000"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Transactions in all accounts, all dates, amount 100.00 to 1,000.00\n")
@@ -705,7 +699,7 @@ func Test_run_search_refuses_blank_text_before_a_bad_min(t *testing.T) {
 // assertSearchRefused runs args against an empty home and requires exit 2, nothing on stdout and want on stderr.
 func assertSearchRefused(t *testing.T, args []string, want string) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	newHome(t)
 
 	assertSearchFailed(t, args, 2, want)
 }
@@ -851,10 +845,7 @@ func Test_run_search_json_echoes_the_category_as_given_and_null_when_absent(t *t
 }
 
 func Test_run_search_text_names_the_category_in_the_caption(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, narrowCategoryStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--category", "food:GROCERIES", "--min", "50"})
+	exitCode, stdout, stderr := runSearchOver(t, narrowCategoryStore(), []string{"search", "--category", "food:GROCERIES", "--min", "50"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Transactions in all accounts, all dates, category \"food:GROCERIES\", amount at least 50.00\n")
@@ -881,10 +872,7 @@ func Test_run_search_category_as_text(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := newHome(t)
-			replaceStore(t, home, categorySearchStore())
-
-			exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"search"}, c.args...))
+			exitCode, stdout, stderr := runSearchOver(t, categorySearchStore(), append([]string{"search"}, c.args...))
 
 			require.Equal(t, c.wantExit, exitCode, stderr.String())
 			assert.Equal(t, c.wantStdout, stdout.String())
@@ -909,10 +897,7 @@ func Test_run_search_prints_the_newest_500_of_501_matches_unless_limit_0(t *test
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := newHome(t)
-			replaceStore(t, home, searchRows([]store.Account{chequingAccount("acct-chq", 1)}, nil, manySearchTxns(501)...))
-
-			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
+			exitCode, stdout, stderr := runSearchOver(t, searchRows([]store.Account{chequingAccount("acct-chq", 1)}, nil, manySearchTxns(501)...), c.args)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			doc := decodeSearchJSON(t, stdout.String())
@@ -932,10 +917,7 @@ func fiveSearchStore() store.Rows {
 }
 
 func Test_run_search_text_with_limit_prints_the_newest_rows_with_the_full_match_count_and_the_cut_line(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, fiveSearchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--limit", "2"})
+	exitCode, stdout, stderr := runSearchOver(t, fiveSearchStore(), []string{"search", "--limit", "2"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	want := "Transactions in all accounts, all dates\n\n" +
@@ -950,10 +932,7 @@ func Test_run_search_text_with_limit_prints_the_newest_rows_with_the_full_match_
 
 func Test_run_search_json_with_limit_carries_the_cut_line_in_warnings_and_on_stderr(t *testing.T) {
 	const cutLine = "showing the newest 2 of 5 matching transactions; pass --limit 0 to list every one"
-	home := newHome(t)
-	replaceStore(t, home, fiveSearchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json", "--limit", "2"})
+	exitCode, stdout, stderr := runSearchOver(t, fiveSearchStore(), []string{"search", "--json", "--limit", "2"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeSearchJSON(t, stdout.String())
@@ -979,10 +958,7 @@ func Test_run_search_cuts_only_when_more_transactions_match_than_the_limit(t *te
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := newHome(t)
-			replaceStore(t, home, fiveSearchStore())
-
-			exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json", "--limit", c.limit})
+			exitCode, stdout, stderr := runSearchOver(t, fiveSearchStore(), []string{"search", "--json", "--limit", c.limit})
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			doc := decodeSearchJSON(t, stdout.String())
@@ -1007,10 +983,7 @@ func Test_run_search_json_echoes_the_limit_it_used(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := newHome(t)
-			replaceStore(t, home, fiveSearchStore())
-
-			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
+			exitCode, stdout, stderr := runSearchOver(t, fiveSearchStore(), c.args)
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, c.want, decodeSearchJSON(t, stdout.String()).Limit)
@@ -1039,7 +1012,7 @@ func Test_run_search_refuses_the_search_flags_and_text_in_the_ruled_order_before
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			newHome(t)
 
 			exitCode, stdout, stderr := runSpendCapture(context.Background(), c.args)
 
@@ -1051,10 +1024,7 @@ func Test_run_search_refuses_the_search_flags_and_text_in_the_ruled_order_before
 }
 
 func Test_run_search_text_with_limit_counts_every_text_match_and_cuts_the_oldest(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, gymSearchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "gym", "--limit", "1", "--json"})
+	exitCode, stdout, stderr := runSearchOver(t, gymSearchStore(), []string{"search", "gym", "--limit", "1", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeSearchJSON(t, stdout.String())
@@ -1065,10 +1035,7 @@ func Test_run_search_text_with_limit_counts_every_text_match_and_cuts_the_oldest
 }
 
 func Test_run_search_with_text_that_matches_nothing_prints_an_empty_result_and_the_no_match_warning(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, searchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json", "zzz"})
+	exitCode, stdout, stderr := runSearchOver(t, searchStore(), []string{"search", "--json", "zzz"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	doc := decodeSearchJSON(t, stdout.String())
@@ -1111,10 +1078,7 @@ func Test_run_search_with_no_match_says_where_the_searched_transactions_run(t *t
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := newHome(t)
-			replaceStore(t, home, c.rows)
-
-			exitCode, stdout, stderr := runSpendCapture(context.Background(), append([]string{"search", "--json"}, c.args...))
+			exitCode, stdout, stderr := runSearchOver(t, c.rows, append([]string{"search", "--json"}, c.args...))
 
 			require.Equal(t, 0, exitCode, stderr.String())
 			assert.Equal(t, []string{c.want}, decodeSearchJSON(t, stdout.String()).Warnings)
@@ -1124,10 +1088,7 @@ func Test_run_search_with_no_match_says_where_the_searched_transactions_run(t *t
 }
 
 func Test_run_search_text_with_no_match_prints_the_empty_listing_on_stdout_and_the_warning_on_stderr(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, searchStore())
-
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "zzz"})
+	exitCode, stdout, stderr := runSearchOver(t, searchStore(), []string{"search", "zzz"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	want := "Transactions matching \"zzz\" in all accounts, all dates\n\n" +
@@ -1303,16 +1264,11 @@ func assertSearchFailed(t *testing.T, args []string, wantExit int, want string) 
 }
 
 func Test_run_search_without_since_or_until_searches_every_date(t *testing.T) {
-	home := newHome(t)
-	replaceStore(t, home, chargeRows([]store.Account{chequingAccount("acct-chq", 1)},
+	doc := searchedJSON(t, chargeRows([]store.Account{chequingAccount("acct-chq", 1)},
 		chargeTxn{id: "old", account: "acct-chq", currency: "CAD", day: day(2025, time.December, 31), splits: []chargeSplit{{cents: -1000}}},
 		chargeTxn{id: "future", account: "acct-chq", currency: "CAD", day: day(2027, time.January, 15), splits: []chargeSplit{{cents: -2000}}},
 	))
 
-	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "--json"})
-
-	require.Equal(t, 0, exitCode, stderr.String())
-	doc := decodeSearchJSON(t, stdout.String())
 	require.Len(t, doc.Transactions, 2)
 	assert.Equal(t, []string{"txn-future", "txn-old"}, []string{doc.Transactions[0].TransactionID, doc.Transactions[1].TransactionID})
 	assert.Nil(t, doc.Since)
