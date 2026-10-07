@@ -13,7 +13,6 @@ import (
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,15 +46,6 @@ func withItems(f store.Finding, n int) store.Finding {
 // listOf is a fake store holding findings.
 func listOf(findings ...store.Finding) *fakeStore {
 	return &fakeStore{findings: store.FindingList{Findings: findings}}
-}
-
-// decodeFindings is result's one text block decoded as the findings list document.
-func decodeFindings(t *testing.T, result *sdk.CallToolResult) document.FindingsList {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.FindingsList
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
 }
 
 // findingIDs is the ids of doc's findings, in listed order.
@@ -93,7 +83,7 @@ func Test_data_quality_returns_the_findings_list_document_of_what_the_store_hold
 	require.False(t, result.IsError, textOf(t, result))
 	assert.Equal(t, string(want), textOf(t, result))
 	assert.JSONEq(t, string(want), jsonOf(t, result.StructuredContent))
-	doc := decodeFindings(t, result)
+	doc := decodeDoc[document.FindingsList](t, result)
 	assert.Equal(t, "open", doc.Status)
 	assert.Nil(t, doc.Type)
 	assert.Equal(t, []string{"uncategorized:p-0000", "uncategorized:p-0001"}, findingIDs(doc))
@@ -103,8 +93,8 @@ func Test_data_quality_lists_a_finding_the_config_ignores_under_ignored_not_open
 	stub := &configStub{cfg: config.Config{Ignore: []string{duplicateID}}}
 	h := newHarness(t, listOf(store.Finding{ID: duplicateID, Type: finding.Duplicate}), nil, mcp.WithConfig(stub.load))
 
-	open := decodeFindings(t, h.dataQuality(t, map[string]any{}))
-	ignored := decodeFindings(t, h.dataQuality(t, map[string]any{"status": "ignored"}))
+	open := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
+	ignored := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"status": "ignored"}))
 
 	assert.Empty(t, open.Findings)
 	assert.Equal(t, 0, open.Counts.Open)
@@ -115,9 +105,9 @@ func Test_data_quality_lists_a_finding_the_config_ignores_under_ignored_not_open
 
 func Test_data_quality_lists_a_fixed_finding_under_fixed_with_no_items(t *testing.T) {
 	fixedAt := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
-	h := newHarness(t, listOf(store.Finding{ID: fixedID, Type: finding.Duplicate, FixedAt: &fixedAt}), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(store.Finding{ID: fixedID, Type: finding.Duplicate, FixedAt: &fixedAt}), nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{"status": "fixed"}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"status": "fixed"}))
 
 	assert.Equal(t, []string{fixedID}, findingIDs(doc))
 	assert.Empty(t, doc.Findings[0].Items)
@@ -126,9 +116,9 @@ func Test_data_quality_lists_a_fixed_finding_under_fixed_with_no_items(t *testin
 
 func Test_data_quality_filters_by_type_and_says_which_type_in_the_document(t *testing.T) {
 	st := listOf(store.Finding{ID: duplicateID, Type: finding.Duplicate}, uncategorized(1)[0])
-	h := newHarness(t, st, nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, st, nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{"type": "duplicate"}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"type": "duplicate"}))
 
 	require.NotNil(t, doc.Type)
 	assert.Equal(t, "duplicate", *doc.Type)
@@ -137,9 +127,9 @@ func Test_data_quality_filters_by_type_and_says_which_type_in_the_document(t *te
 }
 
 func Test_data_quality_lists_nothing_and_warns_of_nothing_for_a_store_without_findings(t *testing.T) {
-	h := newHarness(t, listOf(), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(), nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 	assert.Equal(t, []document.FindingEntry{}, doc.Findings)
 	assert.Equal(t, []string{}, doc.Warnings)
@@ -152,7 +142,7 @@ func Test_data_quality_sends_the_configs_unknown_key_lines_with_absolute_paths(t
 	}}
 	h := newHarness(t, listOf(), nil, mcp.WithConfig(stub.load))
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 	assert.Equal(t, stub.cfg.WarningsAbsolute, doc.Warnings)
 }
@@ -161,7 +151,7 @@ func Test_data_quality_warns_with_the_absolute_config_path_of_an_ignored_id_nami
 	stub := &configStub{cfg: config.Config{Path: dqConfig, Ignore: []string{"duplicate:gone"}}}
 	h := newHarness(t, listOf(), nil, mcp.WithConfig(stub.load))
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 	assert.Equal(t, document.UnmatchedIgnoreWarnings(dqConfig, []string{"duplicate:gone"}), doc.Warnings)
 	assert.Contains(t, doc.Warnings[0], testHome+"/Library")
@@ -193,18 +183,8 @@ func Test_data_quality_refuses_a_loader_failure_that_is_not_a_config_refusal_the
 	assert.Zero(t, h.built)
 }
 
-func Test_data_quality_answers_a_report_factory_failure_as_isError_with_its_text(t *testing.T) {
-	h := newHarness(t, listOf(), errFactoryBroke, mcp.WithConfig((&configStub{}).load))
-
-	result := h.dataQuality(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, dqLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
 func Test_data_quality_answers_a_store_fault_as_isError_with_its_text(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil, withDefaultConfig())
 
 	result := h.dataQuality(t, map[string]any{})
 
@@ -218,9 +198,9 @@ func Test_data_quality_loads_the_config_and_reads_the_store_on_every_call(t *tes
 	stub := &configStub{}
 	h := newHarness(t, listOf(store.Finding{ID: duplicateID, Type: finding.Duplicate}), nil, mcp.WithConfig(stub.load))
 
-	before := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	before := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 	stub.cfg = config.Config{Ignore: []string{duplicateID}}
-	after := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	after := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 	assert.Equal(t, []string{duplicateID}, findingIDs(before))
 	assert.Empty(t, after.Findings)
@@ -255,9 +235,9 @@ func Test_data_quality_lists_the_first_limit_findings_and_warns_of_the_total_onl
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t, listOf(uncategorized(c.findings)...), nil, mcp.WithConfig((&configStub{}).load))
+			h := newHarness(t, listOf(uncategorized(c.findings)...), nil, withDefaultConfig())
 
-			doc := decodeFindings(t, h.dataQuality(t, map[string]any{"limit": c.limit}))
+			doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": c.limit}))
 
 			assert.Len(t, doc.Findings, c.wantListed)
 			assert.Equal(t, c.wantWarnings, doc.Warnings)
@@ -276,9 +256,9 @@ func uncategorizedIDs(n int) []string {
 }
 
 func Test_data_quality_lists_the_first_50_findings_when_limit_is_omitted(t *testing.T) {
-	h := newHarness(t, listOf(uncategorized(60)...), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(uncategorized(60)...), nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 	assert.Equal(t, uncategorizedIDs(50), findingIDs(doc))
 	assert.Equal(t, []string{"listed the first 50 of 60 open findings; pass type to narrow the list, or a larger limit (at most 500)"}, doc.Warnings)
@@ -291,9 +271,9 @@ func Test_data_quality_cuts_across_groups_in_the_order_findings_lists_them(t *te
 		store.Finding{ID: "duplicate:b", Type: finding.Duplicate},
 		store.Finding{ID: "duplicate:a", Type: finding.Duplicate},
 	)
-	h := newHarness(t, st, nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, st, nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{"limit": 3}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": 3}))
 
 	assert.Equal(t, []string{"duplicate:a", "duplicate:b", "uncategorized:many"}, findingIDs(doc))
 }
@@ -321,7 +301,7 @@ func Test_data_quality_words_the_findings_cap_for_each_status(t *testing.T) {
 		t.Run(c.status, func(t *testing.T) {
 			h := newHarness(t, st, nil, mcp.WithConfig(stub.load))
 
-			doc := decodeFindings(t, h.dataQuality(t, map[string]any{"status": c.status, "limit": 1}))
+			doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"status": c.status, "limit": 1}))
 
 			assert.Equal(t, []string{c.want}, doc.Warnings)
 		})
@@ -355,9 +335,9 @@ func Test_data_quality_words_the_findings_cap_tail_by_limit_and_type(t *testing.
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t, listOf(uncategorized(c.total)...), nil, mcp.WithConfig((&configStub{}).load))
+			h := newHarness(t, listOf(uncategorized(c.total)...), nil, withDefaultConfig())
 
-			doc := decodeFindings(t, h.dataQuality(t, c.args))
+			doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, c.args))
 
 			assert.Equal(t, []string{c.want}, doc.Warnings)
 			assert.NotContains(t, doc.Warnings[0], "uncategorized")
@@ -366,9 +346,9 @@ func Test_data_quality_words_the_findings_cap_tail_by_limit_and_type(t *testing.
 }
 
 func Test_data_quality_groups_the_totals_in_the_findings_cap_line(t *testing.T) {
-	h := newHarness(t, listOf(uncategorized(1234)...), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(uncategorized(1234)...), nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{"limit": 500}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": 500}))
 
 	assert.Equal(t, []string{"listed the first 500 of 1,234 open findings; pass type to narrow the list"}, doc.Warnings)
 }
@@ -376,10 +356,10 @@ func Test_data_quality_groups_the_totals_in_the_findings_cap_line(t *testing.T) 
 func Test_data_quality_never_trims_counts(t *testing.T) {
 	fixedAt := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
 	findings := append(uncategorized(5), store.Finding{ID: duplicateID, Type: finding.Duplicate}, store.Finding{ID: fixedID, Type: finding.Duplicate, FixedAt: &fixedAt})
-	h := newHarness(t, listOf(findings...), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(findings...), nil, withDefaultConfig())
 
-	all := decodeFindings(t, h.dataQuality(t, map[string]any{"limit": 2, "status": "all"}))
-	typed := decodeFindings(t, h.dataQuality(t, map[string]any{"limit": 2, "type": "uncategorized"}))
+	all := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": 2, "status": "all"}))
+	typed := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": 2, "type": "uncategorized"}))
 
 	assert.Len(t, all.Findings, 2)
 	assert.Equal(t, document.FindingCounts{Open: 6, Fixed: 1}, all.Counts)
@@ -388,13 +368,13 @@ func Test_data_quality_never_trims_counts(t *testing.T) {
 }
 
 func Test_data_quality_refuses_a_limit_outside_1_to_500_and_accepts_the_bounds(t *testing.T) {
-	h := newHarness(t, listOf(uncategorized(2)...), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(uncategorized(2)...), nil, withDefaultConfig())
 
 	accepted := []int{1, 500}
 	refused := []int{0, 501}
 
 	for _, limit := range accepted {
-		decodeFindings(t, h.dataQuality(t, map[string]any{"limit": limit}))
+		decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": limit}))
 	}
 	for _, limit := range refused {
 		result := h.dataQuality(t, map[string]any{"limit": limit})
@@ -414,7 +394,7 @@ func Test_data_quality_refuses_a_status_or_type_outside_its_enum_and_an_unknown_
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t, listOf(uncategorized(1)...), nil, mcp.WithConfig((&configStub{}).load))
+			h := newHarness(t, listOf(uncategorized(1)...), nil, withDefaultConfig())
 
 			result := h.dataQuality(t, c.args)
 
@@ -444,9 +424,9 @@ func Test_data_quality_lists_the_first_25_items_of_a_finding_and_warns_only_over
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			heavy := withItems(store.Finding{ID: "uncategorized:heavy", Type: finding.Uncategorized}, c.items)
-			h := newHarness(t, listOf(heavy), nil, mcp.WithConfig((&configStub{}).load))
+			h := newHarness(t, listOf(heavy), nil, withDefaultConfig())
 
-			doc := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+			doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 			assert.Equal(t, min(c.items, 25), itemsOf(t, doc, "uncategorized:heavy"))
 			assert.Equal(t, c.want, doc.Warnings)
@@ -460,9 +440,9 @@ func Test_data_quality_warns_for_each_over_cap_finding_in_listed_order(t *testin
 		withItems(store.Finding{ID: "uncategorized:a", Type: finding.Uncategorized}, 30),
 		withItems(store.Finding{ID: "uncategorized:c", Type: finding.Uncategorized}, 2),
 	)
-	h := newHarness(t, st, nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, st, nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 	assert.Equal(t, []string{
 		"finding uncategorized:a lists the first 25 of 30 items; query finding_items WHERE finding_id = 'uncategorized:a' for the rest",
@@ -476,9 +456,9 @@ func Test_data_quality_gives_a_finding_cut_by_the_findings_cap_no_items_warning(
 		withItems(store.Finding{ID: "uncategorized:kept", Type: finding.Uncategorized}, 400),
 		withItems(store.Finding{ID: "uncategorized:dropped", Type: finding.Uncategorized}, 300),
 	)
-	h := newHarness(t, st, nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, st, nil, withDefaultConfig())
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{"limit": 1}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": 1}))
 
 	assert.Equal(t, []string{"uncategorized:kept"}, findingIDs(doc))
 	assert.Equal(t, []string{
@@ -489,10 +469,10 @@ func Test_data_quality_gives_a_finding_cut_by_the_findings_cap_no_items_warning(
 
 func Test_data_quality_leaves_the_stores_items_whole_so_a_second_call_warns_again(t *testing.T) {
 	heavy := withItems(store.Finding{ID: "uncategorized:heavy", Type: finding.Uncategorized}, 26)
-	h := newHarness(t, listOf(heavy), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(heavy), nil, withDefaultConfig())
 
-	first := decodeFindings(t, h.dataQuality(t, map[string]any{}))
-	second := decodeFindings(t, h.dataQuality(t, map[string]any{}))
+	first := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
+	second := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{}))
 
 	assert.Len(t, first.Warnings, 1)
 	assert.Equal(t, first.Warnings, second.Warnings)
@@ -513,7 +493,7 @@ func Test_data_quality_orders_its_warnings(t *testing.T) {
 	)
 	h := newHarness(t, st, nil, mcp.WithConfig(stub.load))
 
-	doc := decodeFindings(t, h.dataQuality(t, map[string]any{"limit": 2}))
+	doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, map[string]any{"limit": 2}))
 
 	assert.Equal(t, []string{
 		"/home/dave/config.toml: unknown key x",

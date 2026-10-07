@@ -1,12 +1,10 @@
 package mcp_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,15 +16,6 @@ const (
 	narrowWording     = "narrow the search with text, since, until, accounts, category, min or max"
 	higherWording     = "pass a higher limit, up to 500, or "
 )
-
-// decodeSearch is result's one text block decoded as the search document.
-func decodeSearch(t *testing.T, result *sdk.CallToolResult) document.Search {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.Search
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
-}
 
 // matchesOf is a search of total matches that holds the newest n of them.
 func matchesOf(n, total int) store.Search {
@@ -124,21 +113,11 @@ func Test_search_transactions_refuses_a_limit_the_schema_rejects_without_searchi
 	}
 }
 
-func Test_search_transactions_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke)
-
-	result := h.searchTransactions(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, searchLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
 func Test_search_transactions_passes_its_arguments_to_the_store(t *testing.T) {
 	fake := &fakeStore{}
 	h := newHarness(t, fake, nil)
 
-	decodeSearch(t, h.searchTransactions(t, map[string]any{"text": "Costco", "category": "", "limit": 20}))
+	decodeDoc[document.Search](t, h.searchTransactions(t, map[string]any{"text": "Costco", "category": "", "limit": 20}))
 
 	require.Len(t, fake.searched, 1)
 	assert.Equal(t, "Costco", fake.searched[0].Text)
@@ -150,7 +129,7 @@ func Test_search_transactions_gives_the_store_no_category_when_the_call_names_no
 	fake := &fakeStore{}
 	h := newHarness(t, fake, nil)
 
-	decodeSearch(t, h.searchTransactions(t, map[string]any{}))
+	decodeDoc[document.Search](t, h.searchTransactions(t, map[string]any{}))
 
 	require.Len(t, fake.searched, 1)
 	assert.Nil(t, fake.searched[0].Category)
@@ -171,7 +150,7 @@ func Test_search_transactions_words_its_cut_line_by_the_limit_asked(t *testing.T
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t, &fakeStore{found: matchesOf(c.limit+1, 1234)}, nil)
 
-			doc := decodeSearch(t, h.searchTransactions(t, map[string]any{"limit": c.limit}))
+			doc := decodeDoc[document.Search](t, h.searchTransactions(t, map[string]any{"limit": c.limit}))
 
 			assert.Equal(t, []string{c.want}, doc.Warnings)
 			assert.True(t, doc.Truncated)
@@ -183,7 +162,7 @@ func Test_search_transactions_words_its_cut_line_by_the_limit_asked(t *testing.T
 func Test_search_transactions_adds_no_cut_line_when_the_limit_cut_nothing(t *testing.T) {
 	h := newHarness(t, &fakeStore{found: matchesOf(20, 20)}, nil)
 
-	doc := decodeSearch(t, h.searchTransactions(t, map[string]any{"limit": 20}))
+	doc := decodeDoc[document.Search](t, h.searchTransactions(t, map[string]any{"limit": 20}))
 
 	assert.Empty(t, doc.Warnings)
 	assert.False(t, doc.Truncated)

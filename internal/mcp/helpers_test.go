@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/config"
+	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/mcp"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
@@ -182,105 +184,79 @@ func newHarness(t *testing.T, st *fakeStore, buildErr error, opts ...mcp.Option)
 // query calls the query tool with arguments.
 func (h *harness) query(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "query", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "query", arguments)
 }
 
 // describeSchema calls the describe_schema tool with no arguments.
 func (h *harness) describeSchema(t *testing.T) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "describe_schema", Arguments: map[string]any{}})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "describe_schema", map[string]any{})
 }
 
 // syncStatus calls the sync_status tool with no arguments.
 func (h *harness) syncStatus(t *testing.T) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "sync_status", Arguments: map[string]any{}})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "sync_status", map[string]any{})
 }
 
 // dataQuality calls the data_quality tool with arguments.
 func (h *harness) dataQuality(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "data_quality", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "data_quality", arguments)
 }
 
 // spending calls the spending tool with arguments.
 func (h *harness) spending(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "spending", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "spending", arguments)
 }
 
 // cashFlow calls the cash_flow tool with arguments.
 func (h *harness) cashFlow(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "cash_flow", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "cash_flow", arguments)
 }
 
 // recurringCharges calls the recurring_charges tool with arguments.
 func (h *harness) recurringCharges(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "recurring_charges", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "recurring_charges", arguments)
 }
 
 // anomalies calls the anomalies tool with arguments.
 func (h *harness) anomalies(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "anomalies", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "anomalies", arguments)
 }
 
 // searchTransactions calls the search_transactions tool with arguments.
 func (h *harness) searchTransactions(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "search_transactions", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "search_transactions", arguments)
 }
 
 // holdings calls the holdings tool with arguments.
 func (h *harness) holdings(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "holdings", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "holdings", arguments)
 }
 
 // acb calls the acb tool with arguments.
 func (h *harness) acb(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "acb", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "acb", arguments)
 }
 
 // netWorth calls the net_worth tool with arguments.
 func (h *harness) netWorth(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "net_worth", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "net_worth", arguments)
 }
 
 // monthlySummary calls the monthly_summary tool with arguments.
 func (h *harness) monthlySummary(t *testing.T, arguments any) *sdk.CallToolResult {
 	t.Helper()
-	result, err := h.session.CallTool(t.Context(), &sdk.CallToolParams{Name: "monthly_summary", Arguments: arguments})
-	require.NoError(t, err)
-	return result
+	return callTool(t, h.session, "monthly_summary", arguments)
 }
 
 // rowsOf is a one-column result of n rows holding 0..n-1.
@@ -293,11 +269,11 @@ func rowsOf(n int) store.QueryResult {
 }
 
 // textOf is the text of result's one content block.
-func textOf(t *testing.T, result *sdk.CallToolResult) string {
-	t.Helper()
-	require.Len(t, result.Content, 1)
+func textOf(tb testing.TB, result *sdk.CallToolResult) string {
+	tb.Helper()
+	require.Len(tb, result.Content, 1)
 	text, ok := result.Content[0].(*sdk.TextContent)
-	require.True(t, ok, "content is not text")
+	require.True(tb, ok, "content is not text")
 	return text.Text
 }
 
@@ -323,4 +299,83 @@ func inUSD(rows []store.Charge, payee string) {
 			rows[i].Account.Currency = "USD"
 		}
 	}
+}
+
+// decodeDoc is result's one text block decoded as the document T.
+func decodeDoc[T any](tb testing.TB, result *sdk.CallToolResult) T {
+	tb.Helper()
+	require.False(tb, result.IsError, textOf(tb, result))
+	var doc T
+	require.NoError(tb, json.Unmarshal([]byte(textOf(tb, result)), &doc))
+	return doc
+}
+
+// windowToday is the instant the window tests fix, so the default since is 2026-01-01.
+var windowToday = time.Date(2026, time.September, 30, 12, 0, 0, 0, time.UTC)
+
+// atInstant is the clock option that fixes today at instant.
+func atInstant(instant time.Time) mcp.Option {
+	return mcp.WithClock(func() time.Time { return instant })
+}
+
+// atSeptember29 is the clock option that makes today 2026-09-29.
+func atSeptember29() mcp.Option {
+	return atInstant(time.Date(2026, time.September, 29, 12, 0, 0, 0, time.UTC))
+}
+
+// newMidnightClock is a clock whose first read is 2026-09-29 23:59 and every later one 2026-09-30 00:01.
+func newMidnightClock() *steppingClock {
+	return &steppingClock{times: []time.Time{
+		time.Date(2026, time.September, 29, 23, 59, 0, 0, time.UTC),
+		time.Date(2026, time.September, 30, 0, 1, 0, 0, time.UTC),
+	}}
+}
+
+// steppingClock answers each read with the next of its times, then the last one again, and counts the reads.
+type steppingClock struct {
+	times []time.Time
+	reads int
+}
+
+func (c *steppingClock) now() time.Time {
+	at := c.times[min(c.reads, len(c.times)-1)]
+	c.reads++
+	return at
+}
+
+// configStub is a config loader that answers cfg, or err when set, and records the commands it was asked for.
+type configStub struct {
+	cfg      config.Config
+	err      error
+	commands []string
+}
+
+func (c *configStub) load(command string) (config.Config, error) {
+	c.commands = append(c.commands, command)
+	return c.cfg, c.err
+}
+
+// statusFixture is a store status holding one open duplicate and one fixed one.
+func statusFixture() store.Status {
+	fixedAt := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
+	return store.Status{
+		Path:    testStorePath,
+		BuiltAt: time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC),
+		Findings: []store.Finding{
+			{ID: duplicateID, Type: finding.Duplicate},
+			{ID: fixedID, Type: finding.Duplicate, FixedAt: &fixedAt},
+		},
+	}
+}
+
+func callTool(t *testing.T, session *sdk.ClientSession, name string, arguments any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &sdk.CallToolParams{Name: name, Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// withDefaultConfig is the config option answering the zero config.Config.
+func withDefaultConfig() mcp.Option {
+	return mcp.WithConfig((&configStub{}).load)
 }
