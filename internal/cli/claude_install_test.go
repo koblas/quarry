@@ -44,8 +44,7 @@ var errNoStart = errors.New("fork/exec /opt/claude: permission denied")
 
 // toolReply is one scripted answer of the fake RunTool.
 type toolReply struct {
-	output string // stdout and combined, unless stdout is set
-	stdout string // when set, stdout alone; combined stays output
+	output string // both stdout and combined
 	status int
 	err    error
 	cancel bool // the call cancels the command's context before answering
@@ -92,11 +91,7 @@ func (f *toolCalls) run(ctx context.Context, name string, args ...string) ([]byt
 	if r.ctxErr {
 		err = ctx.Err()
 	}
-	stdout := r.output
-	if r.stdout != "" {
-		stdout = r.stdout
-	}
-	return []byte(stdout), []byte(r.output), r.status, err
+	return []byte(r.output), []byte(r.output), r.status, err
 }
 
 // lists scripts the two lists with the given JSON bodies.

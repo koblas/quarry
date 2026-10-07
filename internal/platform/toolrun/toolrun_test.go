@@ -20,6 +20,7 @@ import (
 // The helper commands re-run this test binary, so no test starts a real tool.
 const (
 	helperInterleave = "helper-interleave"
+	helperBoth       = "helper-both"
 	helperExit       = "helper-exit"
 	helperFail       = "helper-fail"
 	helperStdin      = "helper-stdin"
@@ -50,6 +51,10 @@ func helperMain(name string, args []string) int {
 		time.Sleep(interleaveGap)
 		_, _ = os.Stdout.WriteString("out2\n")
 		return 0
+	case helperBoth:
+		_, _ = os.Stderr.WriteString("err\n")
+		_, _ = os.Stdout.WriteString("out\n")
+		return 0
 	case helperExit:
 		code, _ := strconv.Atoi(args[0])
 		return code
@@ -62,7 +67,7 @@ func helperMain(name string, args []string) int {
 	case helperStdin:
 		return stdinIsNullDevice()
 	case helperHang:
-		_, _ = os.Stdout.WriteString("hanging\n")
+		writeErrThenOut()
 		//nolint:gosec // the ready file is a tempdir path the test passed
 		if os.WriteFile(args[0], nil, 0o600) != nil {
 			return 4
@@ -70,7 +75,7 @@ func helperMain(name string, args []string) int {
 		time.Sleep(helperLifetime)
 		return 0
 	case helperSelfKill:
-		_, _ = os.Stdout.WriteString("before the kill\n")
+		writeErrThenOut()
 		self, err := os.FindProcess(os.Getpid())
 		if err != nil || self.Kill() != nil {
 			return 4
@@ -84,6 +89,13 @@ func helperMain(name string, args []string) int {
 		return 0
 	}
 	return 99
+}
+
+// writeErrThenOut writes "err" to stderr, then "out" to stdout after interleaveGap.
+func writeErrThenOut() {
+	_, _ = os.Stderr.WriteString("err\n")
+	time.Sleep(interleaveGap)
+	_, _ = os.Stdout.WriteString("out\n")
 }
 
 // stdinIsNullDevice exits 0 when stdin is the null device and 7 otherwise.
@@ -110,7 +122,7 @@ func spawnGrandchild() int {
 	return 0
 }
 
-func Test_run_keeps_stdout_and_stderr_in_arrival_order(t *testing.T) {
+func Test_run_combines_stdout_and_stderr_in_read_order_when_writes_are_spaced_apart(t *testing.T) {
 	_, combined, _, err := toolrun.Run(t.Context(), os.Args[0], helperInterleave)
 
 	require.NoError(t, err)
@@ -118,10 +130,10 @@ func Test_run_keeps_stdout_and_stderr_in_arrival_order(t *testing.T) {
 }
 
 func Test_run_returns_stdout_without_stderr(t *testing.T) {
-	stdout, _, _, err := toolrun.Run(t.Context(), os.Args[0], helperInterleave)
+	stdout, _, _, err := toolrun.Run(t.Context(), os.Args[0], helperBoth)
 
 	require.NoError(t, err)
-	assert.Equal(t, "out1\nout2\n", string(stdout))
+	assert.Equal(t, "out\n", string(stdout))
 }
 
 func Test_run_returns_the_output_of_a_command_that_exits_non_zero(t *testing.T) {
@@ -208,6 +220,7 @@ func Test_run_reports_a_file_it_cannot_start(t *testing.T) {
 
 // cancelled is what Run returned for a command cancelled mid-run.
 type cancelled struct {
+	stdout   []byte
 	combined []byte
 	status   int
 	err      error
@@ -221,8 +234,8 @@ func cancelHungCommand(t *testing.T) cancelled {
 	defer cancel()
 	done := make(chan cancelled, 1)
 	go func() {
-		_, combined, status, err := toolrun.Run(ctx, os.Args[0], helperHang, ready)
-		done <- cancelled{combined, status, err}
+		stdout, combined, status, err := toolrun.Run(ctx, os.Args[0], helperHang, ready)
+		done <- cancelled{stdout, combined, status, err}
 	}()
 	require.Eventually(t, func() bool { _, err := os.Stat(ready); return err == nil }, 10*time.Second, 5*time.Millisecond)
 
@@ -241,7 +254,8 @@ func Test_run_returns_the_context_error_when_cancelled_mid_run(t *testing.T) {
 func Test_run_returns_the_output_of_a_command_cancelled_mid_run(t *testing.T) {
 	got := cancelHungCommand(t)
 
-	assert.Equal(t, "hanging\n", string(got.combined))
+	assert.Equal(t, "out\n", string(got.stdout))
+	assert.Equal(t, "err\nout\n", string(got.combined))
 }
 
 func Test_run_returns_the_context_error_when_cancelled_before_start(t *testing.T) {
@@ -266,10 +280,11 @@ func Test_run_reports_a_signal_it_did_not_send(t *testing.T) {
 }
 
 func Test_run_returns_the_output_of_a_command_ended_by_a_signal(t *testing.T) {
-	_, combined, _, err := toolrun.Run(t.Context(), os.Args[0], helperSelfKill)
+	stdout, combined, _, err := toolrun.Run(t.Context(), os.Args[0], helperSelfKill)
 
 	require.ErrorAs(t, err, new(*toolrun.SignalError))
-	assert.Equal(t, "before the kill\n", string(combined))
+	assert.Equal(t, "out\n", string(stdout))
+	assert.Equal(t, "err\nout\n", string(combined))
 }
 
 func Test_run_returns_when_a_grandchild_holds_the_output_open(t *testing.T) {

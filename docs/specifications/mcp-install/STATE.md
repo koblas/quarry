@@ -27,7 +27,8 @@ Scenarios complete: SCENARIO-01..17 (all; 17 folds 18, 27, 27b, 28). Last update
 
 ## Traps
 - `toolrun` stdout and stderr are separate pipes, so `combined` is in read order: writes to different streams closer than scheduler latency can swap. Helpers in `toolrun_test.go` sleep `interleaveGap` between them; a test that writes both streams back to back is flaky (REVIEW-01)
-- Fake replies: `reply{output}` / `toolReply{output}` feed stdout AND combined; set `stdout` too only when a test needs them to differ (REVIEW-01)
+- Fake replies: `reply{output}` / `toolReply{output}` feed stdout AND combined; the cli layer never pins stdout != combined (toolrun and claudeplugin tests do) (REVIEW-01, 02)
+- toolrun test helpers `helperHang`/`helperSelfKill` write stderr, sleep `interleaveGap`, then stdout (`err\nout\n`), so the cancel and signal returns pin both `stdout` and `combined`; `helperBoth` (no gap) serves tests that only read stdout. The combined-order test is named "read order ... spaced apart" because production promises read order only (REVIEW-02)
 - `toolrun.SignalError.Error()` is `stopped by signal: killed` (colon) — render `Signal.String()`, never `Error()` (SCENARIO-06)
 - `run` keeps the output the Runner returned with `*SignalError`; dropping it loses the replay (SCENARIO-06)
 - A fake returning the test's captured ctx's `Err()` passes with propagation broken; answer from the parameter ctx (SCENARIO-06)
