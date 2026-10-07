@@ -30,14 +30,22 @@ func (e renamedEntry) Name() string { return e.name }
 // readDirWithVariant is os.ReadDir plus one more regular entry named variant that wraps the real entry named like.
 // A macOS volume cannot hold two letter cases of one name, so the second case exists only in this listing.
 func readDirWithVariant(variant, like string) func(string) ([]fs.DirEntry, error) {
+	return readDirWithVariants([2]string{variant, like})
+}
+
+// readDirWithVariants is readDirWithVariant for several [variant, like] pairs.
+func readDirWithVariants(pairs ...[2]string) func(string) ([]fs.DirEntry, error) {
 	return func(dir string) ([]fs.DirEntry, error) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return nil, err
 		}
-		for _, entry := range entries {
-			if entry.Name() == like {
-				entries = append(entries, renamedEntry{DirEntry: entry, name: variant})
+		onDisk := entries
+		for _, pair := range pairs {
+			for _, entry := range onDisk {
+				if entry.Name() == pair[1] {
+					entries = append(entries, renamedEntry{DirEntry: entry, name: pair[0]})
+				}
 			}
 		}
 		return entries, nil
@@ -101,6 +109,50 @@ func Test_run_snapshots_json_warns_about_a_stray_letter_case_with_the_absolute_f
 	assert.Equal(t, int64(oldestBytes), doc.TotalBytes)
 	assert.Equal(t, []string{dir + " holds both " + oldestID + ".sqlite and " + oldestID + ".SQLITE; " +
 		"quarry lists, prunes and uses only " + oldestID + ".sqlite; rename or remove the other"}, doc.Warnings)
+}
+
+// twoStrayCases is one ID holding a stray letter case of its snapshot and of its manifest.
+func twoStrayCases(t *testing.T) (string, string, func(string) ([]fs.DirEntry, error)) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := writeSnapshots(t, home,
+		snapshotFixture{id: oldestID, bytes: oldestBytes, taken: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), source: homeQuicken, verified: true})
+	readDir := readDirWithVariants(
+		[2]string{oldestID + ".SQLITE", oldestID + ".sqlite"},
+		[2]string{oldestID + ".JSON", oldestID + ".json"})
+	return home, dir, readDir
+}
+
+const (
+	strayManifestLine = " holds both " + oldestID + ".json and " + oldestID + ".JSON; " +
+		"quarry lists, prunes and uses only " + oldestID + ".json; rename or remove the other"
+	straySnapshotLine = " holds both " + oldestID + ".sqlite and " + oldestID + ".SQLITE; " +
+		"quarry lists, prunes and uses only " + oldestID + ".sqlite; rename or remove the other"
+)
+
+func Test_run_snapshots_warns_on_stderr_about_each_stray_letter_case_of_one_id_snapshot_first(t *testing.T) {
+	home, _, readDir := twoStrayCases(t)
+
+	exitCode, _, stderr := runSnapshotsWithReadDir(t, home, readDir, nil)
+
+	require.Equal(t, 0, exitCode, stderr)
+	assert.Equal(t, ""+
+		"quarry: warning: "+snapshotsShown+straySnapshotLine+"\n"+
+		"quarry: warning: "+snapshotsShown+strayManifestLine+"\n", stderr)
+}
+
+func Test_run_snapshots_json_warns_about_each_stray_letter_case_of_one_id_snapshot_first(t *testing.T) {
+	home, dir, readDir := twoStrayCases(t)
+
+	exitCode, stdout, stderr := runSnapshotsWithReadDir(t, home, readDir, nil, "--json")
+
+	require.Equal(t, 0, exitCode, stderr)
+	var doc struct {
+		Warnings []string `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
+	assert.Equal(t, []string{dir + straySnapshotLine, dir + strayManifestLine}, doc.Warnings)
 }
 
 func Test_run_snapshots_json_puts_the_stray_letter_case_warning_between_the_config_and_store_warnings(t *testing.T) {

@@ -338,4 +338,4 @@ Order: 01 → 03 → 06 → 14 → 10 → 12a → 12b → 13 (lock first; 14 mak
 - [x] SCENARIO-11: Prune deletes an .SQLITE snapshot and its manifest, never sweeping it as an orphan — delivered by SCENARIO-10, `internal/snapshot/prune_upper_case_test.go` `Test_prune_deletes_an_upper_case_sqlite_snapshot_then_its_manifest_and_keeps_every_newer_manifest`
 - [x] SCENARIO-12a: sync --from <id> resolves an .SQLITE snapshot — `cmd/quarry/run_from_case_test.go` `Test_run_sync_from_an_id_rebuilds_the_store_from_an_upper_case_sqlite_snapshot`
 - [x] SCENARIO-12b: Status names a store built from an .SQLITE snapshot by its id — `cmd/quarry/run_status_case_test.go` `Test_run_status_names_a_store_built_from_an_upper_case_sqlite_snapshot_by_its_id`
-- [ ] SCENARIO-13: Two letter cases of one id: one is listed, the user is warned
+- [x] SCENARIO-13: Two letter cases of one id: one is listed, the user is warned — `cmd/quarry/run_snapshots_two_case_test.go` `Test_run_snapshots_lists_one_of_two_letter_cases_and_warns_naming_both`

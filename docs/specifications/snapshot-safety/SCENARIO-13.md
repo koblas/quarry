@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: Two letter cases of one id: one is listed, the user is warned
@@ -28,10 +28,10 @@ ReadDir survey (`grep -n 'os.ReadDir' internal/snapshot/*.go`, non-test): `list.
 - [x] Step 7: `select.go` add `folderSelection` query "some entry of any type names `id` as snapshot or manifest, any case" (over every group key, not only `snapshots`); `destination.go:33-43,77-105` `dirDestination.readDir`, `newDirDestination(dir, readDir)` with `export_test.go:11` wrapping `os.ReadDir` (27 test sites unchanged), `snapshot.go:162` passes `s.readDir`; collision check at `:92-97` = `fileExists` OR that query. Listing fault falls back to `fileExists` only. Tests: `Test_dir_destination_backup_skips_an_id_the_folder_uses_in_another_letter_case` (seam lists `<name>.SQLITE`, `<name>_2.Sqlite` → `_3`; `<name>.JSON` row; directory-typed `<name>.SQLITE` row; other-ID control → `<name>`; seam error → `<name>`); wiring pin `Test_sync_skips_an_id_the_folder_uses_in_another_letter_case` (Server `Sync`, seam reports `<n>.SQLITE` for each `.<n>.sqlite.partial` it sees → snapshot `<n>_2.sqlite`)
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithReadDir`, `Listing.Duplicates*`, `newDirDestination`; `grep -n 'os.ReadDir' internal/snapshot/*.go` non-test hits = `snapshot.go` default, `destination.go:57`, `discover.go:81` only
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `WithReadDir`, `Listing.Duplicates*`, `newDirDestination`; `grep -n 'os.ReadDir' internal/snapshot/*.go` non-test hits = `snapshot.go` default, `destination.go:57`, `discover.go:81` only
 
 ### Verify
-- [ ] Step 9: full verification + `spec-check.py snapshot-safety` → tick SCENARIO-13 with its acceptance test; STATE.md drops the `strays` and BR-C8-skip entries
+- [x] Step 9: full verification + `spec-check.py snapshot-safety` → tick SCENARIO-13 with its acceptance test; STATE.md drops the `strays` and BR-C8-skip entries
 
 ## Handoff
 
@@ -61,20 +61,11 @@ ReadDir survey (`grep -n 'os.ReadDir' internal/snapshot/*.go`, non-test): `list.
 
 ## Phase report
 
-Runs A, B1 and B2 (steps 1-7) done; V (8-9) next. Acceptance green, narrow loop green, `golangci-lint run` on snapshot/cli/cmd = 0 issues (not the full V run).
+Run V done: all nine steps ticked, `status: done`, SCENARIO-13 ticked in `specification.md`, `spec-check.py --run snapshot-safety` OK, `STATE.md` rewritten. `verify.sh 0d217848` green: tests, race, 0 uncovered added lines, `golangci-lint` 0 issues.
 
-B2 files:
-- `internal/cli/snapshots.go`: each `Listing.Duplicates` line printed `quarry: warning: <line>` after NoSnapshots, before StoreWarning. `json_snapshots.go`: `snapshotsWarnings` appends `DuplicatesAbsolute` between no-snapshots and store warning (doc updated).
-- `internal/snapshot/select.go`: `folderSelection.used` + `uses(id)` (every ID any entry of any type is named after). `destination.go`: `dirDestination.readDir`, `newDirDestination(dir, readDir)`, `folderUses(id)` ORed with the stat check in `Backup`; listing fault = false. `snapshot.go`: `Sync` passes `s.readDir`. `export_test.go`: `NewDirDestination(dir)` wraps `os.ReadDir`; `NewDirDestinationReading` is the raw constructor.
-- Tests: `cmd/quarry/run_snapshots_two_case_test.go` (json absolute D1, order cell, prune-silent table text/json/dry-run json; `runSnapshotsWithReadDir` takes `opts []snapshot.Option`), `internal/snapshot/destination_letter_case_test.go` (Backup table, Sync wiring pin), `sync_test.go` `newServer` takes trailing options.
+V folded three checkpoint pins (tests only, no production change):
+- `cmd/quarry/run_snapshots_two_case_test.go`: `readDirWithVariants`, `twoStrayCases`, text and `--json` cells for one ID with snapshot and manifest strays (two lines, snapshot first).
+- `internal/snapshot/list_duplicates_test.go`: three-name row with an upper-case winner that sorts first.
+- `internal/snapshot/read_dir_seam_test.go`: auto-prune stray test asserts `outcome.Warnings()` empty.
 
-B2 deviations: prune-silent cells expect only `<id>.sqlite` removed, not the manifest (a stray named as the snapshot makes `manifestShared` keep it, BR-C8); they were green on arrival (B1 built that). The Sync wiring pin's seam reports `<n>.SQLITE` only for the un-suffixed partial, else every candidate is refused forever. Order cell uses a corrupt store file for the store warning.
-
-B1 files:
-- `internal/snapshot/snapshot.go`: `NewServer` defaults `readDir: os.ReadDir`.
-- `internal/snapshot/list.go`: `scanFolder` lists through `s.readDir`; `Listing.Duplicates`/`DuplicatesAbsolute` built in `listFolder` (abbreviated and absolute folder, listing order); `duplicateWarning(folder, names, winner)` and `selectedSnapshot.duplicates(folder)` (snapshot line, then manifest line) beside `markStore`.
-- `internal/snapshot/select.go`: `folderSelection.strays` gone; `selectedSnapshot.names` (regular snapshot names, winner included, directory order) and `.manifestNames` (regular manifest names). `idGroup.manifestNames`, `entryNames` helper. A D1 manifest line is skipped when the chosen manifest is not among the regular names (ruling 3).
-- `internal/snapshot/from.go`: `locateFrom`/`locateByID`/`locateByPath` are now `*Server` methods reading through `s.readDir`.
-- Tests: new `read_dir_seam_test.go` (helpers `variant`, `regularVariant`, `readDirWith(t, ...variant)`; step-3 tests), `list_duplicates_test.go` (D1 text, order, non-regular, unlisted), `from_internal_test.go` (listing seam + three locate tests), `select_internal_test.go` (strays column re-pointed via `strayNames`; names table), `prune_upper_case_test.go` BR-C8 test now seam-injected for all three rows, no skip. `newListServer` and `newPruneServer` take trailing `...snapshot.Option`.
-
-Notes: `readDirWith`/`variant` are `snapshot_test` helpers; `cmd/quarry` has its own `readDirWithVariant`. V: Step 8 (doc comments, `os.ReadDir` grep), Step 9.
+Non-test `os.ReadDir` in `internal/snapshot`: `snapshot.go` default, `destination.go:58` (`sweepLeftovers`), `discover.go:81` only.

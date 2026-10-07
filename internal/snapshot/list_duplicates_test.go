@@ -116,6 +116,23 @@ func Test_duplicate_warning_names_the_other_name_when_the_winner_sorts_first(t *
 	}, listing.Duplicates)
 }
 
+func Test_duplicate_warning_names_an_upper_case_winner_that_does_not_sort_last_of_three(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	dir := prunable(t, home, idOldest)
+	upperCased(t, dir, idOldest)
+	srv := newListServer(home, nil, snapshot.WithReadDir(readDirWith(t,
+		regularVariant(idOldest+".Sqlite", idOldest+".SQLITE"), regularVariant(idOldest+".SQLite", idOldest+".SQLITE"))))
+
+	listing, err := srv.List(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"~/snapshots holds " + idOldest + ".SQLITE, " + idOldest + ".SQLite and " + idOldest + ".Sqlite" +
+			usesOnly + idOldest + ".SQLITE; rename or remove the others",
+	}, listing.Duplicates)
+}
+
 func Test_list_gives_no_duplicate_warning_for_a_non_regular_variant(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

@@ -150,5 +150,6 @@ func Test_sync_and_import_never_deletes_a_stray_letter_case_variant(t *testing.T
 	assert.Equal(t, []string{ids[1] + ".sqlite", ids[1] + ".json", ids[0] + ".sqlite"}, rm.calls)
 	assert.Equal(t, []string{ids[1], ids[0]}, doomedIDs(outcome.Pruned.Deleted))
 	assert.Empty(t, outcome.Pruned.Failed)
+	assert.Empty(t, outcome.Warnings())
 	assert.FileExists(t, filepath.Join(dir, ids[0]+".json"))
 }
