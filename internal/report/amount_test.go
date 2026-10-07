@@ -67,12 +67,24 @@ func Test_ParseSearchAmounts_refuses_a_value_outside_the_grammar(t *testing.T) {
 	}
 }
 
-func Test_ParseSearchAmounts_names_the_max_bound_when_the_max_is_refused(t *testing.T) {
-	bad := "1,234.56"
+func Test_ParseSearchAmounts_names_the_first_bound_that_is_not_an_amount(t *testing.T) {
+	cases := []struct {
+		name     string
+		min, max *string
+		want     report.AmountError
+	}{
+		{name: "the_max_alone", max: new("1,234.56"), want: report.AmountError{Kind: report.AmountNotAnAmount, Bound: "max", Value: "1,234.56"}},
+		{name: "a_bad_min_before_a_bad_max", min: new("-1"), max: new("1,5"), want: report.AmountError{Kind: report.AmountNotAnAmount, Bound: "min", Value: "-1"}},
+		{name: "a_bad_max_before_comparing_the_pair", min: new("50"), max: new("1,5"), want: report.AmountError{Kind: report.AmountNotAnAmount, Bound: "max", Value: "1,5"}},
+	}
 
-	_, err := report.ParseSearchAmounts(nil, &bad)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := report.ParseSearchAmounts(c.min, c.max)
 
-	assert.Equal(t, report.AmountError{Kind: report.AmountNotAnAmount, Bound: "max", Value: bad}, err)
+			assert.Equal(t, c.want, err)
+		})
+	}
 }
 
 func Test_ParseSearchAmounts_words_each_refusal_for_the_command_line(t *testing.T) {
@@ -97,16 +109,22 @@ func Test_ParseSearchAmounts_words_each_refusal_for_the_command_line(t *testing.
 	}
 }
 
-func Test_ParseSearchAmounts_reports_min_above_max_with_both_raw_values(t *testing.T) {
-	_, err := report.ParseSearchAmounts(new("50"), new("20"))
+func Test_ParseSearchAmounts_refuses_a_min_above_the_max_with_both_raw_values(t *testing.T) {
+	cases := []struct {
+		name     string
+		min, max string
+	}{
+		{name: "fifty_above_twenty", min: "50", max: "20"},
+		{name: "one_cent_above", min: "20.01", max: "20.00"},
+	}
 
-	assert.Equal(t, report.AmountError{Kind: report.AmountMinAboveMax, Bound: "min", Value: "50", Other: "20"}, err)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := report.ParseSearchAmounts(&c.min, &c.max)
 
-func Test_ParseSearchAmounts_refuses_a_min_one_cent_above_the_max(t *testing.T) {
-	_, err := report.ParseSearchAmounts(new("20.01"), new("20.00"))
-
-	assert.Equal(t, report.AmountError{Kind: report.AmountMinAboveMax, Bound: "min", Value: "20.01", Other: "20.00"}, err)
+			assert.Equal(t, report.AmountError{Kind: report.AmountMinAboveMax, Bound: "min", Value: c.min, Other: c.max}, err)
+		})
+	}
 }
 
 func Test_ParseSearchAmounts_accepts_a_min_equal_to_the_max(t *testing.T) {
@@ -114,18 +132,6 @@ func Test_ParseSearchAmounts_accepts_a_min_equal_to_the_max(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, report.SearchAmounts{Min: new(int64(2000)), Max: new(int64(2000))}, got)
-}
-
-func Test_ParseSearchAmounts_refuses_a_bad_min_before_a_bad_max(t *testing.T) {
-	_, err := report.ParseSearchAmounts(new("-1"), new("1,5"))
-
-	assert.Equal(t, report.AmountError{Kind: report.AmountNotAnAmount, Bound: "min", Value: "-1"}, err)
-}
-
-func Test_ParseSearchAmounts_refuses_a_bad_max_before_comparing_the_pair(t *testing.T) {
-	_, err := report.ParseSearchAmounts(new("50"), new("1,5"))
-
-	assert.Equal(t, report.AmountError{Kind: report.AmountNotAnAmount, Bound: "max", Value: "1,5"}, err)
 }
 
 func Test_ParseSearchAmounts_leaves_a_bound_that_was_not_given_open(t *testing.T) {

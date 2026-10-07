@@ -139,49 +139,77 @@ func Test_change_in_USD_uses_the_USD_balances(t *testing.T) {
 	assert.Equal(t, []string{"USD 5000"}, totalChanges(change))
 }
 
-func Test_change_of_a_type_is_no_rate_when_only_the_start_day_needs_a_rate(t *testing.T) {
-	change := changeOf(t, money.CAD,
-		cadHeld(endOfAugust, "chequing", 100000), unrated(endOfAugust, "savings", 10000),
-		cadHeld(endOfSeptember, "chequing", 150000), heldOn(endOfSeptember, "savings", "USD", 10000, big.NewInt(13000)))
+func Test_change_of_a_type_is_no_rate_when_a_row_of_it_needs_a_rate_it_lacks(t *testing.T) {
+	cases := []struct {
+		name string
+		rows []store.NetWorthRow
+		want []string
+	}{
+		{
+			name: "only_the_start_day_needs_a_rate",
+			rows: []store.NetWorthRow{
+				cadHeld(endOfAugust, "chequing", 100000), unrated(endOfAugust, "savings", 10000),
+				cadHeld(endOfSeptember, "chequing", 150000), heldOn(endOfSeptember, "savings", "USD", 10000, big.NewInt(13000)),
+			},
+			want: []string{"CAD chequing 50000", "CAD savings " + noRate},
+		},
+		{
+			name: "only_the_end_day_needs_a_rate",
+			rows: []store.NetWorthRow{
+				cadHeld(endOfAugust, "chequing", 100000), heldOn(endOfAugust, "savings", "USD", 10000, big.NewInt(13000)),
+				cadHeld(endOfSeptember, "chequing", 150000), unrated(endOfSeptember, "savings", 10000),
+			},
+			want: []string{"CAD chequing 50000", "CAD savings " + noRate},
+		},
+		{
+			name: "one_of_its_rows_converts_and_another_needs_a_rate",
+			rows: []store.NetWorthRow{
+				cadHeld(endOfAugust, "brokerage", 100000), unrated(endOfAugust, "brokerage", 10000),
+				cadHeld(endOfSeptember, "brokerage", 150000),
+			},
+			want: []string{"CAD brokerage " + noRate},
+		},
+	}
 
-	require.NotNil(t, change)
-	assert.Equal(t, []string{"CAD chequing 50000", "CAD savings " + noRate}, typeChanges(change))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			change := changeOf(t, money.CAD, c.rows...)
+
+			require.NotNil(t, change)
+			assert.Equal(t, c.want, typeChanges(change))
+		})
+	}
 }
 
-func Test_change_of_a_type_is_no_rate_when_only_the_end_day_needs_a_rate(t *testing.T) {
-	change := changeOf(t, money.CAD,
-		cadHeld(endOfAugust, "chequing", 100000), heldOn(endOfAugust, "savings", "USD", 10000, big.NewInt(13000)),
-		cadHeld(endOfSeptember, "chequing", 150000), unrated(endOfSeptember, "savings", 10000))
+func Test_change_total_is_no_rate_when_a_day_lacks_a_total_in_the_reporting_currency(t *testing.T) {
+	cases := []struct {
+		name string
+		rows []store.NetWorthRow
+	}{
+		{
+			name: "a_day_holds_a_total_in_another_currency",
+			rows: []store.NetWorthRow{
+				cadHeld(endOfAugust, "chequing", 100000), unrated(endOfAugust, "savings", 10000),
+				cadHeld(endOfSeptember, "chequing", 150000),
+			},
+		},
+		{
+			name: "a_day_has_no_total_in_the_reporting_currency",
+			rows: []store.NetWorthRow{
+				unrated(endOfAugust, "savings", 10000),
+				cadHeld(endOfSeptember, "chequing", 150000),
+			},
+		},
+	}
 
-	require.NotNil(t, change)
-	assert.Equal(t, []string{"CAD chequing 50000", "CAD savings " + noRate}, typeChanges(change))
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			change := changeOf(t, money.CAD, c.rows...)
 
-func Test_change_of_a_type_is_no_rate_when_one_of_its_rows_converts_and_another_needs_a_rate(t *testing.T) {
-	change := changeOf(t, money.CAD,
-		cadHeld(endOfAugust, "brokerage", 100000), unrated(endOfAugust, "brokerage", 10000),
-		cadHeld(endOfSeptember, "brokerage", 150000))
-
-	require.NotNil(t, change)
-	assert.Equal(t, []string{"CAD brokerage " + noRate}, typeChanges(change))
-}
-
-func Test_change_total_is_no_rate_when_a_day_holds_a_total_in_another_currency(t *testing.T) {
-	change := changeOf(t, money.CAD,
-		cadHeld(endOfAugust, "chequing", 100000), unrated(endOfAugust, "savings", 10000),
-		cadHeld(endOfSeptember, "chequing", 150000))
-
-	require.NotNil(t, change)
-	assert.Equal(t, []string{"CAD " + noRate}, totalChanges(change))
-}
-
-func Test_change_total_is_no_rate_when_a_day_has_no_total_in_the_reporting_currency(t *testing.T) {
-	change := changeOf(t, money.CAD,
-		unrated(endOfAugust, "savings", 10000),
-		cadHeld(endOfSeptember, "chequing", 150000))
-
-	require.NotNil(t, change)
-	assert.Equal(t, []string{"CAD " + noRate}, totalChanges(change))
+			require.NotNil(t, change)
+			assert.Equal(t, []string{"CAD " + noRate}, totalChanges(change))
+		})
+	}
 }
 
 func Test_change_total_counts_a_start_day_of_unrated_zero_balances_as_zero(t *testing.T) {
@@ -195,25 +223,41 @@ func Test_change_total_counts_a_start_day_of_unrated_zero_balances_as_zero(t *te
 }
 
 func Test_change_counts_an_empty_end_day_as_zero(t *testing.T) {
-	change := changeOf(t, money.CAD, cadHeld(endOfAugust, "chequing", 100000))
+	cases := []struct {
+		name     string
+		currency money.Currency
+	}{
+		{name: "in_the_reporting_currency", currency: money.CAD},
+		{name: "native", currency: money.Native},
+	}
 
-	require.NotNil(t, change)
-	assert.Equal(t, []string{"CAD chequing -100000"}, typeChanges(change))
-	assert.Equal(t, []string{"CAD -100000"}, totalChanges(change))
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			change := changeOf(t, c.currency, cadHeld(endOfAugust, "chequing", 100000))
 
-func Test_native_change_counts_an_empty_end_day_as_zero(t *testing.T) {
-	change := changeOf(t, money.Native, cadHeld(endOfAugust, "chequing", 100000))
-
-	require.NotNil(t, change)
-	assert.Equal(t, []string{"CAD chequing -100000"}, typeChanges(change))
-	assert.Equal(t, []string{"CAD -100000"}, totalChanges(change))
+			require.NotNil(t, change)
+			assert.Equal(t, []string{"CAD chequing -100000"}, typeChanges(change))
+			assert.Equal(t, []string{"CAD -100000"}, totalChanges(change))
+		})
+	}
 }
 
 func Test_change_is_absent_when_the_start_day_has_no_balance(t *testing.T) {
-	change := changeOf(t, money.CAD, cadHeld(endOfSeptember, "chequing", 150000))
+	cases := []struct {
+		name     string
+		currency money.Currency
+	}{
+		{name: "in_the_reporting_currency", currency: money.CAD},
+		{name: "native", currency: money.Native},
+	}
 
-	assert.Nil(t, change)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			change := changeOf(t, c.currency, cadHeld(endOfSeptember, "chequing", 150000))
+
+			assert.Nil(t, change)
+		})
+	}
 }
 
 func Test_native_change_counts_a_currency_on_the_end_day_only_as_zero_on_the_start_day(t *testing.T) {
@@ -253,12 +297,6 @@ func Test_native_change_is_shown_when_only_a_USD_balance_is_on_the_start_day(t *
 	require.NotNil(t, change)
 	assert.Equal(t, []string{"USD chequing 20000"}, typeChanges(change))
 	assert.Equal(t, []string{"USD 20000"}, totalChanges(change))
-}
-
-func Test_native_change_is_absent_when_the_start_day_has_no_balance(t *testing.T) {
-	change := changeOf(t, money.Native, cadHeld(endOfSeptember, "chequing", 150000))
-
-	assert.Nil(t, change)
 }
 
 func Test_change_is_absent_for_a_listing_without_dates(t *testing.T) {

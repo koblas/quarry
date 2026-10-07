@@ -31,25 +31,27 @@ func Test_recurring_starts_the_series_again_after_a_charge_off_schedule(t *testi
 	assert.Equal(t, 3, result.Series[0].ChargeCount)
 }
 
-func Test_recurring_reads_charges_through_today_even_when_the_window_ends_later(t *testing.T) {
-	var got store.ChargeParams
-	srv := report.NewServer(report.WithStore(fakeStore{gotCharges: &got}))
-	window := store.Window{Since: allTime.Since, Until: dateOf(t, "2030-12-31")}
+func Test_recurring_reads_charges_through_the_local_date_of_now_whatever_the_window_or_zone(t *testing.T) {
+	cases := []struct {
+		name   string
+		window store.Window
+		now    time.Time
+	}{
+		{name: "a_window_ending_after_today", window: store.Window{Since: allTime.Since, Until: dateOf(t, "2030-12-31")}, now: recurringNow},
+		{name: "a_utc_date_later_than_the_local_date", window: allTime, now: windowNow},
+	}
 
-	_, err := srv.Recurring(t.Context(), report.RecurringRequest{Window: window, Now: recurringNow})
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got store.ChargeParams
+			srv := report.NewServer(report.WithStore(fakeStore{gotCharges: &got}))
 
-	require.NoError(t, err)
-	assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
-}
+			_, err := srv.Recurring(t.Context(), report.RecurringRequest{Window: c.window, Now: c.now})
 
-func Test_recurring_reads_charges_through_the_local_date_when_the_utc_date_is_later(t *testing.T) {
-	var got store.ChargeParams
-	srv := report.NewServer(report.WithStore(fakeStore{gotCharges: &got}))
-
-	_, err := srv.Recurring(t.Context(), report.RecurringRequest{Window: allTime, Now: windowNow})
-
-	require.NoError(t, err)
-	assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
+			require.NoError(t, err)
+			assert.Equal(t, store.ChargeParams{Through: dateOf(t, "2026-09-29")}, got)
+		})
+	}
 }
 
 func Test_recurring_reads_the_charges_once(t *testing.T) {
@@ -208,22 +210,26 @@ func Test_recurring_groups_a_payee_with_no_key_by_its_id(t *testing.T) {
 	assert.Equal(t, 6, result.Series[0].ChargeCount)
 }
 
-func Test_recurring_keeps_two_payees_with_no_key_apart(t *testing.T) {
-	first := chargesOn(t, monthlyDates(t), paidTo("payee-77", "#4411"))
-	second := chargesOn(t, monthlyDates(t), paidTo("payee-78", "#9902"))
+func Test_recurring_keeps_payees_apart_that_share_no_group(t *testing.T) {
+	cases := []struct {
+		name                 string
+		firstID, firstName   string
+		secondID, secondName string
+	}{
+		{name: "two_payees_with_no_key", firstID: "payee-77", firstName: "#4411", secondID: "payee-78", secondName: "#9902"},
+		{name: "a_payee_id_fallback_and_an_equal_payee_key", firstID: "payee-1", firstName: "Gym", secondID: "gym", secondName: "#4411"},
+	}
 
-	result := recurringOf(t, first, second)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			first := chargesOn(t, monthlyDates(t), paidTo(c.firstID, c.firstName))
+			second := chargesOn(t, monthlyDates(t), paidTo(c.secondID, c.secondName))
 
-	assert.Len(t, result.Series, 2)
-}
+			result := recurringOf(t, first, second)
 
-func Test_recurring_keeps_a_payee_id_fallback_apart_from_an_equal_payee_key(t *testing.T) {
-	keyed := chargesOn(t, monthlyDates(t), paidTo("payee-1", "Gym"))
-	fallback := chargesOn(t, monthlyDates(t), paidTo("gym", "#4411"))
-
-	result := recurringOf(t, keyed, fallback)
-
-	assert.Len(t, result.Series, 2)
+			assert.Len(t, result.Series, 2)
+		})
+	}
 }
 
 func Test_recurring_refuses_when_the_charges_read_fails_to_open_the_store(t *testing.T) {
@@ -290,18 +296,24 @@ func Test_recurring_leaves_out_an_account_used_only_before_the_run_began(t *test
 	assert.Equal(t, []string{"acct-run"}, accountIDsOf(result.Series[0]))
 }
 
-func Test_recurring_sets_the_payee_key_of_a_series_grouped_by_name(t *testing.T) {
-	result := recurringOf(t, chargesOn(t, monthlyDates(t), paidTo("payee-1", "Netflix.com")))
+func Test_recurring_sets_the_payee_key_only_for_a_series_grouped_by_name(t *testing.T) {
+	cases := []struct {
+		name      string
+		id, payee string
+		want      *string
+	}{
+		{name: "grouped_by_name", id: "payee-1", payee: "Netflix.com", want: new("netflix-com")},
+		{name: "grouped_by_payee_id", id: "payee-77", payee: "#4411", want: nil},
+	}
 
-	require.Len(t, result.Series, 1)
-	assert.Equal(t, new("netflix-com"), result.Series[0].PayeeKey)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			result := recurringOf(t, chargesOn(t, monthlyDates(t), paidTo(c.id, c.payee)))
 
-func Test_recurring_leaves_the_payee_key_nil_for_a_series_grouped_by_payee_id(t *testing.T) {
-	result := recurringOf(t, chargesOn(t, monthlyDates(t), paidTo("payee-77", "#4411")))
-
-	require.Len(t, result.Series, 1)
-	assert.Nil(t, result.Series[0].PayeeKey)
+			require.Len(t, result.Series, 1)
+			assert.Equal(t, c.want, result.Series[0].PayeeKey)
+		})
+	}
 }
 
 func Test_recurring_gives_each_currency_of_one_name_its_own_payees(t *testing.T) {
@@ -396,42 +408,99 @@ func monthlyOf(t *testing.T, payee, last string, cents int64, opts ...chargeOpt)
 	return monthlyEndingOn(t, last, 3, append([]chargeOpt{paidTo("payee-"+payee, payee), ofAmount(cents)}, opts...)...)
 }
 
-func Test_recurring_totals_the_yearly_cost_of_each_currencys_active_series_with_CAD_before_USD(t *testing.T) {
-	usd := monthlyOf(t, "Hulu", activeLast, 1000, billedIn("USD"))
-	gym := monthlyOf(t, "Gym", activeLast, 2000)
-	paper := monthlyOf(t, "Paper", activeLast, 500)
-
-	result := recurringOf(t, usd, gym, paper)
-
-	assert.Equal(t, []report.RecurringTotal{{Currency: "CAD", PerYear: 30000}, {Currency: "USD", PerYear: 12000}}, result.Totals)
+// seriesSpec is a monthly series of three charges paid to payee, the last on last, each of cents in currency
+// ("" is the default CAD).
+type seriesSpec struct {
+	payee, last, currency string
+	cents                 int64
 }
 
-func Test_recurring_leaves_ended_series_out_of_the_totals(t *testing.T) {
-	active := monthlyOf(t, "Gym", activeLast, 1000)
-	endedCAD := monthlyOf(t, "Paper", endedLast, 5000)
-	endedEUR := monthlyOf(t, "Pasta", endedLast, 700, billedIn("EUR"))
-
-	result := recurringOf(t, active, endedCAD, endedEUR)
-
-	assert.Equal(t, []report.RecurringTotal{{Currency: "CAD", PerYear: 12000}}, result.Totals)
+// recurringOfSpecs reads allTime's series of each spec, passed in the order given.
+func recurringOfSpecs(t *testing.T, specs ...seriesSpec) report.Recurring {
+	t.Helper()
+	groups := make([][]store.Charge, len(specs))
+	for i, s := range specs {
+		var opts []chargeOpt
+		if s.currency != "" {
+			opts = append(opts, billedIn(s.currency))
+		}
+		groups[i] = monthlyOf(t, s.payee, s.last, s.cents, opts...)
+	}
+	return recurringOf(t, groups...)
 }
 
-func Test_recurring_lists_CAD_series_before_USD_ones_whatever_they_cost(t *testing.T) {
-	usd := monthlyOf(t, "Aaa", activeLast, 5000, billedIn("USD"))
-	cad := monthlyOf(t, "Bbb", activeLast, 1000)
+func Test_recurring_orders_series_by_currency_then_state_then_cost_then_payee_name(t *testing.T) {
+	cases := []struct {
+		name   string
+		series []seriesSpec
+		want   []string
+	}{
+		{
+			name:   "cad_series_before_usd_ones_whatever_they_cost",
+			series: []seriesSpec{{"Aaa", activeLast, "USD", 5000}, {"Bbb", activeLast, "", 1000}},
+			want:   []string{"Bbb", "Aaa"},
+		},
+		{
+			name:   "an_ended_cad_series_before_an_active_usd_one",
+			series: []seriesSpec{{"Bbb", activeLast, "USD", 1000}, {"Aaa", endedLast, "", 1000}},
+			want:   []string{"Aaa", "Bbb"},
+		},
+		{
+			name:   "the_costliest_active_series_first",
+			series: []seriesSpec{{"Aaa", activeLast, "", 1000}, {"Bbb", activeLast, "", 2000}},
+			want:   []string{"Bbb", "Aaa"},
+		},
+		{
+			name:   "the_most_recently_charged_ended_series_first",
+			series: []seriesSpec{{"Aaa", "2026-05-01", "", 1000}, {"Bbb", "2026-06-01", "", 1000}},
+			want:   []string{"Bbb", "Aaa"},
+		},
+		{
+			name:   "series_that_cost_the_same_by_payee_name_ignoring_case",
+			series: []seriesSpec{{"Banana", activeLast, "", 1000}, {"apple", activeLast, "", 1000}},
+			want:   []string{"apple", "Banana"},
+		},
+		{
+			name:   "series_that_cost_the_same_by_payee_name_before_payee_key",
+			series: []seriesSpec{{"A-b", activeLast, "", 1000}, {"A!c", activeLast, "", 1000}},
+			want:   []string{"A!c", "A-b"},
+		},
+	}
 
-	result := recurringOf(t, usd, cad)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			result := recurringOfSpecs(t, c.series...)
 
-	assert.Equal(t, []string{"Bbb", "Aaa"}, payeesOf(result))
+			assert.Equal(t, c.want, payeesOf(result))
+		})
+	}
 }
 
-func Test_recurring_lists_an_ended_CAD_series_before_an_active_USD_one(t *testing.T) {
-	endedCAD := monthlyOf(t, "Aaa", endedLast, 1000)
-	activeUSD := monthlyOf(t, "Bbb", activeLast, 1000, billedIn("USD"))
+func Test_recurring_totals_the_yearly_cost_of_the_active_series_of_each_currency(t *testing.T) {
+	cases := []struct {
+		name   string
+		series []seriesSpec
+		want   []report.RecurringTotal
+	}{
+		{
+			name:   "each_currencys_active_series_with_cad_before_usd",
+			series: []seriesSpec{{"Hulu", activeLast, "USD", 1000}, {"Gym", activeLast, "", 2000}, {"Paper", activeLast, "", 500}},
+			want:   []report.RecurringTotal{{Currency: "CAD", PerYear: 30000}, {Currency: "USD", PerYear: 12000}},
+		},
+		{
+			name:   "ended_series_are_left_out",
+			series: []seriesSpec{{"Gym", activeLast, "", 1000}, {"Paper", endedLast, "", 5000}, {"Pasta", endedLast, "EUR", 700}},
+			want:   []report.RecurringTotal{{Currency: "CAD", PerYear: 12000}},
+		},
+	}
 
-	result := recurringOf(t, activeUSD, endedCAD)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			result := recurringOfSpecs(t, c.series...)
 
-	assert.Equal(t, []string{"Aaa", "Bbb"}, payeesOf(result))
+			assert.Equal(t, c.want, result.Totals)
+		})
+	}
 }
 
 func Test_recurring_lists_active_series_before_ended_ones_even_when_the_ended_one_charged_later(t *testing.T) {
@@ -441,42 +510,6 @@ func Test_recurring_lists_active_series_before_ended_ones_even_when_the_ended_on
 	result := recurringOf(t, ended, active)
 
 	assert.Equal(t, []string{"Zed", "Abe"}, payeesOf(result))
-}
-
-func Test_recurring_lists_the_costliest_active_series_first(t *testing.T) {
-	cheap := monthlyOf(t, "Aaa", activeLast, 1000)
-	dear := monthlyOf(t, "Bbb", activeLast, 2000)
-
-	result := recurringOf(t, cheap, dear)
-
-	assert.Equal(t, []string{"Bbb", "Aaa"}, payeesOf(result))
-}
-
-func Test_recurring_lists_the_most_recently_charged_ended_series_first(t *testing.T) {
-	older := monthlyOf(t, "Aaa", "2026-05-01", 1000)
-	newer := monthlyOf(t, "Bbb", "2026-06-01", 1000)
-
-	result := recurringOf(t, older, newer)
-
-	assert.Equal(t, []string{"Bbb", "Aaa"}, payeesOf(result))
-}
-
-func Test_recurring_orders_series_that_cost_the_same_by_payee_name_ignoring_case(t *testing.T) {
-	upper := monthlyOf(t, "Banana", activeLast, 1000)
-	lower := monthlyOf(t, "apple", activeLast, 1000)
-
-	result := recurringOf(t, upper, lower)
-
-	assert.Equal(t, []string{"apple", "Banana"}, payeesOf(result))
-}
-
-func Test_recurring_orders_series_that_cost_the_same_by_payee_name_before_payee_key(t *testing.T) {
-	dashed := monthlyOf(t, "A-b", activeLast, 1000)
-	banged := monthlyOf(t, "A!c", activeLast, 1000)
-
-	result := recurringOf(t, dashed, banged)
-
-	assert.Equal(t, []string{"A!c", "A-b"}, payeesOf(result))
 }
 
 func Test_recurring_orders_series_with_the_same_payee_name_and_cost_by_payee_id(t *testing.T) {

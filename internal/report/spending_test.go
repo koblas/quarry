@@ -109,34 +109,34 @@ func Test_spend_passes_every_named_account_to_the_store_in_the_order_given(t *te
 	assert.Equal(t, []store.Account{oldCard, chequing}, result.Accounts)
 }
 
-func Test_spend_matches_an_account_name_ignoring_case(t *testing.T) {
-	list := accountsOf(chequing, savings)
+func Test_spend_passes_the_id_of_the_account_the_argument_points_at(t *testing.T) {
+	cases := []struct {
+		name string
+		list store.AccountList
+		arg  string
+		want []string
+	}{
+		{name: "a_name_ignoring_case", list: accountsOf(chequing, savings), arg: "cHEQUING", want: []string{"acct-100"}},
+		{name: "a_closed_account", list: accountsOf(chequing, oldCard), arg: "old card", want: []string{"acct-300"}},
+		{
+			name: "an_id_before_a_name_equal_to_it",
+			list: accountsOf(
+				store.Account{ID: "acct-1", Name: "acct-2"},
+				store.Account{ID: "acct-2", Name: "Other"},
+			),
+			arg:  "acct-2",
+			want: []string{"acct-2"},
+		},
+	}
 
-	_, got, err := spendAccounts(t, list, "cHEQUING")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, got, err := spendAccounts(t, c.list, c.arg)
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{"acct-100"}, got.AccountIDs)
-}
-
-func Test_spend_matches_a_closed_account(t *testing.T) {
-	list := accountsOf(chequing, oldCard)
-
-	_, got, err := spendAccounts(t, list, "old card")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"acct-300"}, got.AccountIDs)
-}
-
-func Test_spend_resolves_an_id_before_a_name_equal_to_it(t *testing.T) {
-	list := accountsOf(
-		store.Account{ID: "acct-1", Name: "acct-2"},
-		store.Account{ID: "acct-2", Name: "Other"},
-	)
-
-	_, got, err := spendAccounts(t, list, "acct-2")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"acct-2"}, got.AccountIDs)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got.AccountIDs)
+		})
+	}
 }
 
 func Test_spend_names_an_account_given_by_id_and_by_name_once(t *testing.T) {
@@ -202,20 +202,34 @@ func Test_spend_refuses_an_ambiguous_name_with_its_text_and_sorted_ids_as_parts(
 	assert.Equal(t, []string{"acct-812", "acct-977"}, refusal.IDs)
 }
 
-func Test_spend_refuses_an_empty_argument_even_when_an_account_has_an_empty_name(t *testing.T) {
-	list := accountsOf(chequing, store.Account{ID: "acct-400", Name: ""})
+func Test_spend_refuses_the_first_argument_that_points_at_no_account(t *testing.T) {
+	cases := []struct {
+		name string
+		list store.AccountList
+		args []string
+		want string
+	}{
+		{
+			name: "an_empty_argument_even_when_an_account_has_an_empty_name",
+			list: accountsOf(chequing, store.Account{ID: "acct-400", Name: ""}),
+			args: []string{""},
+			want: `no account named ""; run quarry accounts --all to list them`,
+		},
+		{
+			name: "the_first_account_it_cannot_pick",
+			list: accountsOf(chequing),
+			args: []string{"Chequing", "Missing", "Absent"},
+			want: `no account named "Missing"; run quarry accounts --all to list them`,
+		},
+	}
 
-	_, _, err := spendAccounts(t, list, "")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, err := spendAccounts(t, c.list, c.args...)
 
-	assert.EqualError(t, err, `no account named ""; run quarry accounts --all to list them`)
-}
-
-func Test_spend_refuses_the_first_account_it_cannot_pick(t *testing.T) {
-	list := accountsOf(chequing)
-
-	_, _, err := spendAccounts(t, list, "Chequing", "Missing", "Absent")
-
-	assert.EqualError(t, err, `no account named "Missing"; run quarry accounts --all to list them`)
+			assert.EqualError(t, err, c.want)
+		})
+	}
 }
 
 func Test_spend_does_not_ask_the_store_for_spending_when_it_refuses_an_account(t *testing.T) {
@@ -306,61 +320,26 @@ func monthLabels(result report.Spending) []string {
 	return labels
 }
 
-func Test_spend_by_month_marks_the_first_month_partial_only_when_the_window_starts_after_its_first_day(t *testing.T) {
+func Test_spend_by_month_marks_a_month_partial_only_when_the_window_cuts_it(t *testing.T) {
 	cases := []struct {
-		name  string
-		since time.Time
-		want  []bool
+		name         string
+		since, until time.Time
+		want         []bool
 	}{
-		{name: "since on the first day", since: day(2026, time.January, 1), want: []bool{false, false}},
-		{name: "since on the second day", since: day(2026, time.January, 2), want: []bool{true, false}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			result := spendByMonth(t, cadOnly(), c.since, day(2026, time.February, 28))
-
-			assert.Equal(t, c.want, partialFlags(result))
-		})
-	}
-}
-
-func Test_spend_by_month_marks_the_last_month_partial_only_when_the_window_ends_before_its_last_day(t *testing.T) {
-	cases := []struct {
-		name  string
-		until time.Time
-		want  []bool
-	}{
-		{name: "until on the last day", until: day(2026, time.February, 28), want: []bool{false, false}},
-		{name: "until the day before the last", until: day(2026, time.February, 27), want: []bool{false, true}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			result := spendByMonth(t, cadOnly(), day(2026, time.January, 1), c.until)
-
-			assert.Equal(t, c.want, partialFlags(result))
-		})
-	}
-}
-
-func Test_spend_by_month_ends_february_on_its_last_day_in_leap_and_common_years(t *testing.T) {
-	cases := []struct {
-		name  string
-		since time.Time
-		until time.Time
-		want  bool
-	}{
-		{name: "leap year, until the 29th", since: day(2024, time.February, 1), until: day(2024, time.February, 29), want: false},
-		{name: "leap year, until the 28th", since: day(2024, time.February, 1), until: day(2024, time.February, 28), want: true},
-		{name: "common year, until the 28th", since: day(2025, time.February, 1), until: day(2025, time.February, 28), want: false},
+		{name: "since_on_the_first_day", since: day(2026, time.January, 1), until: day(2026, time.February, 28), want: []bool{false, false}},
+		{name: "since_on_the_second_day", since: day(2026, time.January, 2), until: day(2026, time.February, 28), want: []bool{true, false}},
+		{name: "until_the_day_before_the_last", since: day(2026, time.January, 1), until: day(2026, time.February, 27), want: []bool{false, true}},
+		{name: "leap_year_until_the_29th", since: day(2024, time.February, 1), until: day(2024, time.February, 29), want: []bool{false}},
+		{name: "leap_year_until_the_28th", since: day(2024, time.February, 1), until: day(2024, time.February, 28), want: []bool{true}},
+		{name: "common_year_until_the_28th", since: day(2025, time.February, 1), until: day(2025, time.February, 28), want: []bool{false}},
+		{name: "a_one_month_window_cut_at_both_ends", since: day(2026, time.March, 5), until: day(2026, time.March, 20), want: []bool{true}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			result := spendByMonth(t, cadOnly(), c.since, c.until)
 
-			assert.Equal(t, []bool{c.want}, partialFlags(result))
+			assert.Equal(t, c.want, partialFlags(result))
 		})
 	}
 }
@@ -409,12 +388,6 @@ func Test_spend_by_month_lists_no_rows_when_the_window_holds_no_spending(t *test
 	result := spendByMonth(t, store.Spending{}, day(2026, time.January, 1), day(2026, time.March, 31))
 
 	assert.Empty(t, result.Rows)
-}
-
-func Test_spend_by_month_marks_a_one_month_window_cut_at_both_ends_partial(t *testing.T) {
-	result := spendByMonth(t, cadOnly(), day(2026, time.March, 5), day(2026, time.March, 20))
-
-	assert.Equal(t, []bool{true}, partialFlags(result))
 }
 
 func Test_spend_by_month_marks_only_the_first_and_last_month_partial(t *testing.T) {
