@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/koblas/quarry/internal/platform/homepath"
@@ -92,7 +93,11 @@ func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err 
 	}
 	if exit, ok := errors.AsType[*claudeplugin.ExitError](err); ok {
 		replayClaudeOutput(cmd, exit.Output)
-		writeClaudeLine(cmd, verb, exit.Error()+"; see its message above")
+		writeClaudeLine(cmd, verb, claudeStepFailureLine(verb, lead, exit))
+		return ReportedError{}
+	}
+	if interrupted, ok := errors.AsType[*claudeplugin.InterruptedError](err); ok {
+		writeClaudeLine(cmd, verb, "stopped before "+interrupted.Argv+" finished; run quarry "+claudeCommand+" "+verb+" again")
 		return ReportedError{}
 	}
 	if unreadable, ok := errors.AsType[*claudeplugin.ListUnreadableError](err); ok {
@@ -113,6 +118,23 @@ func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err 
 		return ReportedError{}
 	}
 	return &runtimeError{err: err}
+}
+
+// claudeStepFailureLine returns the line for a claude child that did not exit zero, led by lead:
+// how it ended, a pointer to its replayed message when it printed one, and, after a step that ran, the rerun advice.
+func claudeStepFailureLine(verb, lead string, exit *claudeplugin.ExitError) string {
+	how := "exited with status " + strconv.Itoa(exit.Status)
+	if exit.Signal != nil {
+		how = "was stopped by signal " + exit.Signal.String()
+	}
+	line := lead + exit.Argv + " " + how
+	if len(exit.Output) > 0 {
+		line += "; see its message above"
+	}
+	if lead != "" {
+		line += ", then run quarry " + claudeCommand + " " + verb + " again"
+	}
+	return line
 }
 
 // replayClaudeOutput writes a failed child's captured output to stderr, ending it with a newline.

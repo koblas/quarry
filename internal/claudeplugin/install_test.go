@@ -1,11 +1,14 @@
 package claudeplugin_test
 
 import (
+	"context"
 	"io/fs"
 	"os/exec"
+	"syscall"
 	"testing"
 
 	"github.com/koblas/quarry/internal/claudeplugin"
+	"github.com/koblas/quarry/internal/platform/toolrun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -244,4 +247,120 @@ func Test_install_does_not_look_for_quarry_when_a_step_fails(t *testing.T) {
 	require.Error(t, err)
 	assert.False(t, res.QuarryNotOnPath)
 	assert.Equal(t, []string{"claude"}, path.asked)
+}
+
+func Test_install_reports_an_interrupt_naming_the_command_it_stopped(t *testing.T) {
+	cancelsThenFails := reply{cancel: true, ctxErr: true}
+	cases := []struct {
+		name         string
+		marketplaces string
+		cancelBefore bool
+		answers      map[string]reply
+		wantArgv     string
+		wantCalls    []string
+		wantResult   claudeplugin.Result
+	}{
+		{
+			name: "cancelled before Install", marketplaces: "[]", cancelBefore: true,
+			wantArgv: "claude " + marketplaceList, wantCalls: nil,
+		},
+		{
+			name: "during the marketplace list", marketplaces: "[]",
+			answers:  map[string]reply{marketplaceList: cancelsThenFails},
+			wantArgv: "claude " + marketplaceList, wantCalls: []string{marketplaceList},
+		},
+		{
+			name: "during the plugin list", marketplaces: "[]",
+			answers:  map[string]reply{pluginList: {output: "[]", cancel: true, ctxErr: true}},
+			wantArgv: "claude " + pluginList, wantCalls: []string{marketplaceList, pluginList},
+		},
+		{
+			name: "after the plugin list with the marketplace absent", marketplaces: "[]",
+			answers:  map[string]reply{pluginList: {output: "[]", cancel: true}},
+			wantArgv: "claude " + addMarketplace, wantCalls: []string{marketplaceList, pluginList},
+		},
+		{
+			name: "after the plugin list with the marketplace ours", marketplaces: oursMarketplace,
+			answers:  map[string]reply{pluginList: {output: "[]", cancel: true}},
+			wantArgv: "claude " + installPlugin, wantCalls: []string{marketplaceList, pluginList},
+		},
+		{
+			name: "during the add", marketplaces: "[]",
+			answers:  map[string]reply{addMarketplace: cancelsThenFails},
+			wantArgv: "claude " + addMarketplace, wantCalls: []string{marketplaceList, pluginList, addMarketplace},
+		},
+		{
+			name: "after the add succeeds", marketplaces: "[]",
+			answers:  map[string]reply{addMarketplace: {cancel: true}},
+			wantArgv: "claude " + installPlugin, wantCalls: []string{marketplaceList, pluginList, addMarketplace},
+			wantResult: claudeplugin.Result{MarketplaceAdded: true},
+		},
+		{
+			name: "during the install", marketplaces: "[]",
+			answers:  map[string]reply{installPlugin: cancelsThenFails},
+			wantArgv: "claude " + installPlugin, wantCalls: []string{marketplaceList, pluginList, addMarketplace, installPlugin},
+			wantResult: claudeplugin.Result{MarketplaceAdded: true},
+		},
+		{
+			name: "a signal while the context is done", marketplaces: "[]",
+			answers: map[string]reply{
+				installPlugin: {cancel: true, err: &toolrun.SignalError{Signal: syscall.SIGKILL}},
+			},
+			wantArgv: "claude " + installPlugin, wantCalls: []string{marketplaceList, pluginList, addMarketplace, installPlugin},
+			wantResult: claudeplugin.Result{MarketplaceAdded: true},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := newFakeClaude(c.marketplaces, "[]")
+			for argv, r := range c.answers {
+				fake.answer(argv, r)
+			}
+			ctx := fake.cancellable(t)
+			if c.cancelBefore {
+				fake.cancel()
+			}
+
+			res, err := newServer(t, fake).Install(ctx)
+
+			var interrupted *claudeplugin.InterruptedError
+			require.ErrorAs(t, err, &interrupted)
+			assert.Equal(t, c.wantArgv, interrupted.Argv)
+			assert.Equal(t, "stopped before "+c.wantArgv+" finished", interrupted.Error())
+			require.ErrorIs(t, err, context.Canceled)
+			assert.NotErrorAs(t, err, new(*claudeplugin.ExitError))
+			assert.Equal(t, c.wantCalls, fake.calls)
+			assert.Equal(t, c.wantResult, res)
+		})
+	}
+}
+
+func Test_install_reports_a_signal_that_stopped_a_child(t *testing.T) {
+	cases := []struct {
+		name       string
+		argv       string
+		wantResult claudeplugin.Result
+	}{
+		{"a list", pluginList, claudeplugin.Result{}},
+		{"the add", addMarketplace, claudeplugin.Result{}},
+		{"the install", installPlugin, claudeplugin.Result{MarketplaceAdded: true}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := newFakeClaude("[]", "[]")
+			fake.answer(c.argv, reply{output: "partial", status: -1, err: &toolrun.SignalError{Signal: syscall.SIGKILL}})
+
+			res, err := newServer(t, fake).Install(t.Context())
+
+			var exit *claudeplugin.ExitError
+			require.ErrorAs(t, err, &exit)
+			assert.Equal(t, syscall.SIGKILL, exit.Signal)
+			assert.Equal(t, []byte("partial"), exit.Output)
+			assert.Equal(t, "claude "+c.argv, exit.Argv)
+			assert.Equal(t, "claude "+c.argv+" was stopped by signal killed", exit.Error())
+			assert.Equal(t, c.wantResult, res)
+		})
+	}
 }

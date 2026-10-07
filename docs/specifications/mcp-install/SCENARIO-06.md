@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: First install step fails
@@ -26,10 +26,10 @@ User-visible contract (verbatim from `## Surface & Copy` failure table, exit 1, 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/claude_install_test.go` `Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails` — nothing installed, plugin install exits 1 with output; assert stdout `Added…` line, stderr replay then the partial line, `ReportedError`. Needs no stubs; red today at the stderr assertion (first-step form, no lead). Delete the now-duplicate row "an install step that exits 1 after the marketplace was added" in `Test_claude_install_reports_each_list_failure` (`:354-396`).
+- [x] Step 1: `internal/cli/claude_install_test.go` `Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails` — nothing installed, plugin install exits 1 with output; assert stdout `Added…` line, stderr replay then the partial line, `ReportedError`. Needs no stubs; red today at the stderr assertion (first-step form, no lead). Delete the now-duplicate row "an install step that exits 1 after the marketplace was added" in `Test_claude_install_reports_each_list_failure` (`:354-396`).
 
 ### Build
-- [ ] Step 2: `internal/claudeplugin` — step-failure classification in the shared runner.
+- [x] Step 2: `internal/claudeplugin` — step-failure classification in the shared runner.
   - `state.go:35-44` `ExitError` grows `Signal os.Signal` (nil = exited with `Status`); doc says "did not exit zero: a non-zero status, or a signal quarry did not send". Keeps `Argv`, `Output`; no steps-done field (that stays `Result`).
   - New `*InterruptedError{Argv}` in `state.go`, `Unwrap` → the ctx's own error.
   - `state.go:134-145` `(*Server).run`: ctx done before the child → `InterruptedError` for this argv, Runner not called (this is "next-due"; the Server's own call order makes it right through skips). Runner err while ctx done → `InterruptedError` (checked **before** signal). `*toolrun.SignalError` → `ExitError{Signal, Output}` keeping the buffer the Runner returned with the error. Other Runner errors (incl. `*StartError`) returned bare — `install_test.go:139-160` and `state_test.go:206-227` `assert.Same` stay green.
@@ -37,7 +37,7 @@ User-visible contract (verbatim from `## Surface & Copy` failure table, exit 1, 
   - `fake_test.go:25-56` `fakeClaude`: answers from its **parameter** ctx (`ctx.Err()` reply) and can cancel the test's ctx on a scripted argv. No marker assertion here (~20 `Install(t.Context())` sites): the R5 "during X" rows already redden if Install hands the Runner another ctx.
   - `ExitError.Error()` branches on `Signal` so it never says `status -1`.
   - Tests in `install_test.go`: `Test_install_reports_an_interrupt_naming_the_command_it_stopped` (rows: cancelled before Install → marketplace list, zero calls; during marketplace list; during plugin list; after plugin list with marketplace absent → add, add not called; after plugin list with marketplace ours → install; during add; after add succeeds → install, `MarketplaceAdded`; during install → install, `MarketplaceAdded`; signal while ctx is done → interrupted, not `ExitError`; `errors.Is(err, context.Canceled)`); `Test_install_reports_a_signal_that_stopped_a_child` (rows: a list, the add, the install with `MarketplaceAdded`; `Signal` and `Output` carried).
-- [ ] Step 3: `internal/cli/render_claude.go:85-124` — one failure renderer for both verbs.
+- [x] Step 3: `internal/cli/render_claude.go:85-124` — one failure renderer for both verbs.
   - `reportClaudeFailure` `ExitError` arm (`:93-97`) composes from fields, not `Error()`: lead × `exited with status N` / `was stopped by signal <Signal.String()>` × see-above iff `len(Output) > 0` × `, then run quarry claude <verb> again` iff lead != "". New `InterruptedError` arm → R5 line with verb, no replay, no lead. Lead stays `installDoneLead(res)` (`:58-64`); signature unchanged so SCENARIO-10 passes its own verb and lead.
   - `claude_install_test.go:37-95`: `toolCalls` records each ctx it receives; `runClaudeAt` (owns the marker and the cancel func) puts a marker on the command ctx and, after `Execute`, asserts every recorded ctx carries it — closes the "fakes ignore ctx" debt for every helper caller. A reply can cancel that ctx and answer with the parameter ctx's `Err()` or a `*toolrun.SignalError`. Direct `cli.Execute` callers stay unpinned (`Test_claude_install_runs_both_steps_when_nothing_is_installed` `:249` is the acceptance test — leave it; the `failingWriter` tests `:423`, `:432`, `:444` need their own Env).
   - Stateful fake (marketplace/plugin flags flipped by add/install, install fails N times) for `Test_claude_install_finishes_on_a_rerun_after_a_partial_install` — two `cli.Execute` calls: first partial (exit 1), second `already in` / `Installed` / restart, exit 0, argv shows no second add.
@@ -46,10 +46,17 @@ User-visible contract (verbatim from `## Surface & Copy` failure table, exit 1, 
   - `Test_claude_install_reports_an_interrupt_before_or_between_children` rows: cancelled before Execute → names marketplace list, zero calls; cancelled after plugin list → names add.
 
 ### Sweep
-- [ ] Step 4: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ExitError`, `InterruptedError`, `reportClaudeFailure`, the new render helper.
+- [x] Step 4: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ExitError`, `InterruptedError`, `reportClaudeFailure`, the new render helper.
 
 ### Verify
-- [ ] Step 5: `verify.sh <start> ./internal/claudeplugin/... ./internal/cli/...` + `spec-check.py mcp-install`; replace the SCENARIO-06 Progress line with: `- [x] SCENARIO-06: First install step fails (first-step row green on arrival `Test_claude_install_reports_a_failed_first_step`; folds 07 (acceptance test below), 08 `Test_claude_install_finishes_on_a_rerun_after_a_partial_install`, 14 `Test_claude_install_reports_an_interrupt_while_a_step_runs`, 23 `Test_claude_install_drops_see_above_when_the_failed_step_printed_nothing`, 24 `Test_claude_install_reports_a_step_stopped_by_a_signal`) — `internal/cli/claude_install_test.go` `Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails`; rewrite STATE.md.
+- [x] Step 5: `verify.sh <start> ./internal/claudeplugin/... ./internal/cli/...` + `spec-check.py mcp-install`; replace the SCENARIO-06 Progress line with: `- [x] SCENARIO-06: First install step fails (first-step row green on arrival `Test_claude_install_reports_a_failed_first_step`; folds 07 (acceptance test below), 08 `Test_claude_install_finishes_on_a_rerun_after_a_partial_install`, 14 `Test_claude_install_reports_an_interrupt_while_a_step_runs`, 23 `Test_claude_install_drops_see_above_when_the_failed_step_printed_nothing`, 24 `Test_claude_install_reports_a_step_stopped_by_a_signal`) — `internal/cli/claude_install_test.go` `Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails`; rewrite STATE.md.
+
+## Phase report
+
+Runs A, B1 and V done; all steps ticked. Cadence code-first. Verify: `go build rc=0`, `go test rc=0`, `uncovered-diff rc=0` (0 uncovered added lines), `go test -race rc=0`, `golangci-lint rc=0` (`0 issues`); `test-stats.py` rows `internal/claudeplugin 21 (+2)`, `internal/cli 655 (+8)`, `TOTAL 676 (+10)`; `spec-check.py mcp-install` OK.
+- Checkpoint fixes: `(*InterruptedError).Error` pinned in `Test_install_reports_an_interrupt_naming_the_command_it_stopped` (mutation "stopped before" -> "stopped after" reddened all 9 rows; restored); `run` doc cut to 2 lines; `cancellable`, `newFakePath`, `newServerFinding` are all used (IDE diagnostics were stale), nothing deleted. Lint fix: `assert.ErrorIs` -> `require.ErrorIs` after `require.ErrorAs` (testifylint).
+- Doc comments reviewed within budget: `ExitError` (+ `Signal` field), `InterruptedError`, `reportClaudeFailure`, `claudeStepFailureLine`.
+- Progress line replaced in `specification.md`, folds 07/08/14/23/24 named, owner last.
 
 ## Handoff
 

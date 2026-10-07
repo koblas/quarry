@@ -27,6 +27,8 @@ type reply struct {
 	output string
 	status int
 	err    error
+	cancel bool // the call cancels the context set by cancellable before answering
+	ctxErr bool // the call fails with the Err of the context it was given
 }
 
 // fakeClaude is a Runner that records each call's name and argv and answers
@@ -35,6 +37,16 @@ type fakeClaude struct {
 	replies map[string]reply
 	calls   []string
 	names   []string
+	cancel  context.CancelFunc
+}
+
+// cancellable returns a context that a reply with cancel set ends.
+func (f *fakeClaude) cancellable(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	f.cancel = cancel
+	return ctx
 }
 
 // newFakeClaude scripts the two lists with the given JSON bodies.
@@ -47,12 +59,19 @@ func newFakeClaude(marketplaces, plugins string) *fakeClaude {
 
 func (f *fakeClaude) answer(argv string, r reply) { f.replies[argv] = r }
 
-func (f *fakeClaude) run(_ context.Context, name string, args ...string) ([]byte, int, error) {
+func (f *fakeClaude) run(ctx context.Context, name string, args ...string) ([]byte, int, error) {
 	argv := strings.Join(args, " ")
 	f.names = append(f.names, name)
 	f.calls = append(f.calls, argv)
 	r := f.replies[argv]
-	return []byte(r.output), r.status, r.err
+	if r.cancel {
+		f.cancel()
+	}
+	err := r.err
+	if r.ctxErr {
+		err = ctx.Err()
+	}
+	return []byte(r.output), r.status, err
 }
 
 func newServer(t *testing.T, f *fakeClaude) *claudeplugin.Server {

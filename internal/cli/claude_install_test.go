@@ -29,6 +29,11 @@ const (
 	foreignMarketplace = `[{"name":"quarry","source":"github","repo":"someone/quarry"}]`
 	userPluginOn       = `[{"id":"quarry@quarry","scope":"user","enabled":true}]`
 	userPluginOff      = `[{"id":"quarry@quarry","scope":"user","enabled":false}]`
+
+	marketplaceAddedLine   = "Added the quarry marketplace to Claude Code.\n"
+	marketplacePresentLine = "The quarry marketplace is already in Claude Code.\n"
+	pluginInstalledLine    = "Installed the quarry plugin (skill and MCP server) for all your projects.\n"
+	installRestartLine     = "Restart Claude Code to load it.\n"
 )
 
 var errNoStart = errors.New("fork/exec /opt/claude: permission denied")
@@ -38,14 +43,22 @@ type toolReply struct {
 	output string
 	status int
 	err    error
+	cancel bool // the call cancels the command's context before answering
+	ctxErr bool // the call fails with the Err of the context it was given
 }
 
-// toolCalls is a fake RunTool that records each call's arguments and answers
-// from replies keyed by them; an unscripted call prints an empty JSON list and exits 0.
+// toolCalls is a fake RunTool that records each call's context and arguments and
+// answers from script, else replies keyed by them; an unscripted call prints an
+// empty JSON list and exits 0.
 type toolCalls struct {
 	names   []string
 	argv    []string
+	ctxs    []context.Context
 	replies map[string]toolReply
+	script  func(argv string) toolReply
+
+	cancelBefore bool               // runClaudeAt cancels the command's context before it executes
+	cancel       context.CancelFunc // set by runClaudeAt
 }
 
 func (f *toolCalls) reply(argv string, r toolReply) *toolCalls {
@@ -56,15 +69,26 @@ func (f *toolCalls) reply(argv string, r toolReply) *toolCalls {
 	return f
 }
 
-func (f *toolCalls) run(_ context.Context, name string, args ...string) ([]byte, int, error) {
+func (f *toolCalls) run(ctx context.Context, name string, args ...string) ([]byte, int, error) {
 	argv := strings.Join(args, " ")
 	f.names = append(f.names, name)
 	f.argv = append(f.argv, argv)
+	f.ctxs = append(f.ctxs, ctx)
 	r, ok := f.replies[argv]
+	if f.script != nil {
+		r, ok = f.script(argv), true
+	}
 	if !ok {
 		return []byte("[]"), 0, nil
 	}
-	return []byte(r.output), r.status, r.err
+	if r.cancel {
+		f.cancel()
+	}
+	err := r.err
+	if r.ctxErr {
+		err = ctx.Err()
+	}
+	return []byte(r.output), r.status, err
 }
 
 // lists scripts the two lists with the given JSON bodies.
@@ -84,13 +108,26 @@ func runClaudeFinding(t *testing.T, tool *toolCalls, lookPath claudeplugin.LookP
 	return runClaudeAt(t, tool, lookPath, "", args...)
 }
 
-// runClaudeAt is runClaudeFinding with home as the user's home directory.
+// ctxMarker keys the value runClaudeAt puts on the command's context.
+type ctxMarker struct{}
+
+// runClaudeAt is runClaudeFinding with home as the user's home directory. It runs under a
+// cancellable context carrying a marker, and fails the test if a call got any other context.
 func runClaudeAt(t *testing.T, tool *toolCalls, lookPath claudeplugin.LookPath, home string, args ...string) (string, string, error) {
 	t.Helper()
 	var out, errOut bytes.Buffer
+	ctx, cancel := context.WithCancel(context.WithValue(t.Context(), ctxMarker{}, "command"))
+	defer cancel()
+	tool.cancel = cancel
+	if tool.cancelBefore {
+		cancel()
+	}
 
-	err := cli.Execute(t.Context(), args, cli.Env{Stdout: &out, Stderr: &errOut, RunTool: tool.run, LookPath: lookPath, Home: home})
+	err := cli.Execute(ctx, args, cli.Env{Stdout: &out, Stderr: &errOut, RunTool: tool.run, LookPath: lookPath, Home: home})
 
+	for i, got := range tool.ctxs {
+		assert.Equal(t, "command", got.Value(ctxMarker{}), "call %d (%s) ran under a context that is not the command's", i, tool.argv[i])
+	}
 	return out.String(), errOut.String(), err
 }
 
@@ -355,7 +392,6 @@ func Test_claude_install_reports_each_list_failure(t *testing.T) {
 	cases := []struct {
 		name       string
 		tool       *toolCalls
-		wantStdout string
 		wantStderr string
 	}{
 		{
@@ -370,17 +406,73 @@ func Test_claude_install_reports_each_list_failure(t *testing.T) {
 			wantStderr: "boom\n" +
 				"quarry: claude install: claude plugin list --json exited with status 2; see its message above\n",
 		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Empty(t, stdout)
+			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
+}
+
+func Test_claude_install_reports_each_step_failure(t *testing.T) {
+	killed := func(output string) toolReply {
+		return toolReply{output: output, status: -1, err: &toolrun.SignalError{Signal: syscall.SIGKILL}}
+	}
+	cases := []struct {
+		name       string
+		tool       *toolCalls
+		wantStdout string
+		wantStderr string
+	}{
 		{
-			name:       "a marketplace list that exits 1 with no output",
-			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{status: 1}),
-			wantStderr: "quarry: claude install: claude plugin marketplace list --json exited with status 1; see its message above\n",
+			name:       "partial, exit status, no output",
+			tool:       (&toolCalls{}).reply(installPluginArgv, toolReply{status: 1}),
+			wantStdout: marketplaceAddedLine,
+			wantStderr: "quarry: claude install: added the quarry marketplace, but claude plugin install --scope user quarry@quarry " +
+				"exited with status 1, then run quarry claude install again\n",
 		},
 		{
-			name:       "an install step that exits 1 after the marketplace was added",
-			tool:       (&toolCalls{}).reply(installPluginArgv, toolReply{output: "denied\n", status: 1}),
-			wantStdout: "Added the quarry marketplace to Claude Code.\n",
-			wantStderr: "denied\n" +
-				"quarry: claude install: claude plugin install --scope user quarry@quarry exited with status 1; see its message above\n",
+			name:       "partial, signal, output",
+			tool:       (&toolCalls{}).reply(installPluginArgv, killed("out of memory\n")),
+			wantStdout: marketplaceAddedLine,
+			wantStderr: "out of memory\n" +
+				"quarry: claude install: added the quarry marketplace, but claude plugin install --scope user quarry@quarry " +
+				"was stopped by signal killed; see its message above, then run quarry claude install again\n",
+		},
+		{
+			name:       "partial, signal, no output",
+			tool:       (&toolCalls{}).reply(installPluginArgv, killed("")),
+			wantStdout: marketplaceAddedLine,
+			wantStderr: "quarry: claude install: added the quarry marketplace, but claude plugin install --scope user quarry@quarry " +
+				"was stopped by signal killed, then run quarry claude install again\n",
+		},
+		{
+			name: "first step, signal, no output",
+			tool: (&toolCalls{}).reply(addMarketplaceArgv, killed("")),
+			wantStderr: "quarry: claude install: claude plugin marketplace add --scope user koblas/quarry " +
+				"was stopped by signal killed\n",
+		},
+		{
+			name: "second step with the first skipped, exit status, output",
+			tool: (&toolCalls{}).lists(ourMarketplace, "[]").reply(installPluginArgv, toolReply{output: "nope\n", status: 2}),
+			wantStderr: "nope\n" +
+				"quarry: claude install: claude plugin install --scope user quarry@quarry exited with status 2; see its message above\n",
+		},
+		{
+			name: "plugin list, signal, output",
+			tool: (&toolCalls{}).reply(pluginListArgv, killed("lost\n")),
+			wantStderr: "lost\n" +
+				"quarry: claude install: claude plugin list --json was stopped by signal killed; see its message above\n",
+		},
+		{
+			name:       "marketplace list, exit status, no output",
+			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{status: 1}),
+			wantStderr: "quarry: claude install: claude plugin marketplace list --json exited with status 1\n",
 		},
 	}
 
@@ -393,6 +485,133 @@ func Test_claude_install_reports_each_list_failure(t *testing.T) {
 			assert.Equal(t, c.wantStderr, stderr)
 		})
 	}
+}
+
+func Test_claude_install_reports_a_failed_first_step(t *testing.T) {
+	tool := (&toolCalls{}).reply(addMarketplaceArgv, toolReply{output: "denied\n", status: 1})
+
+	stdout, stderr, err := runClaude(t, tool, "claude", "install")
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, addMarketplaceArgv}, tool.argv)
+	assert.Empty(t, stdout)
+	assert.Equal(t, "denied\n"+
+		"quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1; see its message above\n", stderr)
+}
+
+func Test_claude_install_drops_see_above_when_the_failed_step_printed_nothing(t *testing.T) {
+	tool := (&toolCalls{}).reply(addMarketplaceArgv, toolReply{status: 1})
+
+	stdout, stderr, err := runClaude(t, tool, "claude", "install")
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Empty(t, stdout)
+	assert.Equal(t, "quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1\n", stderr)
+}
+
+func Test_claude_install_reports_a_step_stopped_by_a_signal(t *testing.T) {
+	tool := (&toolCalls{}).lists(ourMarketplace, "[]").
+		reply(installPluginArgv, toolReply{output: "Killed\n", status: -1, err: &toolrun.SignalError{Signal: syscall.SIGKILL}})
+
+	stdout, stderr, err := runClaude(t, tool, "claude", "install")
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Empty(t, stdout)
+	assert.Equal(t, "Killed\n"+
+		"quarry: claude install: claude plugin install --scope user quarry@quarry was stopped by signal killed; see its message above\n", stderr)
+}
+
+func Test_claude_install_reports_an_interrupt_while_a_step_runs(t *testing.T) {
+	tool := (&toolCalls{}).reply(installPluginArgv, toolReply{output: "installing...\n", cancel: true, ctxErr: true})
+
+	stdout, stderr, err := runClaude(t, tool, "claude", "install")
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, marketplaceAddedLine, stdout)
+	assert.Equal(t, "quarry: claude install: stopped before claude plugin install --scope user quarry@quarry finished; "+
+		"run quarry claude install again\n", stderr)
+}
+
+func Test_claude_install_reports_an_interrupt_before_or_between_children(t *testing.T) {
+	cases := []struct {
+		name      string
+		tool      *toolCalls
+		wantArgv  []string
+		wantAfter string
+	}{
+		{
+			name:      "cancelled before the command runs",
+			tool:      &toolCalls{cancelBefore: true},
+			wantAfter: "claude plugin marketplace list --json",
+		},
+		{
+			name:      "cancelled after the plugin list",
+			tool:      (&toolCalls{}).reply(pluginListArgv, toolReply{output: "[]", cancel: true}),
+			wantArgv:  []string{marketplaceListArgv, pluginListArgv},
+			wantAfter: "claude plugin marketplace add --scope user koblas/quarry",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantArgv, c.tool.argv)
+			assert.Empty(t, stdout)
+			assert.Equal(t, "quarry: claude install: stopped before "+c.wantAfter+" finished; run quarry claude install again\n", stderr)
+		})
+	}
+}
+
+func Test_claude_install_finishes_on_a_rerun_after_a_partial_install(t *testing.T) {
+	marketplaceAdded, pluginInstalled, installFailures := false, false, 1
+	tool := &toolCalls{}
+	tool.script = func(argv string) toolReply {
+		switch argv {
+		case marketplaceListArgv:
+			if marketplaceAdded {
+				return toolReply{output: ourMarketplace}
+			}
+			return toolReply{output: "[]"}
+		case pluginListArgv:
+			if pluginInstalled {
+				return toolReply{output: userPluginOn}
+			}
+			return toolReply{output: "[]"}
+		case addMarketplaceArgv:
+			marketplaceAdded = true
+		case installPluginArgv:
+			if installFailures > 0 {
+				installFailures--
+				return toolReply{output: "denied\n", status: 1}
+			}
+			pluginInstalled = true
+		}
+		return toolReply{}
+	}
+
+	_, _, firstErr := runClaude(t, tool, "claude", "install")
+	callsAfterFirst := len(tool.argv)
+	stdout, stderr, secondErr := runClaude(t, tool, "claude", "install")
+
+	require.ErrorIs(t, firstErr, cli.ReportedError{})
+	require.NoError(t, secondErr)
+	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, installPluginArgv}, tool.argv[callsAfterFirst:])
+	assert.Equal(t, marketplacePresentLine+pluginInstalledLine+installRestartLine, stdout)
+	assert.Empty(t, stderr)
+}
+
+func Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails(t *testing.T) {
+	tool := (&toolCalls{}).reply(installPluginArgv, toolReply{output: "denied\n", status: 1})
+
+	stdout, stderr, err := runClaude(t, tool, "claude", "install")
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n", stdout)
+	assert.Equal(t, "denied\n"+
+		"quarry: claude install: added the quarry marketplace, but claude plugin install --scope user quarry@quarry "+
+		"exited with status 1; see its message above, then run quarry claude install again\n", stderr)
 }
 
 func Test_claude_install_reports_when_the_user_copy_is_on_but_the_marketplace_is_missing(t *testing.T) {

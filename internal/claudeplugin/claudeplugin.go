@@ -63,7 +63,7 @@ func (r Result) Ran() bool {
 // Install adds quarry's marketplace and installs its plugin at user scope, skipping
 // each step the lists show done, and returns the steps completed even on failure.
 // Errors: ErrClaudeNotFound, ErrForeignMarketplace, *ListUnreadableError, *ExitError,
-// or the Runner's own.
+// *InterruptedError, or the Runner's own.
 func (s *Server) Install(ctx context.Context) (Result, error) {
 	claude, err := s.findClaude()
 	if err != nil {

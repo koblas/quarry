@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/koblas/quarry/internal/platform/toolrun"
 )
 
 // The commands Install looks up.
@@ -32,16 +35,34 @@ var ErrClaudeNotFound = errors.New("claude is not on your PATH")
 // is not quarry's own; no step runs when it is found.
 var ErrForeignMarketplace = errors.New("a foreign marketplace named quarry exists")
 
-// ExitError reports a claude child that ran and exited non-zero.
+// ExitError reports a claude child that did not exit zero: a non-zero status, or a
+// signal quarry did not send.
 type ExitError struct {
-	Argv   string // the command as run, e.g. "claude plugin list --json"
-	Status int    // the exit status
-	Output []byte // stdout and stderr combined, in arrival order
+	Argv   string    // the command as run, e.g. "claude plugin list --json"
+	Status int       // the exit status; unset when Signal is
+	Signal os.Signal // the signal that ended the child; nil when it exited on its own
+	Output []byte    // stdout and stderr combined, in arrival order
 }
 
 func (e *ExitError) Error() string {
+	if e.Signal != nil {
+		return e.Argv + " was stopped by signal " + e.Signal.String()
+	}
 	return e.Argv + " exited with status " + strconv.Itoa(e.Status)
 }
+
+// InterruptedError reports that the context ended before Argv, the running or next-due
+// claude command, finished; it unwraps to the context's error.
+type InterruptedError struct {
+	Argv  string // the command that was running or due next
+	cause error
+}
+
+func (e *InterruptedError) Error() string {
+	return "stopped before " + e.Argv + " finished"
+}
+
+func (e *InterruptedError) Unwrap() error { return e.cause }
 
 // ListUnreadableError reports a list command that exited zero but printed
 // something quarry cannot classify: not a JSON array of objects, or an entry
@@ -131,15 +152,26 @@ func (s *Server) list(ctx context.Context, claude, args string, required ...stri
 	return entries, nil
 }
 
-// run runs one child of the claude command and returns its combined output. The
-// Runner's own error comes back as is; a non-zero exit comes back as *ExitError.
+// run runs one child of claude and returns its combined output: a done ctx is
+// *InterruptedError, a non-zero exit or signal is *ExitError, any other error is unchanged.
 func (s *Server) run(ctx context.Context, claude, args string) ([]byte, error) {
+	argv := claudeCommand + " " + args
+	if ctx.Err() != nil {
+		return nil, &InterruptedError{Argv: argv, cause: ctx.Err()}
+	}
 	out, status, err := s.runner(ctx, claude, strings.Fields(args)...)
 	if err != nil {
+		// A cancelled child dies by SIGKILL, so ctx is decided before the signal.
+		if ctx.Err() != nil {
+			return nil, &InterruptedError{Argv: argv, cause: ctx.Err()}
+		}
+		if sig, ok := errors.AsType[*toolrun.SignalError](err); ok {
+			return nil, &ExitError{Argv: argv, Signal: sig.Signal, Output: out}
+		}
 		return nil, err
 	}
 	if status != 0 {
-		return nil, &ExitError{Argv: claudeCommand + " " + args, Status: status, Output: out}
+		return nil, &ExitError{Argv: argv, Status: status, Output: out}
 	}
 	return out, nil
 }
