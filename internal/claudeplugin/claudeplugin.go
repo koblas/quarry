@@ -5,10 +5,10 @@ import (
 	"fmt"
 )
 
-// Runner runs the command name with args and returns its combined output and
-// exit status. err is non-nil only when the command could not start, a signal
-// ended it, or ctx ended; a non-zero exit status comes back with a nil err.
-type Runner func(ctx context.Context, name string, args ...string) (output []byte, exitCode int, err error)
+// Runner runs the command name with args and returns its stdout, its stdout and stderr
+// combined, and its exit status. err is non-nil only when the command could not start,
+// a signal ended it, or ctx ended; a non-zero exit status comes back with a nil err.
+type Runner func(ctx context.Context, name string, args ...string) (stdout, combined []byte, exitCode int, err error)
 
 // LookPath resolves the command file to the path that would run, as exec.LookPath does.
 type LookPath func(file string) (string, error)
@@ -21,7 +21,9 @@ const (
 	removeMarketplaceArgs = "plugin marketplace remove --scope user " + marketplaceName
 )
 
-// Server installs and uninstalls quarry's Claude Code plugin through a Runner.
+// Server installs and uninstalls quarry's Claude Code plugin through a Runner. Install and
+// Uninstall fail with ErrClaudeNotFound, ErrForeignMarketplace, *ListUnreadableError,
+// *ExitError, *InterruptedError, or the Runner's own.
 type Server struct {
 	runner   Runner
 	lookPath LookPath
@@ -65,8 +67,6 @@ func (r Result) Ran() bool {
 
 // Install adds quarry's marketplace and installs its plugin at user scope, skipping
 // each step the lists show done, and returns the steps completed even on failure.
-// Errors: ErrClaudeNotFound, ErrForeignMarketplace, *ListUnreadableError, *ExitError,
-// *InterruptedError, or the Runner's own.
 func (s *Server) Install(ctx context.Context) (Result, error) {
 	claude, err := s.findClaude()
 	if err != nil {
@@ -115,9 +115,7 @@ func (r UninstallResult) Ran() bool {
 }
 
 // Uninstall removes quarry's user-scope plugin, then its marketplace unless a copy at another
-// scope remains, skipping each step the lists show absent; it returns the steps done even on
-// failure. Errors: ErrClaudeNotFound, ErrForeignMarketplace, *ListUnreadableError, *ExitError,
-// *InterruptedError, or the Runner's own.
+// scope remains, skipping each step the lists show absent; it returns the steps done even on failure.
 func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 	claude, err := s.findClaude()
 	if err != nil {

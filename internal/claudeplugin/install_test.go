@@ -112,7 +112,7 @@ func Test_install_refuses_a_foreign_marketplace_before_any_step(t *testing.T) {
 
 func Test_install_stops_when_the_add_step_exits_non_zero(t *testing.T) {
 	fake := newFakeClaude("[]", "[]")
-	fake.answer(addMarketplace, reply{output: "add failed", status: 1})
+	fake.answer(addMarketplace, reply{stdout: "adding", output: "add failed", status: 1})
 
 	res, err := newServer(t, fake).Install(t.Context())
 
@@ -350,7 +350,7 @@ func Test_install_reports_a_signal_that_stopped_a_child(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			fake := newFakeClaude("[]", "[]")
-			fake.answer(c.argv, reply{output: "partial", status: -1, err: &toolrun.SignalError{Signal: syscall.SIGKILL}})
+			fake.answer(c.argv, reply{stdout: "part", output: "partial", status: -1, err: &toolrun.SignalError{Signal: syscall.SIGKILL}})
 
 			res, err := newServer(t, fake).Install(t.Context())
 

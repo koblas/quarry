@@ -25,15 +25,10 @@ skipping each step that is already done, so running it again is safe.
 Claude Code downloads the plugin from github.com/koblas/quarry; quarry
 itself sends nothing and opens none of Claude Code's files. The plugin
 starts "quarry" from your PATH. Restart Claude Code to load it.`,
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				return UsageError{msg: installCommand + " takes no arguments; Run '" + cmd.CommandPath() + " --help' for usage."}
-			}
-			return nil
-		},
+		Args: claudeNoArgs(installCommand),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if *jsonOut {
-				return UsageError{msg: claudeCommand + " " + installCommand + " prints no JSON; drop --json"}
+			if err := claudeRefuseJSON(installCommand, jsonOut); err != nil {
+				return err
 			}
 			srv := claudeplugin.NewServer(claudeplugin.WithRunner(runTool), claudeplugin.WithLookPath(lookPath))
 			res, err := srv.Install(cmd.Context())

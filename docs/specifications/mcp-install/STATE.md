@@ -1,6 +1,6 @@
 # mcp-install — current state
 
-Scenarios complete: SCENARIO-01..17 (all; 17 folds 18, 27, 27b, 28). Last updated by SCENARIO-17. Feature complete; next step is the final gate.
+Scenarios complete: SCENARIO-01..17 (all; 17 folds 18, 27, 27b, 28). Last updated by gate fix pass 1 (REVIEW-01). Feature complete; next step is the re-gate.
 
 ## Binding decisions
 - claudeplugin returns values and typed errors (`*ExitError`, `*InterruptedError`, `*ListUnreadableError`, `ErrForeignMarketplace`, `ErrClaudeNotFound`, the Runner's own); all copy lives in `internal/cli/render_claude.go`. The exit/signal line is composed from fields (`Argv`, `Status`, `Signal.String()`, `len(Output)`) by `claudeStepFailureLine(verb, lead, exit)`, never from `Error()`; the unreadable line still uses `Error()`. Install and uninstall render the same errors under their own verb prefix (SCENARIO-01, 04, 06, 10)
@@ -14,6 +14,7 @@ Scenarios complete: SCENARIO-01..17 (all; 17 folds 18, 27, 27b, 28). Last update
 - Refusal copy per verb lives in `claudeRefusalCopy` (`render_claude.go:52`), read by `reportClaudeFailure`; signature `(cmd, verb, home, lead, done, err)` unchanged (SCENARIO-10)
 - Identity is exact and case-sensitive (`name`, `source`, `repo`). Only a JSON `false` in `enabled` turns the copy off; missing/null/non-bool counts as on (SCENARIO-01)
 - BR-8: `root.go` `newClaudeCommand` passes no store, snapshots or config factory (SCENARIO-01)
+- Runner is `func(ctx, name, args...) (stdout, combined []byte, exitCode int, err error)`. `claudeplugin.list` decodes `stdout` only; `ExitError.Output` and every replay stay on `combined`. `toolrun.run` reads stdout into `MultiWriter(&stdout, &combined)` and stderr into `combined`, both `syncBuffer`s (REVIEW-01)
 - `toolrun.Run` owns the Runner error types (`*StartError`, `*SignalError`, `ctx.Err()`); status -1 on any err. `claudeplugin` imports `internal/platform/toolrun` for `*SignalError` only (SCENARIO-04, 06)
 - The Runner's `name` is the path `LookPath("claude")` resolved; `ExitError.Argv` stays `claude …`; the wiring test (`cmd/quarry/run_claude_wiring_test.go`) proves production sets it (SCENARIO-04)
 - `Env.Home` rendered through `claudePath(home, p)` (raw when home is ""); hint paths abbreviate first, then `%q` (SCENARIO-04, 12)
@@ -25,6 +26,8 @@ Scenarios complete: SCENARIO-01..17 (all; 17 folds 18, 27, 27b, 28). Last update
 - Nothing planned remains. Out of scope per spec, no owner: `--json` for install/uninstall, `--desktop`, `--scope`, project-scope removal; adding the new README section to `skillDriftSources` (`run_skill_drift_test.go:42-48`; `claude mcp add ... -- quarry mcp` may confuse its scanner) (SCENARIO-17)
 
 ## Traps
+- `toolrun` stdout and stderr are separate pipes, so `combined` is in read order: writes to different streams closer than scheduler latency can swap. Helpers in `toolrun_test.go` sleep `interleaveGap` between them; a test that writes both streams back to back is flaky (REVIEW-01)
+- Fake replies: `reply{output}` / `toolReply{output}` feed stdout AND combined; set `stdout` too only when a test needs them to differ (REVIEW-01)
 - `toolrun.SignalError.Error()` is `stopped by signal: killed` (colon) — render `Signal.String()`, never `Error()` (SCENARIO-06)
 - `run` keeps the output the Runner returned with `*SignalError`; dropping it loses the replay (SCENARIO-06)
 - A fake returning the test's captured ctx's `Err()` passes with propagation broken; answer from the parameter ctx (SCENARIO-06)
@@ -37,6 +40,9 @@ Scenarios complete: SCENARIO-01..17 (all; 17 folds 18, 27, 27b, 28). Last update
 - Uninstall Long's "names each one" is now true; ruled copy, do not reword (SCENARIO-10, 12)
 
 ## Open debts
+- Deferred from REVIEW-01 (MINOR, unowned, die unless re-opened): `readState` two phases plus foreign check in one body, extract `classifyMarketplaces`/`classifyPlugins` (`state.go:78-122`); build `Server` once in `newClaudeCommand` and pass `srv, home, jsonOut` instead of the `runTool, lookPath, home, jsonOut` clump (`claude.go:30`, `claude_install.go:16`, `claude_uninstall.go:16`); `installDoneLead`/`renderInstallDone` derive one fact twice, pass one `claudeProgress{line, lead}` (`render_claude.go:~100-125,150-165`); `reportClaudeFailure` six `if errors.As/Is` blocks to one `switch`; `list` allocates `&ListUnreadableError{}` eagerly (`state.go:~172`)
+- Deferred from REVIEW-01 (test layout): split `claude_install_test.go` (shared fakes to `claude_fake_test.go`, failure/interrupt tests to `claude_install_failure_test.go`); fold standalone tests that duplicate table rows (`claude_install_test.go` ~347, 359, 494, 506, 516, 609)
+- Deferred from REVIEW-01 (no wrong result): terminal Ctrl-C reaches the child first, so it can read as "stopped by signal interrupt" / "exited with status 130" instead of the interrupt line (`toolrun.go:61`, `claudeplugin/state.go` run); `CommandContext` kills the direct child only, a grandchild survives (`toolrun.go:46`, `Setpgid` + kill `-pgid`)
 - Final product-vision pass (NITs from the SCENARIO-17 checkpoint, left as ruled): README says "skipping any that is already done" (grammar "any that is"); Claude Code section shows scope-less lines while the install section shows `--scope user`; the README uninstall text does not mention the marketplace keep-rule when a project copy remains (SCENARIO-17)
 - Group help padding: cobra pads names to 11 (`uninstall` three spaces before its Short, `install` five); child-column width changes break the group-help `Contains` pins; `Test_claude_*_help_prints_the_ruled_text` and `Test_claude_uninstall_reports_each_outcome` must stay byte-identical (SCENARIO-10, 17)
 - Final product-vision pass: the Kept line says "a single project" even for a `managed`/`local` scope copy or several remaining copies (SCENARIO-12) — ruled copy, not re-ruled here

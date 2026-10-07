@@ -32,7 +32,9 @@ var errNoChildren = errors.New("test wiring starts no child process")
 func testEnv(stdout, stderr io.Writer) cli.Env {
 	env := defaultEnv(stdout, stderr)
 	env.NewServer = newServerFactory(fixedRates())
-	env.RunTool = func(context.Context, string, ...string) ([]byte, int, error) { return nil, -1, errNoChildren }
+	env.RunTool = func(context.Context, string, ...string) ([]byte, []byte, int, error) {
+		return nil, nil, -1, errNoChildren
+	}
 	env.LookPath = func(file string) (string, error) { return "", &exec.Error{Name: file, Err: exec.ErrNotFound} }
 	return env
 }

@@ -5,6 +5,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// claudeNoArgs refuses any argument to the claude child verb.
+func claudeNoArgs(verb string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return UsageError{msg: verb + " takes no arguments; Run '" + cmd.CommandPath() + " --help' for usage."}
+		}
+		return nil
+	}
+}
+
+// claudeRefuseJSON is a usage error when --json was given to the claude child verb, which prints none.
+func claudeRefuseJSON(verb string, jsonOut *bool) error {
+	if *jsonOut {
+		return UsageError{msg: claudeCommand + " " + verb + " prints no JSON; drop --json"}
+	}
+	return nil
+}
+
 // claudeCommand is the claude group's name, for its children's messages.
 const claudeCommand = "claude"
 

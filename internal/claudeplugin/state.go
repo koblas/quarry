@@ -161,26 +161,27 @@ func (s *Server) list(ctx context.Context, claude, args string, required ...stri
 	return entries, nil
 }
 
-// run runs one child of claude and returns its combined output: a done ctx is
-// *InterruptedError, a non-zero exit or signal is *ExitError, any other error is unchanged.
+// run runs one child of claude and returns its stdout: a done ctx is
+// *InterruptedError, a non-zero exit or signal is *ExitError carrying the combined
+// output, any other error is unchanged.
 func (s *Server) run(ctx context.Context, claude, args string) ([]byte, error) {
 	argv := claudeCommand + " " + args
 	if ctx.Err() != nil {
 		return nil, &InterruptedError{Argv: argv, cause: ctx.Err()}
 	}
-	out, status, err := s.runner(ctx, claude, strings.Fields(args)...)
+	stdout, combined, status, err := s.runner(ctx, claude, strings.Fields(args)...)
 	if err != nil {
 		// A cancelled child dies by SIGKILL, so ctx is decided before the signal.
 		if ctx.Err() != nil {
 			return nil, &InterruptedError{Argv: argv, cause: ctx.Err()}
 		}
 		if sig, ok := errors.AsType[*toolrun.SignalError](err); ok {
-			return nil, &ExitError{Argv: argv, Signal: sig.Signal, Output: out}
+			return nil, &ExitError{Argv: argv, Signal: sig.Signal, Output: combined}
 		}
 		return nil, err
 	}
 	if status != 0 {
-		return nil, &ExitError{Argv: argv, Status: status, Output: out}
+		return nil, &ExitError{Argv: argv, Status: status, Output: combined}
 	}
-	return out, nil
+	return stdout, nil
 }

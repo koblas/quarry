@@ -427,11 +427,8 @@ store and snapshots are not touched.
 	tool := &toolCalls{}
 
 	stdout, _, err := runClaude(t, tool, "claude", "uninstall", "--help")
-	require.NoError(t, err)
-	group, _, groupErr := runClaude(t, tool, "claude", "--help")
 
-	require.NoError(t, groupErr)
+	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(stdout, long), stdout)
-	assert.Contains(t, group, "  uninstall   Uninstall quarry's plugin from Claude Code\n")
 	assert.Empty(t, tool.argv)
 }

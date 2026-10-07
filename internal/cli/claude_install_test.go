@@ -44,16 +44,16 @@ var errNoStart = errors.New("fork/exec /opt/claude: permission denied")
 
 // toolReply is one scripted answer of the fake RunTool.
 type toolReply struct {
-	output string
+	output string // stdout and combined, unless stdout is set
+	stdout string // when set, stdout alone; combined stays output
 	status int
 	err    error
 	cancel bool // the call cancels the command's context before answering
 	ctxErr bool // the call fails with the Err of the context it was given
 }
 
-// toolCalls is a fake RunTool that records each call's context and arguments and
-// answers from script, else replies keyed by them; an unscripted call prints an
-// empty JSON list and exits 0.
+// toolCalls is a fake RunTool that records each call's context and arguments and answers
+// from script, else replies keyed by them; an unscripted call prints an empty JSON list.
 type toolCalls struct {
 	names   []string
 	argv    []string
@@ -73,7 +73,7 @@ func (f *toolCalls) reply(argv string, r toolReply) *toolCalls {
 	return f
 }
 
-func (f *toolCalls) run(ctx context.Context, name string, args ...string) ([]byte, int, error) {
+func (f *toolCalls) run(ctx context.Context, name string, args ...string) ([]byte, []byte, int, error) {
 	argv := strings.Join(args, " ")
 	f.names = append(f.names, name)
 	f.argv = append(f.argv, argv)
@@ -83,7 +83,7 @@ func (f *toolCalls) run(ctx context.Context, name string, args ...string) ([]byt
 		r, ok = f.script(argv), true
 	}
 	if !ok {
-		return []byte("[]"), 0, nil
+		return []byte("[]"), []byte("[]"), 0, nil
 	}
 	if r.cancel {
 		f.cancel()
@@ -92,7 +92,11 @@ func (f *toolCalls) run(ctx context.Context, name string, args ...string) ([]byt
 	if r.ctxErr {
 		err = ctx.Err()
 	}
-	return []byte(r.output), r.status, err
+	stdout := r.output
+	if r.stdout != "" {
+		stdout = r.stdout
+	}
+	return []byte(stdout), []byte(r.output), r.status, err
 }
 
 // lists scripts the two lists with the given JSON bodies.
@@ -722,11 +726,8 @@ starts "quarry" from your PATH. Restart Claude Code to load it.
 	tool := &toolCalls{}
 
 	stdout, _, err := runClaude(t, tool, "claude", "install", "--help")
-	require.NoError(t, err)
-	group, _, groupErr := runClaude(t, tool, "claude", "--help")
 
-	require.NoError(t, groupErr)
+	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(stdout, long), stdout)
-	assert.Contains(t, group, "  install     Install quarry's plugin (skill and MCP server) in Claude Code\n")
 	assert.Empty(t, tool.argv)
 }

@@ -145,6 +145,58 @@ func Test_read_state_refuses_an_unreadable_plugin_list(t *testing.T) {
 	}
 }
 
+func Test_read_state_reads_a_list_whose_stderr_carries_a_warning(t *testing.T) {
+	const warning = "(node) DeprecationWarning: update available\n"
+	cases := []struct {
+		name  string
+		argv  string
+		reply reply
+	}{
+		{"marketplace list", marketplaceList, reply{stdout: oursMarketplace, output: warning + oursMarketplace}},
+		{"plugin list", pluginList, reply{stdout: userPlugin, output: warning + userPlugin}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := newFakeClaude(oursMarketplace, userPlugin)
+			fake.answer(c.argv, c.reply)
+
+			res, err := newServer(t, fake).Install(t.Context())
+
+			require.NoError(t, err)
+			assert.False(t, res.Ran())
+			assert.Equal(t, []string{marketplaceList, pluginList}, fake.calls)
+		})
+	}
+}
+
+func Test_read_state_refuses_a_list_whose_stdout_is_unreadable_though_the_combined_output_parses(t *testing.T) {
+	cases := []struct {
+		name  string
+		argv  string
+		reply reply
+		want  string
+		calls []string
+	}{
+		{"marketplace list", marketplaceList, reply{stdout: "not json", output: "[]"}, "claude " + marketplaceList, []string{marketplaceList}},
+		{"plugin list", pluginList, reply{stdout: "not json", output: "[]"}, "claude " + pluginList, []string{marketplaceList, pluginList}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fake := newFakeClaude("[]", "[]")
+			fake.answer(c.argv, c.reply)
+
+			_, err := newServer(t, fake).Install(t.Context())
+
+			var unreadable *claudeplugin.ListUnreadableError
+			require.ErrorAs(t, err, &unreadable)
+			assert.Equal(t, c.want, unreadable.Argv)
+			assert.Equal(t, c.calls, fake.calls)
+		})
+	}
+}
+
 func Test_read_state_reports_an_unreadable_plugin_list_before_a_foreign_marketplace(t *testing.T) {
 	foreign := `[{"name":"quarry","source":"directory"}]`
 	fake := newFakeClaude(foreign, `{}`)

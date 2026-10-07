@@ -23,15 +23,10 @@ quarry marketplace. uninstall runs:
 skipping each step with nothing to remove. A copy of the plugin installed
 for a single project stays, and uninstall names each one. Your quarry
 store and snapshots are not touched.`,
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				return UsageError{msg: uninstallCommand + " takes no arguments; Run '" + cmd.CommandPath() + " --help' for usage."}
-			}
-			return nil
-		},
+		Args: claudeNoArgs(uninstallCommand),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if *jsonOut {
-				return UsageError{msg: claudeCommand + " " + uninstallCommand + " prints no JSON; drop --json"}
+			if err := claudeRefuseJSON(uninstallCommand, jsonOut); err != nil {
+				return err
 			}
 			srv := claudeplugin.NewServer(claudeplugin.WithRunner(runTool), claudeplugin.WithLookPath(lookPath))
 			res, err := srv.Uninstall(cmd.Context())

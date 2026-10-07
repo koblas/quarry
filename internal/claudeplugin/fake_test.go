@@ -24,7 +24,8 @@ var errBoom = errors.New("cannot start")
 
 // reply is one scripted answer of the fake claude.
 type reply struct {
-	output string
+	output string // stdout and combined, unless stdout is set
+	stdout string // when set, stdout alone; combined stays output
 	status int
 	err    error
 	cancel bool // the call cancels the context set by cancellable before answering
@@ -59,7 +60,7 @@ func newFakeClaude(marketplaces, plugins string) *fakeClaude {
 
 func (f *fakeClaude) answer(argv string, r reply) { f.replies[argv] = r }
 
-func (f *fakeClaude) run(ctx context.Context, name string, args ...string) ([]byte, int, error) {
+func (f *fakeClaude) run(ctx context.Context, name string, args ...string) ([]byte, []byte, int, error) {
 	argv := strings.Join(args, " ")
 	f.names = append(f.names, name)
 	f.calls = append(f.calls, argv)
@@ -71,7 +72,11 @@ func (f *fakeClaude) run(ctx context.Context, name string, args ...string) ([]by
 	if r.ctxErr {
 		err = ctx.Err()
 	}
-	return []byte(r.output), r.status, err
+	stdout := r.output
+	if r.stdout != "" {
+		stdout = r.stdout
+	}
+	return []byte(stdout), []byte(r.output), r.status, err
 }
 
 func newServer(t *testing.T, f *fakeClaude) *claudeplugin.Server {
