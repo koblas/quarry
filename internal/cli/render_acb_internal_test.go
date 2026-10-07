@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var acbDay = time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC)
+var acbDay = utcDay(2026, time.October, 5)
 
 // acbHeld is a security with shares whole shares held for cents of ACB.
 func acbHeld(name string, ticker *string, shares, cents int64) report.ACBSecurity {
@@ -233,8 +233,8 @@ func Test_renderACB_prints_a_years_sales_alone_one_row_each_then_a_total(t *test
 	year := report.ACBYear{
 		Year: 2025, Proceeds: 1_210_000, Outlays: 2_500, ACBRemoved: 1_000_000, Gain: 207_500,
 		Sales: []report.ACBSale{
-			acbSold("xeqt", time.Date(2025, time.March, 4, 0, 0, 0, 0, time.UTC), 40, 910_000, 1_500, 700_000, 208_500),
-			acbSold("xeqt", time.Date(2025, time.June, 2, 0, 0, 0, 0, time.UTC), 10, 300_000, 1_000, 300_000, -1_000),
+			acbSold("xeqt", utcDay(2025, time.March, 4), 40, 910_000, 1_500, 700_000, 208_500),
+			acbSold("xeqt", utcDay(2025, time.June, 2), 10, 300_000, 1_000, 300_000, -1_000),
 		},
 	}
 

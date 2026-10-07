@@ -4,19 +4,11 @@ package cli
 
 import (
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
-
-func spendingWindow() store.Window {
-	return store.Window{
-		Since: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, time.March, 9, 0, 0, 0, 0, time.UTC),
-	}
-}
 
 func Test_renderSpending(t *testing.T) {
 	cases := []struct {

@@ -15,7 +15,7 @@ import (
 func searchRowOf() store.SearchRow {
 	return store.SearchRow{
 		TransactionID: "txn-1",
-		Date:          time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC),
+		Date:          utcDay(2026, time.March, 10),
 		Account:       store.Account{ID: "acct-1", Name: "Chequing", Currency: "CAD", Active: true},
 		Payee:         new("Costco"),
 		Amount:        -4217,
@@ -28,11 +28,6 @@ func foundRows(matched int, rows ...store.SearchRow) report.Search {
 	var found report.Search
 	found.Rows, found.Matched = rows, matched
 	return found
-}
-
-func searchDay(y int, m time.Month, d int) *time.Time {
-	t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-	return &t
 }
 
 func Test_renderSearch_pads_each_column_right_aligns_the_amount_and_trims_trailing_spaces(t *testing.T) {
@@ -83,11 +78,11 @@ func Test_searchCaption_names_the_dates_the_window_bounds(t *testing.T) {
 		want   string
 	}{
 		{name: "no bound searches all dates", window: store.SearchWindow{}, want: "Transactions in all accounts, all dates"},
-		{name: "since only reads from", window: store.SearchWindow{Since: searchDay(2026, time.January, 1)}, want: "Transactions in all accounts, from 2026-01-01"},
-		{name: "until only reads through", window: store.SearchWindow{Until: searchDay(2025, time.December, 31)}, want: "Transactions in all accounts, through 2025-12-31"},
+		{name: "since only reads from", window: store.SearchWindow{Since: new(utcDay(2026, time.January, 1))}, want: "Transactions in all accounts, from 2026-01-01"},
+		{name: "until only reads through", window: store.SearchWindow{Until: new(utcDay(2025, time.December, 31))}, want: "Transactions in all accounts, through 2025-12-31"},
 		{
 			name:   "both bounds read as a range",
-			window: store.SearchWindow{Since: searchDay(2026, time.January, 1), Until: searchDay(2026, time.March, 31)},
+			window: store.SearchWindow{Since: new(utcDay(2026, time.January, 1)), Until: new(utcDay(2026, time.March, 31))},
 			want:   "Transactions in all accounts, 2026-01-01 to 2026-03-31",
 		},
 	}
@@ -133,7 +128,7 @@ func Test_searchCaption_puts_the_amount_after_the_text_accounts_and_dates(t *tes
 	s := report.Search{
 		Text:     new("costco"),
 		Accounts: []store.Account{{Name: "Visa"}},
-		Window:   store.SearchWindow{Since: searchDay(2025, time.January, 1)},
+		Window:   store.SearchWindow{Since: new(utcDay(2025, time.January, 1))},
 		Amounts:  report.SearchAmounts{Min: &least},
 	}
 
@@ -249,7 +244,7 @@ func Test_renderSearch_escapes_account_payee_category_and_memo(t *testing.T) {
 
 func Test_searchCaption_names_the_text_right_after_transactions(t *testing.T) {
 	text := "costco"
-	since := searchDay(2026, time.January, 1)
+	since := new(utcDay(2026, time.January, 1))
 	cases := []struct {
 		name  string
 		found report.Search
@@ -272,7 +267,7 @@ func Test_searchCaption_names_the_text_right_after_transactions(t *testing.T) {
 		},
 		{
 			name:  "text with both bounds",
-			found: report.Search{Text: &text, Window: store.SearchWindow{Since: since, Until: searchDay(2026, time.March, 31)}},
+			found: report.Search{Text: &text, Window: store.SearchWindow{Since: since, Until: new(utcDay(2026, time.March, 31))}},
 			want:  `Transactions matching "costco" in all accounts, 2026-01-01 to 2026-03-31`,
 		},
 	}
@@ -292,7 +287,7 @@ func Test_searchCaption_quotes_text_that_has_a_quote_or_a_newline(t *testing.T) 
 
 func Test_searchCaption_names_the_category_after_the_dates_and_before_the_amount(t *testing.T) {
 	least := int64(10000)
-	since := searchDay(2025, time.January, 1)
+	since := new(utcDay(2025, time.January, 1))
 	cases := []struct {
 		name  string
 		found report.Search

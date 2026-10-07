@@ -27,10 +27,6 @@ func openFinding(f store.Finding) report.ListedFinding {
 	return report.ListedFinding{Finding: f, Status: finding.StatusOpen}
 }
 
-func findingDay(year int, month time.Month, day int) time.Time {
-	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-}
-
 // duplicatePair is a duplicate finding of two items in one account and payee at amount cents.
 func duplicatePair(id string, account store.FindingItem, payees [2]string, dates [2]time.Time, cents int64) report.ListedFinding {
 	first, second := account, account
@@ -64,19 +60,19 @@ func Test_renderFindings_the_specification_example_rows_and_footer(t *testing.T)
 		Groups: []report.FindingsGroup{
 			{Type: finding.Duplicate, Findings: []report.ListedFinding{
 				duplicatePair("duplicate:txn-4410+txn-4412", chequing("CAD"), [2]string{"Hydro One", "HYDRO ONE NETWORKS"},
-					[2]time.Time{findingDay(2026, 8, 3), findingDay(2026, 8, 5)}, -14217),
+					[2]time.Time{utcDay(2026, 8, 3), utcDay(2026, 8, 5)}, -14217),
 				duplicatePair("duplicate:txn-2001+txn-2003", visa, [2]string{"Tim Hortons", "Tim Hortons"},
-					[2]time.Time{findingDay(2019, 1, 10), findingDay(2019, 1, 11)}, -245),
+					[2]time.Time{utcDay(2019, 1, 10), utcDay(2019, 1, 11)}, -245),
 			}},
 			{Type: finding.OneSidedTransfer, Findings: []report.ListedFinding{
 				oneSidedFinding("one-sided-transfer:xfer-301", store.FindingItem{
-					Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment", Date: findingDay(2024, 2, 1),
+					Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment", Date: utcDay(2024, 2, 1),
 					Amount: 120000, OtherAccount: new("Savings"),
 				}),
 			}},
 			{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-				uncategorizedFinding("uncategorized:payee-88", "AMZN MKTP CA", 12, findingDay(2019, 3, 2), findingDay(2026, 9, 12)),
-				uncategorizedFinding("uncategorized:no-payee", "", 4, findingDay(2012, 1, 1), findingDay(2020, 5, 5)),
+				uncategorizedFinding("uncategorized:payee-88", "AMZN MKTP CA", 12, utcDay(2019, 3, 2), utcDay(2026, 9, 12)),
+				uncategorizedFinding("uncategorized:no-payee", "", 4, utcDay(2012, 1, 1), utcDay(2020, 5, 5)),
 			}},
 		},
 		Counts: finding.Counts{Open: 5, Ignored: 4, Fixed: 12},
@@ -106,7 +102,7 @@ func Test_renderFindings_the_specification_example_rows_and_footer(t *testing.T)
 func Test_renderFindings_a_single_payee_and_split_use_the_singular_header(t *testing.T) {
 	listing := report.FindingsListing{
 		Groups: []report.FindingsGroup{{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-			uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
+			uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, utcDay(2026, 3, 1), utcDay(2026, 3, 1)),
 		}}},
 		Counts: finding.Counts{Open: 1},
 	}
@@ -120,7 +116,7 @@ func Test_renderFindings_a_single_payee_and_split_use_the_singular_header(t *tes
 func Test_renderFindings_uncategorized_shows_the_date_once_when_first_and_last_are_equal(t *testing.T) {
 	listing := report.FindingsListing{
 		Groups: []report.FindingsGroup{{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-			uncategorizedFinding("uncategorized:payee-2", "Bakery", 3, findingDay(2026, 4, 2), findingDay(2026, 4, 2)),
+			uncategorizedFinding("uncategorized:payee-2", "Bakery", 3, utcDay(2026, 4, 2), utcDay(2026, 4, 2)),
 		}}},
 		Counts: finding.Counts{Open: 1},
 	}
@@ -135,7 +131,7 @@ func Test_renderFindings_labels_a_USD_account_and_a_payeeless_item_in_a_duplicat
 	listing := report.FindingsListing{
 		Groups: []report.FindingsGroup{{Type: finding.Duplicate, Findings: []report.ListedFinding{
 			duplicatePair("duplicate:txn-7+txn-9", usd, [2]string{"", "Costco"},
-				[2]time.Time{findingDay(2026, 5, 1), findingDay(2026, 5, 2)}, -1234567),
+				[2]time.Time{utcDay(2026, 5, 1), utcDay(2026, 5, 2)}, -1234567),
 		}}},
 		Counts: finding.Counts{Open: 1},
 	}
@@ -152,7 +148,7 @@ func Test_renderFindings_labels_a_USD_account_and_a_payeeless_item_in_a_duplicat
 func Test_renderFindings_names_the_other_account_of_a_one_sided_leg_in_each_of_its_three_forms(t *testing.T) {
 	leg := func(other, otherID *string) store.FindingItem {
 		return store.FindingItem{
-			Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment", Date: findingDay(2024, 2, 1),
+			Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment", Date: utcDay(2024, 2, 1),
 			Amount: 100, OtherAccount: other, OtherAccountID: otherID,
 		}
 	}
@@ -199,7 +195,7 @@ func Test_renderFindings_says_so_when_no_finding_is_open(t *testing.T) {
 func openUncategorizedListing() report.FindingsListing {
 	return report.FindingsListing{
 		Groups: []report.FindingsGroup{{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-			uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
+			uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, utcDay(2026, 3, 1), utcDay(2026, 3, 1)),
 		}}},
 		Counts: finding.Counts{Open: 1},
 	}
@@ -225,15 +221,15 @@ func Test_renderFindings_leaves_out_the_ignore_hint_when_no_finding_is_open(t *t
 
 func Test_uncategorizedSpan_takes_the_earliest_and_latest_date_whatever_the_item_order(t *testing.T) {
 	items := []store.FindingItem{
-		{Payee: "Amazon", Date: findingDay(2026, 3, 5)},
-		{Payee: "Amazon", Date: findingDay(2026, 3, 1)},
-		{Payee: "Amazon", Date: findingDay(2026, 3, 3)},
+		{Payee: "Amazon", Date: utcDay(2026, 3, 5)},
+		{Payee: "Amazon", Date: utcDay(2026, 3, 1)},
+		{Payee: "Amazon", Date: utcDay(2026, 3, 3)},
 	}
 
 	_, first, last := uncategorizedSpan(items)
 
-	assert.Equal(t, findingDay(2026, 3, 1), first)
-	assert.Equal(t, findingDay(2026, 3, 5), last)
+	assert.Equal(t, utcDay(2026, 3, 1), first)
+	assert.Equal(t, utcDay(2026, 3, 5), last)
 }
 
 func Test_renderFindings_groups_the_thousands_of_a_group_header_count(t *testing.T) {
@@ -256,11 +252,11 @@ func Test_renderFindings_pads_columns_by_runes_not_bytes_for_a_non_ASCII_payee(t
 		Groups: []report.FindingsGroup{
 			{Type: finding.Duplicate, Findings: []report.ListedFinding{
 				duplicatePair("duplicate:txn-1+txn-2", chequing("CAD"), [2]string{"Café", "Bar"},
-					[2]time.Time{findingDay(2026, 5, 1), findingDay(2026, 5, 2)}, -450),
+					[2]time.Time{utcDay(2026, 5, 1), utcDay(2026, 5, 2)}, -450),
 			}},
 			{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-				uncategorizedFinding("uncategorized:payee-1", "Café", 2, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
-				uncategorizedFinding("uncategorized:payee-2", "Bar", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
+				uncategorizedFinding("uncategorized:payee-1", "Café", 2, utcDay(2026, 3, 1), utcDay(2026, 3, 1)),
+				uncategorizedFinding("uncategorized:payee-2", "Bar", 1, utcDay(2026, 3, 1), utcDay(2026, 3, 1)),
 			}},
 		},
 		Counts: finding.Counts{Open: 3},
@@ -371,7 +367,7 @@ func Test_mixedRows_names_a_payee_less_finding_with_the_no_payee_label(t *testin
 }
 
 func Test_findingsRows_escape_the_names_they_show(t *testing.T) {
-	date := findingDay(2026, time.May, 1)
+	date := utcDay(2026, time.May, 1)
 	t.Run("duplicate item account and payee", func(t *testing.T) {
 		item := store.FindingItem{Account: "Chq\tA", Currency: "CAD", Active: true, Payee: "Tim\nHortons", Date: date, Amount: 100}
 		rows := itemRows([]store.FindingItem{item})
@@ -454,8 +450,8 @@ func sharesFinding(txn string, date time.Time, account, security string, shares 
 
 func Test_sharesWithoutCostRows_pads_the_ids_accounts_and_securities_to_the_widest(t *testing.T) {
 	findings := []report.ListedFinding{
-		sharesFinding("itxn-9", findingDay(2016, time.March, 1), "Margin", "XEQT", 100_000_000),
-		sharesFinding("itxn-123", findingDay(2015, time.December, 31), "Questrade Margin", "Vanguard FTSE", 2_500_000),
+		sharesFinding("itxn-9", utcDay(2016, time.March, 1), "Margin", "XEQT", 100_000_000),
+		sharesFinding("itxn-123", utcDay(2015, time.December, 31), "Questrade Margin", "Vanguard FTSE", 2_500_000),
 	}
 
 	got := sharesWithoutCostRows(findings, openView)
@@ -468,8 +464,8 @@ func Test_sharesWithoutCostRows_pads_the_ids_accounts_and_securities_to_the_wide
 
 func Test_sharesWithoutCostRows_escapes_the_account_and_security_before_padding_them(t *testing.T) {
 	findings := []report.ListedFinding{
-		sharesFinding("itxn-1", findingDay(2016, time.March, 1), "A\tB", "X\nY", 3_000_000),
-		sharesFinding("itxn-2", findingDay(2016, time.March, 1), "Cash", "ZZZZZ", 3_000_000),
+		sharesFinding("itxn-1", utcDay(2016, time.March, 1), "A\tB", "X\nY", 3_000_000),
+		sharesFinding("itxn-2", utcDay(2016, time.March, 1), "Cash", "ZZZZZ", 3_000_000),
 	}
 
 	got := sharesWithoutCostRows(findings, openView)
@@ -482,8 +478,8 @@ func Test_sharesWithoutCostRows_escapes_the_account_and_security_before_padding_
 
 func Test_sharesWithoutCostRows_ends_an_ignored_finding_with_a_marker_under_the_all_view_only(t *testing.T) {
 	findings := []report.ListedFinding{
-		withStatus(sharesFinding("itxn-1", findingDay(2016, time.March, 1), "Margin", "XEQT", 3_000_000), finding.StatusIgnored),
-		sharesFinding("itxn-2", findingDay(2016, time.March, 1), "Margin", "XEQT", 3_000_000),
+		withStatus(sharesFinding("itxn-1", utcDay(2016, time.March, 1), "Margin", "XEQT", 3_000_000), finding.StatusIgnored),
+		sharesFinding("itxn-2", utcDay(2016, time.March, 1), "Margin", "XEQT", 3_000_000),
 	}
 
 	assert.Equal(t, []string{
@@ -517,7 +513,7 @@ func Test_renderFindings_lists_shares_added_with_no_cost_under_the_ruled_heading
 	listing := report.FindingsListing{
 		Groups: []report.FindingsGroup{{
 			Type:     finding.SharesWithoutCost,
-			Findings: []report.ListedFinding{sharesFinding("itxn-123", findingDay(2016, time.March, 1), "Questrade Margin", "XEQT", 100_000_000)},
+			Findings: []report.ListedFinding{sharesFinding("itxn-123", utcDay(2016, time.March, 1), "Questrade Margin", "XEQT", 100_000_000)},
 		}},
 		Counts: finding.Counts{Open: 1},
 	}
@@ -699,7 +695,7 @@ func Test_findingsFooter_by_view(t *testing.T) {
 }
 
 func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(t *testing.T) {
-	visaLeg := store.FindingItem{Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment", Date: findingDay(2024, 2, 1), Amount: 100}
+	visaLeg := store.FindingItem{Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment", Date: utcDay(2024, 2, 1), Amount: 100}
 	cases := []struct {
 		name  string
 		group report.FindingsGroup
@@ -709,7 +705,7 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 			name: "duplicate marks its id line",
 			group: report.FindingsGroup{Type: finding.Duplicate, Findings: []report.ListedFinding{withStatus(
 				duplicatePair("duplicate:txn-1+txn-2", chequing("CAD"), [2]string{"Rogers", "Rogers"},
-					[2]time.Time{findingDay(2026, 8, 20), findingDay(2026, 8, 21)}, -5500), finding.StatusIgnored)}},
+					[2]time.Time{utcDay(2026, 8, 20), utcDay(2026, 8, 21)}, -5500), finding.StatusIgnored)}},
 			want: []string{
 				"  duplicate:txn-1+txn-2  ignored",
 				"    2026-08-20  Chequing (CAD)  Rogers  -55.00",
@@ -730,8 +726,8 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 		{
 			name: "uncategorized marks the end of its row",
 			group: report.FindingsGroup{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-				withStatus(uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)), finding.StatusIgnored),
-				uncategorizedFinding("uncategorized:payee-2", "Bar", 2, findingDay(2026, 3, 1), findingDay(2026, 3, 5)),
+				withStatus(uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, utcDay(2026, 3, 1), utcDay(2026, 3, 1)), finding.StatusIgnored),
+				uncategorizedFinding("uncategorized:payee-2", "Bar", 2, utcDay(2026, 3, 1), utcDay(2026, 3, 5)),
 			}},
 			want: []string{
 				"  uncategorized:payee-1  Amazon   1 split  2026-03-01  ignored",
@@ -749,7 +745,7 @@ func Test_findingLines_ends_an_ignored_finding_with_a_marker_under_the_all_view(
 
 func Test_findingLines_leaves_an_ignored_finding_unmarked_when_the_view_lists_only_ignored_ones(t *testing.T) {
 	group := report.FindingsGroup{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-		withStatus(uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)), finding.StatusIgnored),
+		withStatus(uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, utcDay(2026, 3, 1), utcDay(2026, 3, 1)), finding.StatusIgnored),
 	}}
 
 	assert.Equal(t, []string{"  uncategorized:payee-1  Amazon  1 split  2026-03-01"}, findingLines(group, ignoredView))
@@ -758,8 +754,8 @@ func Test_findingLines_leaves_an_ignored_finding_unmarked_when_the_view_lists_on
 func Test_findingLines_shows_a_fixed_finding_as_one_unpadded_line_with_the_local_date_of_its_fixed_at(t *testing.T) {
 	useZone(t, time.FixedZone("UTC-5", -5*60*60))
 	group := report.FindingsGroup{Type: finding.Uncategorized, Findings: []report.ListedFinding{
-		uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
-		uncategorizedFinding("uncategorized:payee-2", "Bar", 1, findingDay(2026, 3, 1), findingDay(2026, 3, 1)),
+		uncategorizedFinding("uncategorized:payee-1", "Amazon", 1, utcDay(2026, 3, 1), utcDay(2026, 3, 1)),
+		uncategorizedFinding("uncategorized:payee-2", "Bar", 1, utcDay(2026, 3, 1), utcDay(2026, 3, 1)),
 		fixedFinding("uncategorized:payee-123456", finding.Uncategorized, time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)),
 	}}
 
@@ -818,7 +814,7 @@ func Test_findingsHeader_counts_the_splits_of_an_uncategorized_group_only_when_i
 	payee := func(id string, splits int, status finding.Status) report.ListedFinding {
 		f := fixedFinding(id, finding.Uncategorized, fixedTime())
 		if splits > 0 {
-			f = uncategorizedFinding(id, "Amazon", splits, findingDay(2026, 3, 1), findingDay(2026, 3, 1))
+			f = uncategorizedFinding(id, "Amazon", splits, utcDay(2026, 3, 1), utcDay(2026, 3, 1))
 		}
 		return withStatus(f, status)
 	}
@@ -997,11 +993,11 @@ func unlinkedListing(f ...report.ListedFinding) report.FindingsListing {
 
 func Test_renderFindings_the_specification_example_unlinked_transfer_pair(t *testing.T) {
 	first := store.FindingItem{
-		Account: "Chequing", Currency: "CAD", Active: true, Payee: "Visa payment", Date: findingDay(2026, 7, 2),
+		Account: "Chequing", Currency: "CAD", Active: true, Payee: "Visa payment", Date: utcDay(2026, 7, 2),
 		Amount: -50000, Category: new("Bills"), Splits: 1,
 	}
 	second := store.FindingItem{
-		Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment thank you", Date: findingDay(2026, 7, 3),
+		Account: "Visa", Currency: "CAD", Active: true, Payee: "Payment thank you", Date: utcDay(2026, 7, 3),
 		Amount: 50000, Category: new("Income:Other"), Splits: 1,
 	}
 
@@ -1017,8 +1013,8 @@ func Test_renderFindings_the_specification_example_unlinked_transfer_pair(t *tes
 }
 
 func Test_renderFindings_an_unlinked_transfer_row_ends_with_split_and_uncategorized_cells_without_trailing_spaces(t *testing.T) {
-	split := store.FindingItem{Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Date: findingDay(2026, 7, 2), Amount: -120000, Splits: 2}
-	bare := store.FindingItem{Account: "Visa", Currency: "CAD", Active: true, Payee: "Rent", Date: findingDay(2026, 7, 3), Amount: 120000, Splits: 1}
+	split := store.FindingItem{Account: "Chequing", Currency: "CAD", Active: true, Payee: "Rent", Date: utcDay(2026, 7, 2), Amount: -120000, Splits: 2}
+	bare := store.FindingItem{Account: "Visa", Currency: "CAD", Active: true, Payee: "Rent", Date: utcDay(2026, 7, 3), Amount: 120000, Splits: 1}
 
 	got := renderFindings(unlinkedListing(unlinkedFinding("unlinked-transfer:txn-1+txn-2", split, bare)), openView, false)
 
@@ -1030,8 +1026,8 @@ func Test_renderFindings_an_unlinked_transfer_row_ends_with_split_and_uncategori
 }
 
 func Test_renderFindings_labels_a_closed_and_a_USD_account_and_a_payeeless_item_in_an_unlinked_transfer(t *testing.T) {
-	closed := store.FindingItem{Account: "Old Visa", Currency: "CAD", Closed: true, Date: findingDay(2019, 1, 10), Amount: -245, Category: new("Fees"), Splits: 1}
-	usd := store.FindingItem{Account: "US Savings", Currency: "USD", Active: true, Payee: "Transfer", Date: findingDay(2019, 1, 11), Amount: 245, Splits: 1}
+	closed := store.FindingItem{Account: "Old Visa", Currency: "CAD", Closed: true, Date: utcDay(2019, 1, 10), Amount: -245, Category: new("Fees"), Splits: 1}
+	usd := store.FindingItem{Account: "US Savings", Currency: "USD", Active: true, Payee: "Transfer", Date: utcDay(2019, 1, 11), Amount: 245, Splits: 1}
 
 	got := renderFindings(unlinkedListing(unlinkedFinding("unlinked-transfer:txn-7+txn-9", closed, usd)), openView, false)
 
@@ -1043,7 +1039,7 @@ func Test_renderFindings_labels_a_closed_and_a_USD_account_and_a_payeeless_item_
 }
 
 func Test_findingLines_ends_the_id_line_of_an_ignored_unlinked_transfer_with_a_marker_under_the_all_view(t *testing.T) {
-	item := store.FindingItem{Account: "Visa", Currency: "CAD", Active: true, Payee: "P", Date: findingDay(2026, 7, 2), Amount: 100, Category: new("Bills"), Splits: 1}
+	item := store.FindingItem{Account: "Visa", Currency: "CAD", Active: true, Payee: "P", Date: utcDay(2026, 7, 2), Amount: 100, Category: new("Bills"), Splits: 1}
 	group := report.FindingsGroup{Type: finding.UnlinkedTransfer, Findings: []report.ListedFinding{
 		unlinkedFinding("unlinked-transfer:txn-1+txn-2", item, item),
 		withStatus(unlinkedFinding("unlinked-transfer:txn-3+txn-4", item, item), finding.StatusIgnored),

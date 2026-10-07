@@ -19,11 +19,6 @@ func balanceRow(name, accountType, currency string, cents int64, closed, active 
 	}
 }
 
-func cents(text string) *big.Int {
-	n, _ := new(big.Int).SetString(text, 10)
-	return n
-}
-
 func withNotInReports(a store.AccountBalance) store.AccountBalance {
 	a.NotInReports = true
 	return a

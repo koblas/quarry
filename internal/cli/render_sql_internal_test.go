@@ -9,14 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func sqlRow(texts ...string) []store.QueryValue {
-	row := make([]store.QueryValue, len(texts))
-	for i, text := range texts {
-		row[i] = store.QueryValue{Text: text}
-	}
-	return row
-}
-
 func Test_renderSQLTable(t *testing.T) {
 	text := store.QueryColumn{Name: "s", Type: "VARCHAR"}
 	integer := store.QueryColumn{Name: "n", Type: "INTEGER"}

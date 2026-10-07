@@ -40,7 +40,7 @@ var historySecurity = store.Security{ID: "sec-1", Name: "Acme Corp", Ticker: new
 
 func historyEvent(id, action string, cad int64) report.ACBEvent {
 	return report.ACBEvent{
-		ID: id, Date: time.Date(2025, time.March, 3, 0, 0, 0, 0, time.UTC), Account: "Margin", Action: action,
+		ID: id, Date: utcDay(2025, time.March, 3), Account: "Margin", Action: action,
 		Shares: big.NewRat(2, 1), Amount: new(int64(100)), Currency: "CAD", CAD: cad, Held: big.NewRat(8, 1), ACB: 500,
 	}
 }
@@ -73,7 +73,7 @@ func Test_renderACBHistory_prints_a_usd_events_rate_and_leaves_a_cad_events_blan
 
 func Test_renderACBHistory_prints_an_adjustment_with_no_account_shares_amount_or_rate(t *testing.T) {
 	adjustment := report.ACBEvent{
-		Date: time.Date(2025, time.June, 30, 0, 0, 0, 0, time.UTC), Action: report.ACBActionReinvestedDistribution,
+		Date: utcDay(2025, time.June, 30), Action: report.ACBActionReinvestedDistribution,
 		Shares: new(big.Rat), CAD: -2_000, Held: big.NewRat(8, 1), ACB: 52_000,
 	}
 	w := [10]int{10, 7, 23, 6, 6, 4, 6, 11, 6, 12}
@@ -87,7 +87,7 @@ func Test_renderACBHistory_prints_an_adjustment_with_no_account_shares_amount_or
 
 func Test_renderACBHistory_prints_the_excess_of_a_return_of_capital_above_the_acb_as_its_gain(t *testing.T) {
 	excess := report.ACBEvent{
-		Date: time.Date(2025, time.June, 30, 0, 0, 0, 0, time.UTC), Action: report.ACBActionReturnOfCapital,
+		Date: utcDay(2025, time.June, 30), Action: report.ACBActionReturnOfCapital,
 		Shares: new(big.Rat), CAD: 23_000, Held: big.NewRat(8, 1), Realized: true, Gain: 12_500,
 	}
 	w := [10]int{10, 7, 17, 6, 6, 4, 6, 11, 4, 12}

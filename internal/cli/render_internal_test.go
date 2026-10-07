@@ -6,7 +6,6 @@ package cli
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -232,7 +231,7 @@ func Test_renderStore_prints_the_transfers_count_line_without_one_sided_rows(t *
 	result := store.Result{
 		Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 		Validation: store.Validation{Transfers: store.TransferCheck{Paired: 2, OneSided: []store.OneSidedTransfer{
-			{Date: time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
+			{Date: utcDay(2019, 6, 14), Account: "Chequing", Currency: "CAD", Active: true, Amount: -50000},
 		}}},
 		Findings: finding.Counts{Open: 2},
 	}
@@ -291,7 +290,7 @@ func Test_renderStore_renders_the_store_rows_balances_splits_shares_and_transfer
 func Test_renderStore_ends_with_the_rates_line(t *testing.T) {
 	result := store.Result{
 		Counts: store.Counts{Transactions: 1},
-		Rates:  store.RatesSummary{First: time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), Last: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Added: 12},
+		Rates:  store.RatesSummary{First: utcDay(2005, 3, 1), Last: utcDay(2026, 3, 1), Added: 12},
 	}
 
 	got := renderStore(result, "/Users/dave")
@@ -300,7 +299,7 @@ func Test_renderStore_ends_with_the_rates_line(t *testing.T) {
 }
 
 func Test_ratesPhrase(t *testing.T) {
-	first, last := time.Date(2005, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	first, last := utcDay(2005, 3, 1), utcDay(2026, 3, 1)
 	cases := []struct {
 		name         string
 		rates        store.RatesSummary
@@ -560,7 +559,7 @@ func Test_accountLabel(t *testing.T) {
 }
 
 func Test_balanceMismatchRows(t *testing.T) {
-	day := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	day := utcDay(2026, 8, 31)
 
 	t.Run("single row needs no padding", func(t *testing.T) {
 		rows := balanceMismatchRows([]store.BalanceMismatch{
@@ -574,7 +573,7 @@ func Test_balanceMismatchRows(t *testing.T) {
 			{Name: "US Chequing", Currency: "USD", Active: true, StatementDate: day, Quarry: 831000, Quicken: 830000, Difference: 1000},
 			{
 				Name: "Visa Infinite", Currency: "CAD", Closed: true,
-				StatementDate: time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC), Quarry: -120417, Quicken: -118417, Difference: -2000,
+				StatementDate: utcDay(2026, 7, 15), Quarry: -120417, Quicken: -118417, Difference: -2000,
 			},
 		})
 		assert.Equal(t, []string{
@@ -585,7 +584,7 @@ func Test_balanceMismatchRows(t *testing.T) {
 }
 
 func Test_splitMismatchRows(t *testing.T) {
-	date := time.Date(2024, 3, 2, 0, 0, 0, 0, time.UTC)
+	date := utcDay(2024, 3, 2)
 
 	t.Run("single row needs no padding", func(t *testing.T) {
 		rows := splitMismatchRows([]store.SplitMismatch{
@@ -624,7 +623,7 @@ func Test_splitMismatchRows(t *testing.T) {
 }
 
 func Test_oneSidedRows(t *testing.T) {
-	date := time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC)
+	date := utcDay(2019, 6, 14)
 
 	t.Run("numeric link renders other account unknown", func(t *testing.T) {
 		rows := oneSidedRows([]store.OneSidedTransfer{
@@ -675,13 +674,13 @@ func Test_renderStoreFailure(t *testing.T) {
 			Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
 			Validation: store.Validation{
 				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
-					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
+					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: utcDay(2026, 8, 31), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
 				Splits: store.SplitCheck{Checked: 5},
 				Shares: store.ShareCheck{Checked: 7},
 				Transfers: store.TransferCheck{Paired: 1, OneSided: []store.OneSidedTransfer{
 					{
-						Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
+						Date: utcDay(2026, 8, 2), Account: "Chequing", Currency: "CAD", Active: true,
 						Payee: "Rent", Amount: -50000, OtherAccount: new("Old Visa"),
 					},
 				}},
@@ -759,7 +758,7 @@ func Test_renderStoreFailure(t *testing.T) {
 		result := store.Result{
 			Validation: store.Validation{
 				Balances: store.BalanceCheck{Checked: 2, Mismatched: []store.BalanceMismatch{
-					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Quarry: 100, Quicken: 200, Difference: -100},
+					{Name: "Chequing", Currency: "CAD", Active: true, StatementDate: utcDay(2026, 8, 31), Quarry: 100, Quicken: 200, Difference: -100},
 				}},
 				Splits: store.SplitCheck{Checked: 5},
 				Shares: store.ShareCheck{Checked: 3, Mismatched: []store.ShareMismatch{
@@ -871,11 +870,11 @@ func Test_renderStoreFailure_escapes_the_names_of_a_one_sided_leg_and_a_mismatch
 	result := store.Result{
 		Validation: store.Validation{
 			Balances: store.BalanceCheck{Checked: 1, Mismatched: []store.BalanceMismatch{
-				{Name: "Cheq\tuing", Currency: "CAD", Active: true, StatementDate: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)},
+				{Name: "Cheq\tuing", Currency: "CAD", Active: true, StatementDate: utcDay(2026, 8, 31)},
 			}},
 			Transfers: store.TransferCheck{OneSided: []store.OneSidedTransfer{
 				{
-					Date: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), Account: "Chequing", Currency: "CAD", Active: true,
+					Date: utcDay(2026, 8, 2), Account: "Chequing", Currency: "CAD", Active: true,
 					Payee: "Rent", Amount: -50000, OtherAccount: new("\tAccount Not Synced"),
 				},
 			}},
@@ -889,7 +888,7 @@ func Test_renderStoreFailure_escapes_the_names_of_a_one_sided_leg_and_a_mismatch
 }
 
 func Test_oneSidedRows_measure_widths_after_escaping(t *testing.T) {
-	date := time.Date(2019, 6, 14, 0, 0, 0, 0, time.UTC)
+	date := utcDay(2019, 6, 14)
 
 	rows := oneSidedRows([]store.OneSidedTransfer{
 		{Date: date, Account: "A\tB", Currency: "CAD", Active: true, Payee: "x", Amount: 100},
@@ -935,7 +934,7 @@ func Test_shareMismatchRows_pad_non_ASCII_names_by_runes(t *testing.T) {
 }
 
 func Test_balanceMismatchRows_pad_non_ASCII_labels_by_runes(t *testing.T) {
-	day := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	day := utcDay(2026, 8, 31)
 
 	rows := balanceMismatchRows([]store.BalanceMismatch{
 		{Name: "Épargne courante", Currency: "CAD", Active: true, StatementDate: day, Quarry: 831000, Quicken: 830000, Difference: 1000},
