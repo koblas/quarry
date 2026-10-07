@@ -34,14 +34,7 @@ func Test_status_counts_the_findings_from_the_same_read_as_the_rest_of_the_statu
 		findings: store.FindingList{Findings: []store.Finding{{ID: "duplicate:txn-3+txn-4", Type: finding.Duplicate}, {ID: "duplicate:txn-5+txn-6", Type: finding.Duplicate}}},
 	}
 	var stdout bytes.Buffer
-	env := cli.Env{
-		Stdout: &stdout, Stderr: &bytes.Buffer{},
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-		LoadConfig: func(string) (config.Config, error) { return config.Config{}, nil },
-		Now:        time.Now,
-	}
+	env := reportEnv(fake, &stdout, &bytes.Buffer{}, atWallClock, withConfig(config.Config{}))
 
 	err := cli.Execute(t.Context(), []string{"status"}, env)
 
@@ -53,15 +46,6 @@ func Test_status_counts_the_findings_from_the_same_read_as_the_rest_of_the_statu
 // the wrong zone or from a truncated duration reads one day too many.
 var ratesNow = time.Date(2026, 10, 2, 3, 30, 0, 0, time.UTC)
 
-// pinLocalZone makes zone the process-local zone for the test.
-func pinLocalZone(t *testing.T, zone *time.Location) {
-	t.Helper()
-	//nolint:gosmopolitan // the test swaps the process-local zone to pin the local date; Cleanup restores it
-	previous := time.Local
-	time.Local = zone                           //nolint:gosmopolitan // restored by Cleanup
-	t.Cleanup(func() { time.Local = previous }) //nolint:gosmopolitan // restores the zone swapped above
-}
-
 func ratesDay(month time.Month, day int) time.Time {
 	return time.Date(2026, month, day, 0, 0, 0, 0, time.UTC)
 }
@@ -69,16 +53,9 @@ func ratesDay(month time.Month, day int) time.Time {
 // runStatusWith runs quarry status (with --json when asJSON) over st at ratesNow and returns stdout.
 func runStatusWith(t *testing.T, st store.Status, asJSON bool) string {
 	t.Helper()
-	pinLocalZone(t, time.FixedZone("EDT", -4*60*60))
+	cli.UseZone(t, time.FixedZone("EDT", -4*60*60))
 	var stdout bytes.Buffer
-	env := cli.Env{
-		Stdout: &stdout, Stderr: &bytes.Buffer{},
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(statusStore{status: st})), nil
-		},
-		LoadConfig: func(string) (config.Config, error) { return config.Config{}, nil },
-		Now:        func() time.Time { return ratesNow },
-	}
+	env := reportEnv(statusStore{status: st}, &stdout, &bytes.Buffer{}, atTime(ratesNow), withConfig(config.Config{}))
 	args := []string{"status"}
 	if asJSON {
 		args = append(args, "--json")

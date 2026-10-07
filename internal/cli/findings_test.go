@@ -31,13 +31,7 @@ func executeFindings(t *testing.T, fake fakeReportStore, stdout, stderr io.Write
 // executeFindingsIgnoring runs findings with ignore as the config's findings.ignore.
 func executeFindingsIgnoring(t *testing.T, fake fakeReportStore, ignore []string, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
-		LoadConfig: func(string) (config.Config, error) { return config.Config{Ignore: ignore}, nil },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, withConfig(config.Config{Ignore: ignore}))
 	return cli.Execute(t.Context(), append([]string{"findings"}, args...), env)
 }
 
@@ -475,15 +469,7 @@ func Test_findings_csv_prints_the_header_alone_when_no_finding_is_listed(t *test
 
 func Test_findings_csv_keeps_config_warnings_on_stderr_and_out_of_stdout(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		Stdout: &stdout, Stderr: &stderr,
-		LoadConfig: func(string) (config.Config, error) {
-			return config.Config{Warnings: []string{"config.toml: unknown key findings.ignored"}}, nil
-		},
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fakeReportStore{})), nil
-		},
-	}
+	env := reportEnv(fakeReportStore{}, &stdout, &stderr, withConfig(config.Config{Warnings: []string{"config.toml: unknown key findings.ignored"}}))
 
 	err := cli.Execute(t.Context(), []string{"findings", "--csv"}, env)
 
@@ -651,13 +637,7 @@ func Test_findings_csv_gives_every_record_the_header_width_with_the_investment_c
 		},
 	}}
 	var stdout bytes.Buffer
-	env := cli.Env{
-		Stdout: &stdout, Stderr: &bytes.Buffer{},
-		LoadConfig: func(string) (config.Config, error) { return config.Config{NonRegistered: []string{"acct-1"}}, nil },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, &stdout, &bytes.Buffer{}, withConfig(config.Config{NonRegistered: []string{"acct-1"}}))
 
 	err := cli.Execute(t.Context(), []string{"findings", "--csv", "--status", "all"}, env)
 

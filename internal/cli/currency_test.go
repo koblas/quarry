@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
@@ -35,14 +34,7 @@ func cadConfig(string) (config.Config, error) { return config.Config{Currency: m
 
 // currencyEnv is an Env whose report opens an empty store and whose config leaves the currency at CAD.
 func currencyEnv(stdout, stderr *bytes.Buffer) cli.Env {
-	return cli.Env{
-		Stdout: stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fakeReportStore{})), nil
-		},
-		LoadConfig: cadConfig,
-	}
+	return reportEnv(fakeReportStore{}, stdout, stderr, atSpendNow)
 }
 
 // refusedEnv is an Env whose report factory fails, so a command that gets that far is not usage-refused.

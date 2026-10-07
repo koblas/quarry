@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +14,6 @@ import (
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,14 +25,7 @@ const holdingsCurrencyHelp = "add a column with each value in currency code: CAD
 
 // holdingsEnv is an Env whose config comes from load and whose report store is fake.
 func holdingsEnv(load func(string) (config.Config, error), fake fakeReportStore, stdout, stderr io.Writer) cli.Env {
-	return cli.Env{
-		LoadConfig: load,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	return reportEnv(fake, stdout, stderr, atSpendNow, withLoader(load))
 }
 
 func executeHoldings(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {

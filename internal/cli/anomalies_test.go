@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +14,6 @@ import (
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,14 +21,7 @@ import (
 
 func executeAnomalies(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atSpendNow)
 	return cli.Execute(t.Context(), append([]string{"anomalies"}, args...), env)
 }
 
@@ -46,12 +37,7 @@ func Test_anomalies_returns_the_report_fault(t *testing.T) {
 
 func Test_anomalies_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"anomalies"}, env)
 
@@ -61,12 +47,7 @@ func Test_anomalies_returns_the_report_factory_fault(t *testing.T) {
 
 func Test_anomalies_refuses_a_window_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"anomalies", "--since", "2024-13"}, env)
 
@@ -162,15 +143,6 @@ func Test_anomalies_reports_a_failed_stdout_write(t *testing.T) {
 
 const anomaliesEmpty = "no unusually large charges from 2026-01-01 to 2026-09-29"
 
-func leftOutAnomaliesWarning(name string) string {
-	return "account \"" + name + "\" is not used in reports in Quicken, so anomalies leaves it out; " +
-		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
-}
-
-func linkedAnomaliesWarning(name string) string {
-	return "account \"" + name + "\" uses linked account tracking in Quicken, so anomalies leaves it out, as Quicken's reports do"
-}
-
 // ordinaryCharge is three 2025 charges of a payee and a 100.00 one on 2026-03-02, not above twice their median.
 func ordinaryCharge() []store.Charge {
 	return payeeHistory("Bell Canada", time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC), 10000, 9000, 9300, 9605)
@@ -233,7 +205,7 @@ func Test_anomalies_prints_each_warning_on_stderr_and_in_the_json_warnings(t *te
 			name:    "an account not in reports and one under linked tracking, each once in the order named",
 			charges: inChequing,
 			args:    []string{"--account", linkedID, "--account", "Old Card", "--account", chequingID, "--account", bothID, "--account", "old card"},
-			want:    []string{linkedAnomaliesWarning("Netskope 401(k)"), leftOutAnomaliesWarning("Old Card"), linkedAnomaliesWarning("Old 401(k)")},
+			want:    []string{linkedTrackingWarning("anomalies", "Netskope 401(k)"), leftOutWarning("anomalies", "Old Card"), linkedTrackingWarning("anomalies", "Old 401(k)")},
 		},
 		{
 			name:    "the store's span when no charge falls in the period",
@@ -266,7 +238,7 @@ func Test_anomalies_prints_each_warning_on_stderr_and_in_the_json_warnings(t *te
 			charges: store.Charges{Transactions: span(t, "2019-03-02", "2024-11-30")},
 			args:    []string{"--account", "Old Card", "--account", chequingID},
 			want: []string{
-				leftOutAnomaliesWarning("Old Card"),
+				leftOutWarning("anomalies", "Old Card"),
 				anomaliesEmpty + " in the named accounts; their transactions run 2019-03-02 to 2024-11-30",
 			},
 		},
@@ -274,13 +246,13 @@ func Test_anomalies_prints_each_warning_on_stderr_and_in_the_json_warnings(t *te
 			name:    "only the left-out warnings when every named account is left out",
 			charges: store.Charges{Transactions: span(t, "2019-03-02", "2024-11-30")},
 			args:    []string{"--account", linkedID, "--account", "Old Card"},
-			want:    []string{linkedAnomaliesWarning("Netskope 401(k)"), leftOutAnomaliesWarning("Old Card")},
+			want:    []string{linkedTrackingWarning("anomalies", "Netskope 401(k)"), leftOutWarning("anomalies", "Old Card")},
 		},
 		{
 			name:    "only the left-out warning when every named account is left out and the store is empty",
 			charges: store.Charges{},
 			args:    []string{"--account", oldBankID},
-			want:    []string{leftOutAnomaliesWarning("Old Bank")},
+			want:    []string{leftOutWarning("anomalies", "Old Bank")},
 		},
 		{
 			name:    "no note when charges were checked but none is unusual",
@@ -323,14 +295,7 @@ func Test_anomalies_reads_the_charges_once_and_takes_the_empty_note_from_that_re
 // executeAnomaliesIn runs anomalies over fake with a config whose reporting.currency is cfg.
 func executeAnomaliesIn(t *testing.T, cfg money.Currency, fake fakeReportStore, stdout, stderr *bytes.Buffer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
-		Now:        func() time.Time { return spendNow },
-		LoadConfig: func(string) (config.Config, error) { return config.Config{Currency: cfg}, nil },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atSpendNow, withConfig(config.Config{Currency: cfg}))
 	return cli.Execute(t.Context(), append([]string{"anomalies"}, args...), env)
 }
 
@@ -392,7 +357,7 @@ func Test_anomalies_prints_the_left_out_account_warning_before_the_unconverted_c
 		early.Rows[i].AmountUSD, early.Rows[i].USDCAD = nil, 0
 	}
 	want := []string{
-		leftOutAnomaliesWarning("Old Card"),
+		leftOutWarning("anomalies", "Old Card"),
 		"1 charge dated before 2026-04-01, the first exchange rate in the store, is listed in CAD, not converted to USD",
 	}
 	args := []string{"--account", "Old Card", "--account", chequingID}

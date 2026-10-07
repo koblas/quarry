@@ -2,13 +2,11 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"regexp"
 	"testing"
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -347,14 +345,7 @@ func advancingClock() func() time.Time {
 
 func executeAtAdvancingClock(t *testing.T, command string, fake fakeReportStore, stdout *bytes.Buffer) error {
 	t.Helper()
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     stdout, Stderr: &bytes.Buffer{},
-		Now: advancingClock(),
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, &bytes.Buffer{}, withClock(advancingClock()))
 	return cli.Execute(t.Context(), []string{command}, env)
 }
 

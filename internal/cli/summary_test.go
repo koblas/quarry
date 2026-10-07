@@ -3,7 +3,6 @@ package cli_test
 import (
 	"bytes"
 	"cmp"
-	"context"
 	"encoding/json"
 	"io"
 	"strconv"
@@ -14,7 +13,6 @@ import (
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/platform/money"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,14 +23,7 @@ import (
 func executeSummary(t *testing.T, fake fakeReportStore, load cli.ConfigLoader, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
 	fake.summary.Status.Run.Snapshot.TakenAt = cmp.Or(fake.summary.Status.Run.Snapshot.TakenAt, spendNow)
-	env := cli.Env{
-		LoadConfig: load,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atSpendNow, withLoader(load))
 	return cli.Execute(t.Context(), append([]string{"summary"}, args...), env)
 }
 

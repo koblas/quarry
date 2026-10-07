@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"testing"
@@ -11,7 +10,6 @@ import (
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,14 +20,7 @@ var utcMinus5 = time.FixedZone("UTC-5", -5*60*60)
 
 func executeSpend(t *testing.T, fake fakeReportStore, now time.Time, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return now },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atTime(now))
 	return cli.Execute(t.Context(), append([]string{"spend"}, args...), env)
 }
 
@@ -88,14 +79,7 @@ func Test_spend_refuses_a_by_that_names_no_grouping_before_reading_the_store(t *
 
 func Test_spend_refuses_a_by_that_names_no_grouping_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now: time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return nil, errStoreRead
-		},
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"spend", "--by", "vendor"}, env)
 
@@ -134,12 +118,7 @@ func Test_spend_returns_the_report_fault(t *testing.T) {
 
 func Test_spend_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"spend"}, env)
 
@@ -188,15 +167,6 @@ func withSpending(fake fakeReportStore) fakeReportStore {
 	return fake
 }
 
-func leftOutWarning(name string) string {
-	return "account \"" + name + "\" is not used in reports in Quicken, so spend leaves it out; " +
-		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
-}
-
-func linkedTrackingWarning(name string) string {
-	return "account \"" + name + "\" uses linked account tracking in Quicken, so spend leaves it out, as Quicken's reports do"
-}
-
 func Test_spend_captions_the_named_accounts(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -239,12 +209,12 @@ func Test_spend_json_puts_w2_in_warnings_unprefixed_before_w1(t *testing.T) {
 
 	require.NoError(t, err)
 	const w1 = "2 splits carry more than one tag, so the rows add up to more than the total"
-	warnings, err := json.Marshal([]string{leftOutWarning("Old Card"), w1})
+	warnings, err := json.Marshal([]string{leftOutWarning("spend", "Old Card"), w1})
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"since":"2026-01-01","until":"2026-09-29","by":"tag","currency":"CAD",
 		"account_filter":[{"id":"acct-old","name":"Old Card"}],"rows":[],"totals":[],
 		"warnings":`+string(warnings)+`}`, stdout.String())
-	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+w1+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("spend", "Old Card")+"\nquarry: warning: "+w1+"\n", stderr.String())
 }
 
 func Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_given(t *testing.T) {
@@ -254,7 +224,7 @@ func Test_spend_warns_once_per_named_account_left_out_of_reports_in_the_order_gi
 		"--account", "Old Card", "--account", chequingID, "--account", oldBankID, "--account", "old card")
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+leftOutWarning("Old Bank")+"\n",
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("spend", "Old Card")+"\nquarry: warning: "+leftOutWarning("spend", "Old Bank")+"\n",
 		stderr.String())
 }
 
@@ -265,8 +235,8 @@ func Test_spend_warns_about_a_linked_tracking_account_in_the_order_given_among_t
 		"--account", "Old Card", "--account", linkedID, "--account", oldBankID, "--account", chequingID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+
-		"\nquarry: warning: "+leftOutWarning("Old Bank")+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("spend", "Old Card")+"\nquarry: warning: "+linkedTrackingWarning("spend", "Netskope 401(k)")+
+		"\nquarry: warning: "+leftOutWarning("spend", "Old Bank")+"\n", stderr.String())
 }
 
 func Test_spend_warns_only_that_linked_tracking_leaves_out_an_account_that_is_also_not_in_reports(t *testing.T) {
@@ -275,7 +245,7 @@ func Test_spend_warns_only_that_linked_tracking_leaves_out_an_account_that_is_al
 	err := executeSpend(t, withSpending(namedAccounts()), spendNow, &stdout, &stderr, "--account", bothID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("Old 401(k)")+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("spend", "Old 401(k)")+"\n", stderr.String())
 }
 
 func Test_spend_json_lists_a_linked_tracking_warning_before_a_left_out_of_reports_one_unprefixed(t *testing.T) {
@@ -289,7 +259,7 @@ func Test_spend_json_lists_a_linked_tracking_warning_before_a_left_out_of_report
 		Warnings []string `json:"warnings"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	assert.Equal(t, []string{linkedTrackingWarning("Netskope 401(k)"), leftOutWarning("Old Card")}, doc.Warnings)
+	assert.Equal(t, []string{linkedTrackingWarning("spend", "Netskope 401(k)"), leftOutWarning("spend", "Old Card")}, doc.Warnings)
 }
 
 func Test_spend_does_not_warn_about_an_account_in_reports(t *testing.T) {
@@ -338,14 +308,7 @@ func Test_spend_reads_in_the_currency_the_resolver_picks(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var got store.SpendingParams
 			var stdout, stderr bytes.Buffer
-			env := cli.Env{
-				Stdout: &stdout, Stderr: &stderr,
-				Now:        func() time.Time { return spendNow },
-				LoadConfig: func(string) (config.Config, error) { return config.Config{Currency: c.config}, nil },
-				NewReport: func(context.Context, string) (*report.Server, error) {
-					return report.NewServer(report.WithStore(fakeReportStore{gotSpending: &got})), nil
-				},
-			}
+			env := reportEnv(fakeReportStore{gotSpending: &got}, &stdout, &stderr, atSpendNow, withConfig(config.Config{Currency: c.config}))
 
 			err := cli.Execute(t.Context(), append([]string{"spend"}, c.args...), env)
 
@@ -421,7 +384,7 @@ func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left
 	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", "Old Card", "--account", oldBankID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+leftOutWarning("Old Bank")+"\n",
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("spend", "Old Card")+"\nquarry: warning: "+leftOutWarning("spend", "Old Bank")+"\n",
 		stderr.String())
 }
 
@@ -431,7 +394,7 @@ func Test_spend_says_nothing_of_an_empty_window_when_every_named_account_is_left
 	err := executeSpend(t, namedAccounts(), spendNow, &stdout, &stderr, "--account", "Old Card", "--account", linkedID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+"\n",
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("spend", "Old Card")+"\nquarry: warning: "+linkedTrackingWarning("spend", "Netskope 401(k)")+"\n",
 		stderr.String())
 }
 
@@ -443,7 +406,7 @@ func Test_spend_puts_the_empty_window_note_after_the_linked_tracking_warning_whe
 	err := executeSpend(t, fake, spendNow, &stdout, &stderr, "--account", linkedID, "--account", chequingID)
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("Netskope 401(k)")+"\nquarry: warning: "+emptyE1a+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+linkedTrackingWarning("spend", "Netskope 401(k)")+"\nquarry: warning: "+emptyE1a+"\n", stderr.String())
 }
 
 func Test_spend_puts_the_empty_window_note_after_the_left_out_of_reports_warnings(t *testing.T) {
@@ -455,12 +418,12 @@ func Test_spend_puts_the_empty_window_note_after_the_left_out_of_reports_warning
 		"--account", "Old Card", "--account", chequingID, "--json")
 
 	require.NoError(t, err)
-	assert.Equal(t, "quarry: warning: "+leftOutWarning("Old Card")+"\nquarry: warning: "+emptyE1a+"\n", stderr.String())
+	assert.Equal(t, "quarry: warning: "+leftOutWarning("spend", "Old Card")+"\nquarry: warning: "+emptyE1a+"\n", stderr.String())
 	var doc struct {
 		Warnings []string `json:"warnings"`
 	}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &doc))
-	assert.Equal(t, []string{leftOutWarning("Old Card"), emptyE1a}, doc.Warnings)
+	assert.Equal(t, []string{leftOutWarning("spend", "Old Card"), emptyE1a}, doc.Warnings)
 }
 
 func Test_spend_says_nothing_of_an_empty_window_when_a_currency_nets_to_zero(t *testing.T) {
@@ -651,14 +614,7 @@ func Test_spend_refuses_a_period_it_cannot_use_before_reading_the_store(t *testi
 
 func Test_spend_refuses_a_bad_period_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return nil, errStoreRead
-		},
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atSpendNow)
 
 	err := cli.Execute(t.Context(), []string{"spend", "--since", "2024-13"}, env)
 

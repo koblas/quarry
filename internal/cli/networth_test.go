@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"math/big"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,14 +57,7 @@ func Test_networth_refuses_an_as_of_it_cannot_use_before_opening_the_store(t *te
 
 func executeNetWorth(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atSpendNow)
 	return cli.Execute(t.Context(), append([]string{"networth", "--as-of", "2026-03-12"}, args...), env)
 }
 

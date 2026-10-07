@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/money"
-	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,14 +18,7 @@ import (
 
 func executeRecurring(t *testing.T, fake fakeReportStore, stdout, stderr io.Writer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     stdout, Stderr: stderr,
-		Now: func() time.Time { return spendNow },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atSpendNow)
 	return cli.Execute(t.Context(), append([]string{"recurring"}, args...), env)
 }
 
@@ -100,12 +91,7 @@ func Test_recurring_json_returns_the_report_fault_with_nothing_on_stdout(t *test
 
 func Test_recurring_refuses_a_window_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"recurring", "--since", "2024-13"}, env)
 
@@ -116,12 +102,7 @@ func Test_recurring_refuses_a_window_before_opening_the_report(t *testing.T) {
 
 func Test_recurring_returns_the_report_factory_fault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{
-		LoadConfig: cadConfig,
-		Stdout:     &stdout, Stderr: &stderr,
-		Now:       time.Now,
-		NewReport: func(context.Context, string) (*report.Server, error) { return nil, errStoreRead },
-	}
+	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
 
 	err := cli.Execute(t.Context(), []string{"recurring"}, env)
 
@@ -188,15 +169,6 @@ func Test_recurring_reports_a_failed_stdout_write(t *testing.T) {
 
 const recurringEmpty = "no recurring charges from 2026-01-01 to 2026-09-29"
 
-func leftOutRecurringWarning(name string) string {
-	return "account \"" + name + "\" is not used in reports in Quicken, so recurring leaves it out; " +
-		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
-}
-
-func linkedRecurringWarning(name string) string {
-	return "account \"" + name + "\" uses linked account tracking in Quicken, so recurring leaves it out, as Quicken's reports do"
-}
-
 // chargesOn is four monthly Netflix.com charges, all on the account with id.
 func chargesOn(id string) store.Charges {
 	charges := monthlyCharges("Netflix.com", 999, 999, 999, 999)
@@ -246,7 +218,7 @@ func Test_recurring_prints_each_warning_on_stderr_and_in_the_json_warnings(t *te
 			name:    "an account not in reports and one under linked tracking, each once in the order named",
 			charges: chargesOn(chequingID),
 			args:    []string{"--account", linkedID, "--account", "Old Card", "--account", chequingID, "--account", bothID, "--account", "old card"},
-			want:    []string{linkedRecurringWarning("Netskope 401(k)"), leftOutRecurringWarning("Old Card"), linkedRecurringWarning("Old 401(k)")},
+			want:    []string{linkedTrackingWarning("recurring", "Netskope 401(k)"), leftOutWarning("recurring", "Old Card"), linkedTrackingWarning("recurring", "Old 401(k)")},
 		},
 		{
 			name:    "the store's span when no series runs in the period",
@@ -279,7 +251,7 @@ func Test_recurring_prints_each_warning_on_stderr_and_in_the_json_warnings(t *te
 			charges: store.Charges{Transactions: span(t, "2019-03-02", "2024-11-30")},
 			args:    []string{"--account", "Old Card", "--account", chequingID},
 			want: []string{
-				leftOutRecurringWarning("Old Card"),
+				leftOutWarning("recurring", "Old Card"),
 				recurringEmpty + " in the named accounts; their transactions run 2019-03-02 to 2024-11-30",
 			},
 		},
@@ -287,13 +259,13 @@ func Test_recurring_prints_each_warning_on_stderr_and_in_the_json_warnings(t *te
 			name:    "only the left-out warnings when every named account is left out",
 			charges: store.Charges{Transactions: span(t, "2019-03-02", "2024-11-30")},
 			args:    []string{"--account", linkedID, "--account", "Old Card"},
-			want:    []string{linkedRecurringWarning("Netskope 401(k)"), leftOutRecurringWarning("Old Card")},
+			want:    []string{linkedTrackingWarning("recurring", "Netskope 401(k)"), leftOutWarning("recurring", "Old Card")},
 		},
 		{
 			name:    "only the left-out warning when every named account is left out and the store is empty",
 			charges: store.Charges{},
 			args:    []string{"--account", oldBankID},
-			want:    []string{leftOutRecurringWarning("Old Bank")},
+			want:    []string{leftOutWarning("recurring", "Old Bank")},
 		},
 		{
 			name:    "no note when a series is listed",
@@ -354,14 +326,7 @@ func Test_recurring_text_prints_caption_and_header_only_for_an_empty_period(t *t
 // executeRecurringIn runs recurring over fake with a config whose reporting.currency is cfg.
 func executeRecurringIn(t *testing.T, cfg money.Currency, fake fakeReportStore, stdout, stderr *bytes.Buffer, args ...string) error {
 	t.Helper()
-	env := cli.Env{
-		Stdout: stdout, Stderr: stderr,
-		Now:        func() time.Time { return spendNow },
-		LoadConfig: func(string) (config.Config, error) { return config.Config{Currency: cfg}, nil },
-		NewReport: func(context.Context, string) (*report.Server, error) {
-			return report.NewServer(report.WithStore(fake)), nil
-		},
-	}
+	env := reportEnv(fake, stdout, stderr, atSpendNow, withConfig(config.Config{Currency: cfg}))
 	return cli.Execute(t.Context(), append([]string{"recurring", "--since", "2000"}, args...), env)
 }
 
@@ -420,7 +385,7 @@ func Test_recurring_prints_the_left_out_account_warning_before_the_unconverted_s
 	}
 	charges.FirstRate = time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
 	want := []string{
-		leftOutRecurringWarning("Old Card"),
+		leftOutWarning("recurring", "Old Card"),
 		"1 series with a charge dated before 2026-04-01, the first exchange rate in the store, is listed in USD, not converted to CAD",
 	}
 	args := []string{"--since", "2000", "--account", "Old Card", "--account", chequingID}
