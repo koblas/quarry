@@ -752,54 +752,18 @@ func Test_run_spend_rejects_a_period_it_cannot_use(t *testing.T) {
 }
 
 func Test_run_report_commands_refuse_when_home_is_unset(t *testing.T) {
-	cases := []struct {
-		command    string
-		wantStderr string
-	}{
-		{command: "spend", wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry spend again\n"},
-		{
-			command:    "cashflow",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry cashflow again\n",
-		},
-		{
-			command:    "recurring",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry recurring again\n",
-		},
-		{
-			command:    "anomalies",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry anomalies again\n",
-		},
-		{
-			command:    "search",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry search again\n",
-		},
-		{
-			command:    "holdings",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry holdings again\n",
-		},
-		{
-			command:    "networth",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry networth again\n",
-		},
-		{
-			command:    "acb",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry acb again\n",
-		},
-		{
-			command:    "summary",
-			wantStderr: "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry summary again\n",
-		},
-	}
+	commands := []string{"spend", "cashflow", "recurring", "anomalies", "search", "holdings", "networth", "acb", "summary"}
 
-	for _, c := range cases {
-		t.Run(c.command, func(t *testing.T) {
+	for _, command := range commands {
+		t.Run(command, func(t *testing.T) {
 			t.Setenv("HOME", "")
 
-			exitCode, stdout, stderr := runCapture(context.Background(), []string{c.command})
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{command})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
-			assert.Equal(t, c.wantStderr, stderr.String())
+			assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry "+command+" again\n",
+				stderr.String())
 		})
 	}
 }

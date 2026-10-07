@@ -281,55 +281,40 @@ var (
 	futureRate = store.Rate{Date: time.Date(2099, time.January, 2, 0, 0, 0, 0, time.UTC), USDCAD: money.Rate(1_600_000), Series: "FXUSDCAD"}
 )
 
-func Test_run_accounts_warns_of_the_missing_rate_and_shows_no_rate_in_both_forms_and_currencies(t *testing.T) {
-	cases := []struct {
-		name  string
-		rates []store.Rate
-		args  []string
-		want  string
-	}{
-		{name: "no rates in CAD", args: nil, want: noRatesCADWarning},
-		{name: "no rates in USD", args: []string{"--currency", "USD"}, want: noRatesUSDWarning},
-		{name: "rates only after today in CAD", rates: []store.Rate{futureRate}, args: nil, want: futureCADWarning},
-		{name: "rates only after today in USD", rates: []store.Rate{futureRate}, args: []string{"--currency", "USD"}, want: futureUSDWarning},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			seedAccounts(t, []store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}, c.rates...)
-
-			got := runAccountsBothForms(t, c.args...)
-
-			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.textErr)
-			assert.Contains(t, got.text, "no rate\n")
-			assert.Equal(t, []string{c.want}, warningsOf(t, got.json))
-			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.jsonErr)
-		})
-	}
-}
-
-func Test_run_accounts_warns_of_the_missing_rate_for_an_investment_account_in_both_forms(t *testing.T) {
+func Test_run_accounts_warns_of_the_missing_rate_and_shows_no_rate_in_both_forms(t *testing.T) {
+	cadAndUSDChequing := []store.Account{chequingAccount("acct-cad", 1), usdChequingAccount("acct-usd", 2)}
 	cases := []struct {
 		name     string
 		accounts []store.Account
 		rates    []store.Rate
 		args     []string
 		want     string
+		noRate   string
 	}{
+		{name: "no rates in CAD", accounts: cadAndUSDChequing, want: noRatesCADWarning, noRate: "no rate\n"},
+		{name: "no rates in USD", accounts: cadAndUSDChequing, args: []string{"--currency", "USD"}, want: noRatesUSDWarning, noRate: "no rate\n"},
+		{
+			name: "rates only after today in CAD", accounts: cadAndUSDChequing, rates: []store.Rate{futureRate},
+			want: futureCADWarning, noRate: "no rate\n",
+		},
+		{
+			name: "rates only after today in USD", accounts: cadAndUSDChequing, rates: []store.Rate{futureRate},
+			args: []string{"--currency", "USD"}, want: futureUSDWarning, noRate: "no rate\n",
+		},
 		{
 			name:     "a USD brokerage beside CAD chequing with no rates in CAD",
 			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
-			want:     noRatesCADWarning,
+			want:     noRatesCADWarning, noRate: "no rate  unclassified\n",
 		},
 		{
 			name:     "a CAD brokerage beside USD chequing with no rates in USD",
 			accounts: []store.Account{usdChequingAccount("acct-usd", 1), brokerageAccount("acct-brk", 2, "CAD")},
-			args:     []string{"--currency", "USD"}, want: noRatesUSDWarning,
+			args:     []string{"--currency", "USD"}, want: noRatesUSDWarning, noRate: "no rate  unclassified\n",
 		},
 		{
 			name:     "a USD brokerage beside CAD chequing with rates only after today",
 			accounts: []store.Account{chequingAccount("acct-cad", 1), brokerageAccount("acct-brk", 2, "USD")},
-			rates:    []store.Rate{futureRate}, want: futureCADWarning,
+			rates:    []store.Rate{futureRate}, want: futureCADWarning, noRate: "no rate  unclassified\n",
 		},
 	}
 
@@ -340,7 +325,7 @@ func Test_run_accounts_warns_of_the_missing_rate_for_an_investment_account_in_bo
 			got := runAccountsBothForms(t, c.args...)
 
 			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.textErr)
-			assert.Contains(t, got.text, "no rate  unclassified\n")
+			assert.Contains(t, got.text, c.noRate)
 			assert.Equal(t, []string{c.want}, warningsOf(t, got.json))
 			assert.Equal(t, "quarry: warning: "+c.want+"\n", got.jsonErr)
 		})
@@ -928,24 +913,18 @@ func jsonWarnings(t *testing.T, args ...string) ([]string, string) {
 	return doc.Warnings, stderr.String()
 }
 
-func Test_run_accounts_json_names_the_config_by_absolute_path_in_a_no_account_warning(t *testing.T) {
-	home := newHome(t)
-	syncUnmatchedFixture(t, home)
+func Test_run_accounts_and_findings_json_name_the_config_by_absolute_path_in_a_no_account_warning(t *testing.T) {
+	for _, command := range []string{"accounts", "findings"} {
+		t.Run(command, func(t *testing.T) {
+			home := newHome(t)
+			syncUnmatchedFixture(t, home)
 
-	warnings, stderr := jsonWarnings(t, "accounts", "--json")
+			warnings, stderr := jsonWarnings(t, command, "--json")
 
-	assert.Equal(t, unmatchedWarningsAt(configPath(home)), warnings)
-	assert.Equal(t, unmatchedStderr, stderr)
-}
-
-func Test_run_findings_json_names_the_config_by_absolute_path_in_a_no_account_warning(t *testing.T) {
-	home := newHome(t)
-	syncUnmatchedFixture(t, home)
-
-	warnings, stderr := jsonWarnings(t, "findings", "--json")
-
-	assert.Equal(t, unmatchedWarningsAt(configPath(home)), warnings)
-	assert.Equal(t, unmatchedStderr, stderr)
+			assert.Equal(t, unmatchedWarningsAt(configPath(home)), warnings)
+			assert.Equal(t, unmatchedStderr, stderr)
+		})
+	}
 }
 
 func Test_run_accounts_warns_nothing_about_a_listed_closed_account_without_all(t *testing.T) {

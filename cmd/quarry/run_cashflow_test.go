@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -772,6 +773,7 @@ func Test_run_cashflow_without_rates_warns_only_when_a_conversion_is_needed(t *t
 		name     string
 		accounts []store.Account
 		splits   []spendSplit
+		currency []string
 		want     []string
 	}{
 		{
@@ -788,49 +790,26 @@ func Test_run_cashflow_without_rates_warns_only_when_a_conversion_is_needed(t *t
 			accounts: []store.Account{chequingAccount("acct-cad", 1)},
 			splits:   []spendSplit{{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 100000}},
 		},
+		{
+			name:     "all-USD data in USD",
+			accounts: []store.Account{usdChequingAccount("acct-usd", 2)},
+			splits:   []spendSplit{{id: "s01", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 3, 10), cents: 8000}},
+			currency: []string{"--currency", "USD"},
+		},
+		{
+			name:     "all-CAD data in USD",
+			accounts: []store.Account{chequingAccount("acct-cad", 1)},
+			splits:   []spendSplit{{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 100000}},
+			currency: []string{"--currency", "USD"},
+			want:     []string{noRatesLine},
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home := newHome(t)
 			replaceStore(t, home, cashFlowRows(c.accounts, c.splits...))
-
-			exitCode, _, stderr := runSpendCapture(context.Background(), []string{"cashflow", "--since", "2026-03", "--until", "2026-03"})
-			doc, echoedStderr := runCashFlowJSON(t, "--since", "2026-03", "--until", "2026-03")
-
-			require.Equal(t, 0, exitCode, stderr.String())
-			assert.Equal(t, warningLines(c.want), stderr.String())
-			assert.Equal(t, warningLines(c.want), echoedStderr)
-			assert.ElementsMatch(t, c.want, doc.Warnings)
-		})
-	}
-}
-
-func Test_run_cashflow_in_usd_without_rates_warns_only_when_a_conversion_is_needed(t *testing.T) {
-	cases := []struct {
-		name    string
-		account store.Account
-		split   spendSplit
-		want    []string
-	}{
-		{
-			name:    "all-USD data in USD",
-			account: usdChequingAccount("acct-usd", 2),
-			split:   spendSplit{id: "s01", account: "acct-usd", category: "cat-salary", currency: "USD", day: day(2026, 3, 10), cents: 8000},
-		},
-		{
-			name:    "all-CAD data in USD",
-			account: chequingAccount("acct-cad", 1),
-			split:   spendSplit{id: "s01", account: "acct-cad", category: "cat-salary", currency: "CAD", day: day(2026, 3, 10), cents: 100000},
-			want:    []string{noRatesLine},
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			home := newHome(t)
-			replaceStore(t, home, cashFlowRows([]store.Account{c.account}, c.split))
-			args := []string{"--currency", "USD", "--since", "2026-03", "--until", "2026-03"}
+			args := append(slices.Clone(c.currency), "--since", "2026-03", "--until", "2026-03")
 
 			exitCode, _, stderr := runSpendCapture(context.Background(), append([]string{"cashflow"}, args...))
 			doc, echoedStderr := runCashFlowJSON(t, args...)
