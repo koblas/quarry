@@ -81,10 +81,6 @@ func Test_run_mcp_anomalies_refuses_a_future_since_in_its_own_words(t *testing.T
 	assert.Equal(t, anomaliesLogPrefix+windowRefusedLog+"\n", peer.stderr.String())
 }
 
-func Test_run_mcp_anomalies_refuses_an_account_without_its_name_on_stderr(t *testing.T) {
-	refuseAccountKeepingItsNameOffStderr(t, "anomalies", anomaliesLogPrefix)
-}
-
 const (
 	recurringChargesLogPrefix      = "quarry: mcp: recurring_charges: "
 	linkedLineForRecurringCharges  = `account "Linked" uses linked account tracking in Quicken, so recurring_charges leaves it out, as Quicken's reports do`
@@ -152,10 +148,6 @@ func Test_run_mcp_recurring_charges_refuses_a_future_since_in_its_own_words(t *t
 	assert.True(t, result.IsError)
 	assert.Equal(t, "since 2099 is after today; recurring_charges lists charges up to today only, so pass an earlier since", textOf(result))
 	assert.Equal(t, recurringChargesLogPrefix+windowRefusedLog+"\n", peer.stderr.String())
-}
-
-func Test_run_mcp_recurring_charges_refuses_an_account_without_its_name_on_stderr(t *testing.T) {
-	refuseAccountKeepingItsNameOffStderr(t, "recurring_charges", recurringChargesLogPrefix)
 }
 
 func Test_run_mcp_recurring_charges_words_its_left_out_warnings_with_the_tool_name(t *testing.T) {

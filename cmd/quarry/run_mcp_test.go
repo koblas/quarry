@@ -1158,3 +1158,19 @@ func refuseAccountKeepingItsNameOffStderr(t *testing.T, tool, logPrefix string) 
 		})
 	}
 }
+
+func Test_run_mcp_tools_refuse_an_account_without_its_name_on_stderr(t *testing.T) {
+	cases := []struct{ tool, logPrefix string }{
+		{"anomalies", anomaliesLogPrefix},
+		{"recurring_charges", recurringChargesLogPrefix},
+		{"cash_flow", cashFlowLogPrefix},
+		{"search_transactions", searchLogPrefix},
+		{"holdings", holdingsLogPrefix},
+	}
+
+	for _, c := range cases {
+		t.Run(c.tool, func(t *testing.T) {
+			refuseAccountKeepingItsNameOffStderr(t, c.tool, c.logPrefix)
+		})
+	}
+}

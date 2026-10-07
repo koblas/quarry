@@ -433,10 +433,6 @@ func Test_run_mcp_holdings_refuses_an_as_of_it_cannot_use_in_mcp_words(t *testin
 	}
 }
 
-func Test_run_mcp_holdings_refuses_an_account_without_its_name_on_stderr(t *testing.T) {
-	refuseAccountKeepingItsNameOffStderr(t, "holdings", holdingsLogPrefix)
-}
-
 const netWorthLogPrefix = "quarry: mcp: net_worth: "
 
 // netWorthSeeder is seed as the store hook of a toolDocumentRun; seed sets the HOME both surfaces read.

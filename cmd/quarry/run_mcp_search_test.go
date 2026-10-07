@@ -97,10 +97,6 @@ func Test_run_mcp_search_transactions_cuts_to_its_limit_with_the_mcp_cut_line(t 
 	}
 }
 
-func Test_run_mcp_search_transactions_refuses_an_account_without_its_name_on_stderr(t *testing.T) {
-	refuseAccountKeepingItsNameOffStderr(t, "search_transactions", searchLogPrefix)
-}
-
 // replaceSearchStore seeds home with searchStore, in the shape runBothSurfaces' store hook takes.
 func replaceSearchStore(t *testing.T, home string) {
 	t.Helper()

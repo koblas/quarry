@@ -1159,20 +1159,6 @@ func Test_skill_run_cell_finds_the_row_of_section_4_for_a_question(t *testing.T)
 	assert.Equal(t, "`quarry spend --by category\\|payee --since <date> --json`", cell)
 }
 
-func Test_skill_run_cell_reports_a_question_with_no_row_in_section_4(t *testing.T) {
-	skill := "## 4. Pick the command\n\n| Spending | `quarry spend` |\n\n## 5. Next\n\n| Elsewhere | `quarry elsewhere` |\n"
-
-	_, err := skillRunCell(skill, "Elsewhere")
-
-	require.ErrorIs(t, err, errNoSkillRow)
-}
-
-func Test_skill_run_cell_reports_a_skill_with_no_section_4(t *testing.T) {
-	_, err := skillRunCell("## 5. Next\n\n| Spending | `quarry spend` |\n", "Spending")
-
-	require.ErrorIs(t, err, errNoSkillRow)
-}
-
 func Test_argv_matches_the_cell_through_an_alternative_and_before_a_placeholder(t *testing.T) {
 	const cell = "`quarry spend --by category\\|payee --since <date> --json`"
 
@@ -1198,6 +1184,25 @@ func Test_argv_mismatches_name_each_departure_from_the_cell(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			assert.Equal(t, c.want, argvMismatches(c.cell, c.argv))
+		})
+	}
+}
+
+func Test_skill_run_cell_reports_a_question_it_cannot_find(t *testing.T) {
+	cases := []struct{ name, skill, question string }{
+		{
+			"a_question_with_no_row_in_section_4",
+			"## 4. Pick the command\n\n| Spending | `quarry spend` |\n\n## 5. Next\n\n| Elsewhere | `quarry elsewhere` |\n",
+			"Elsewhere",
+		},
+		{"a_skill_with_no_section_4", "## 5. Next\n\n| Spending | `quarry spend` |\n", "Spending"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := skillRunCell(c.skill, c.question)
+
+			require.ErrorIs(t, err, errNoSkillRow)
 		})
 	}
 }

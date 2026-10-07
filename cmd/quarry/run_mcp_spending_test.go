@@ -324,10 +324,6 @@ func Test_run_mcp_cash_flow_returns_the_cashflow_json_document(t *testing.T) {
 	}
 }
 
-func Test_run_mcp_cash_flow_refuses_an_account_without_its_name_on_stderr(t *testing.T) {
-	refuseAccountKeepingItsNameOffStderr(t, "cash_flow", cashFlowLogPrefix)
-}
-
 func Test_run_mcp_cash_flow_words_its_left_out_warnings_with_the_tool_name(t *testing.T) {
 	got := runBothSurfaces(t, toolDocumentRun{
 		store: populatedAnalysisStore, tool: "cash_flow",

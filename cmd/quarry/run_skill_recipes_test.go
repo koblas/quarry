@@ -345,29 +345,6 @@ func Test_spending_trend_category_matches_the_subtree_ignoring_case(t *testing.T
 	}
 }
 
-func Test_spending_trend_payee_matches_the_exact_name_ignoring_case(t *testing.T) {
-	recipeScenario(t)
-	hardware := [][]any{{"2025-01-01", "CAD", "200.00"}, {"2026-01-01", "CAD", "250.00"}}
-	cases := []struct {
-		name, payee, category string
-		want                  [][]any
-	}{
-		{"exact", "Hardware", "", hardware},
-		{"lower_case", "hardware", "", hardware},
-		{"upper_case", "HARDWARE", "", hardware},
-		{"prefix_only", "Hard", "", [][]any{}},
-		{"other_category", "Hardware", "Auto", [][]any{}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			recipe := runRecipe(t, spendingTrendFile, recipeParams{category: c.category, payee: c.payee, grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "CAD"})
-
-			assert.Equal(t, c.want, recipe.Rows)
-		})
-	}
-}
-
 // spendByMonth is the 2026 rows of spend --by month that spent anything, as cents keyed "YYYY-MM|currency".
 func spendByMonth(t *testing.T) map[string]int64 {
 	t.Helper()
@@ -417,22 +394,6 @@ func Test_spending_trend_currency_usd_matches_spend_currency_usd(t *testing.T) {
 	assert.Equal(t, want, recipeTotals(t, recipe.Rows, 1))
 }
 
-func Test_spending_trend_since_and_until_include_both_ends_only(t *testing.T) {
-	recipeScenario(t)
-
-	recipe := runRecipe(t, spendingTrendFile, recipeParams{grain: "year", since: "2024-06-10", until: "2024-06-20", currency: "CAD"})
-
-	assert.Equal(t, [][]any{{"2024-01-01", "CAD", "6.00"}}, recipe.Rows)
-}
-
-func Test_spending_trend_lists_cad_before_the_first_rate_natively_in_usd_mode(t *testing.T) {
-	recipeScenario(t)
-
-	recipe := runRecipe(t, spendingTrendFile, recipeParams{payee: "Hardware", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "USD"})
-
-	assert.Equal(t, [][]any{{"2025-01-01", "CAD", "200.00"}, {"2026-01-01", "USD", "192.31"}}, recipe.Rows)
-}
-
 func Test_spending_trend_leaves_out_the_transfer(t *testing.T) {
 	recipeScenario(t)
 	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search", "Savings Sweep", "--json"})
@@ -446,14 +407,6 @@ func Test_spending_trend_leaves_out_the_transfer(t *testing.T) {
 	recipe := runRecipe(t, spendingTrendFile, recipeParams{payee: "Savings Sweep", grain: "year", since: "2022-01-01", until: "2026-12-31", currency: "CAD"})
 
 	assert.Empty(t, recipe.Rows)
-}
-
-func Test_spending_trend_columns_are_period_currency_spent(t *testing.T) {
-	recipeScenario(t)
-
-	recipe := runShippedRecipe(t, spendingTrendFile)
-
-	assert.Equal(t, []document.SQLColumn{{Name: "period", Type: "DATE"}, {Name: "currency", Type: "VARCHAR"}, {Name: "spent", Type: "DECIMAL(18,2)"}}, recipe.Columns)
 }
 
 func Test_income_by_category_currency_usd_matches_cashflow_currency_usd(t *testing.T) {
@@ -476,69 +429,6 @@ func withoutZeros(totals map[string]int64) map[string]int64 {
 	kept := maps.Clone(totals)
 	maps.DeleteFunc(kept, func(_ string, cents int64) bool { return cents == 0 })
 	return kept
-}
-
-func Test_income_by_category_since_and_until_include_both_ends_only(t *testing.T) {
-	recipeScenario(t)
-
-	recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2024-06-10", until: "2024-06-20", currency: "CAD"})
-
-	assert.Equal(t, [][]any{{"Income:Interest", "CAD", "6.00"}}, recipe.Rows)
-}
-
-func Test_income_by_category_lists_cad_before_the_first_rate_natively_in_usd_mode(t *testing.T) {
-	recipeScenario(t)
-
-	recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2024-01-01", until: "2024-12-31", currency: "USD"})
-
-	assert.Equal(t, [][]any{{"Income:Interest", "CAD", "15.00"}}, recipe.Rows)
-}
-
-func Test_income_by_category_columns_are_category_currency_income(t *testing.T) {
-	recipeScenario(t)
-
-	recipe := runShippedRecipe(t, incomeByCatFile)
-
-	assert.Equal(t, []document.SQLColumn{{Name: "category", Type: "VARCHAR"}, {Name: "currency", Type: "VARCHAR"}, {Name: "income", Type: "DECIMAL(18,2)"}}, recipe.Columns)
-}
-
-func Test_spending_trend_lists_each_currency_natively_for_a_currency_other_than_cad_or_usd(t *testing.T) {
-	recipeScenario(t)
-	hardware := [][]any{{"2025-01-01", "CAD", "200.00"}, {"2026-01-01", "CAD", "250.00"}}
-	cases := []struct {
-		name, currency, payee string
-		want                  [][]any
-	}{
-		{"native_keeps_cad_splits_in_cad", "native", "Hardware", hardware},
-		{"native_keeps_usd_splits_in_usd", "native", "Spotify", [][]any{{"2025-01-01", "USD", "21.98"}, {"2026-01-01", "USD", "54.95"}}},
-		{"lower_case_cad_is_not_cad", "cad", "Hardware", hardware},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			recipe := runRecipe(t, spendingTrendFile, recipeParams{payee: c.payee, grain: "year", since: "2025-01-01", until: "2026-12-31", currency: c.currency})
-
-			assert.Equal(t, c.want, recipe.Rows)
-		})
-	}
-}
-
-func Test_income_by_category_lists_each_currency_natively_for_a_currency_other_than_cad_or_usd(t *testing.T) {
-	recipeScenario(t)
-	cases := []struct{ name, currency string }{
-		{"native", "native"},
-		{"lower_case_cad", "cad"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			recipe := runRecipe(t, incomeByCatFile, recipeParams{since: "2026-01-01", until: "2026-12-31", currency: c.currency})
-
-			assert.Equal(t, [][]any{
-				{"(uncategorized)", "CAD", "128.00"}, {"Income:Salary", "CAD", "10000.00"}, {"Income:Salary", "USD", "1100.00"},
-			}, recipe.Rows)
-		})
-	}
 }
 
 var (
@@ -795,4 +685,88 @@ func skillTransferPair() []chargeTxn {
 	out := skillCharge("sweep-out", "Savings Sweep", "", day(2026, time.April, 15), -50000)
 	in := skillCharge("sweep-in", "Savings Sweep", "", day(2026, time.April, 15), 50000)
 	return []chargeTxn{out, skillOn(in, "acct-savings", "CAD")}
+}
+
+func Test_recipe_rows_follow_their_params(t *testing.T) {
+	recipeScenario(t)
+	hardware := [][]any{{"2025-01-01", "CAD", "200.00"}, {"2026-01-01", "CAD", "250.00"}}
+	incomeAllCurrencies := [][]any{
+		{"(uncategorized)", "CAD", "128.00"}, {"Income:Salary", "CAD", "10000.00"}, {"Income:Salary", "USD", "1100.00"},
+	}
+	cases := []struct {
+		name   string
+		file   string
+		params recipeParams
+		want   [][]any
+	}{
+		{"spending_trend_payee_exact", spendingTrendFile, recipeParams{payee: "Hardware", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "CAD"}, hardware},
+		{"spending_trend_payee_lower_case", spendingTrendFile, recipeParams{payee: "hardware", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "CAD"}, hardware},
+		{"spending_trend_payee_upper_case", spendingTrendFile, recipeParams{payee: "HARDWARE", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "CAD"}, hardware},
+		{"spending_trend_payee_prefix_only", spendingTrendFile, recipeParams{payee: "Hard", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "CAD"}, [][]any{}},
+		{
+			"spending_trend_payee_other_category", spendingTrendFile,
+			recipeParams{category: "Auto", payee: "Hardware", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "CAD"},
+			[][]any{},
+		},
+		{
+			"spending_trend_since_and_until_include_both_ends_only", spendingTrendFile,
+			recipeParams{grain: "year", since: "2024-06-10", until: "2024-06-20", currency: "CAD"},
+			[][]any{{"2024-01-01", "CAD", "6.00"}},
+		},
+		{
+			"income_by_category_since_and_until_include_both_ends_only", incomeByCatFile,
+			recipeParams{since: "2024-06-10", until: "2024-06-20", currency: "CAD"},
+			[][]any{{"Income:Interest", "CAD", "6.00"}},
+		},
+		{
+			"spending_trend_lists_cad_before_the_first_rate_natively_in_usd_mode", spendingTrendFile,
+			recipeParams{payee: "Hardware", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "USD"},
+			[][]any{{"2025-01-01", "CAD", "200.00"}, {"2026-01-01", "USD", "192.31"}},
+		},
+		{
+			"income_by_category_lists_cad_before_the_first_rate_natively_in_usd_mode", incomeByCatFile,
+			recipeParams{since: "2024-01-01", until: "2024-12-31", currency: "USD"},
+			[][]any{{"Income:Interest", "CAD", "15.00"}},
+		},
+		{"spending_trend_native_keeps_cad_splits_in_cad", spendingTrendFile, recipeParams{payee: "Hardware", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "native"}, hardware},
+		{
+			"spending_trend_native_keeps_usd_splits_in_usd", spendingTrendFile,
+			recipeParams{payee: "Spotify", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "native"},
+			[][]any{{"2025-01-01", "USD", "21.98"}, {"2026-01-01", "USD", "54.95"}},
+		},
+		{"spending_trend_lower_case_cad_is_not_cad", spendingTrendFile, recipeParams{payee: "Hardware", grain: "year", since: "2025-01-01", until: "2026-12-31", currency: "cad"}, hardware},
+		{"income_by_category_native", incomeByCatFile, recipeParams{since: "2026-01-01", until: "2026-12-31", currency: "native"}, incomeAllCurrencies},
+		{"income_by_category_lower_case_cad", incomeByCatFile, recipeParams{since: "2026-01-01", until: "2026-12-31", currency: "cad"}, incomeAllCurrencies},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			recipe := runRecipe(t, c.file, c.params)
+
+			assert.Equal(t, c.want, recipe.Rows)
+		})
+	}
+}
+
+func Test_recipe_columns_are_the_ruled_ones(t *testing.T) {
+	recipeScenario(t)
+	cases := []struct {
+		name string
+		file string
+		want []document.SQLColumn
+	}{
+		{"spending_trend_period_currency_spent", spendingTrendFile, []document.SQLColumn{{Name: "period", Type: "DATE"}, {Name: "currency", Type: "VARCHAR"}, {Name: "spent", Type: "DECIMAL(18,2)"}}},
+		{
+			"income_by_category_category_currency_income", incomeByCatFile,
+			[]document.SQLColumn{{Name: "category", Type: "VARCHAR"}, {Name: "currency", Type: "VARCHAR"}, {Name: "income", Type: "DECIMAL(18,2)"}},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			recipe := runShippedRecipe(t, c.file)
+
+			assert.Equal(t, c.want, recipe.Columns)
+		})
+	}
 }
