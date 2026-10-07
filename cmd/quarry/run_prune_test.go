@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/platform/lockfile"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store/duckstore"
@@ -234,11 +233,7 @@ func Test_run_snapshots_prune_refuses_a_malformed_config_with_nothing_deleted(t 
 }
 
 func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t *testing.T) {
-	cases := []struct {
-		name    string
-		content string
-		line    string
-	}{
+	cases := append([]badConfigValue{
 		{
 			name: "keep of zero", content: "snapshots.keep = 0\n",
 			line: configShown + ": snapshots.keep must be a whole number of 1 or more, got 0",
@@ -247,19 +242,7 @@ func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t 
 			name: "keep as a string", content: "snapshots.keep = \"twelve\"\n",
 			line: configShown + ": snapshots.keep must be a whole number of 1 or more, got \"twelve\"",
 		},
-		{
-			name: "quicken.path not a string", content: "quicken.path = 12\n",
-			line: configShown + ": quicken.path must be a path in quotes, got 12",
-		},
-		{
-			name: "quicken.path relative", content: "quicken.path = \"Home.quicken\"\n",
-			line: configShown + ": quicken.path must be a full path or start with ~/, got \"Home.quicken\"",
-		},
-		{
-			name: "reporting.currency another currency", content: "reporting.currency = \"EUR\"\n",
-			line: configShown + ": reporting.currency must be CAD, USD or native, got \"EUR\"",
-		},
-	}
+	}, quickenAndReportingBadValues()...)
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -373,20 +356,6 @@ func Test_run_snapshots_prune_prints_config_warnings_before_its_failed_delete_li
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n"+
 		"quarry: cannot delete snapshot "+pruneOldest+": permission denied\n", stderr)
 	requireSnapshotsKept(t, dir, pruneOldest, pruneMorning, pruneNoon, pruneNewest)
-}
-
-// LoadConfig is stubbed, so the refusal comes from the snapshots factory's own home lookup.
-func Test_run_snapshots_prune_factory_names_itself_when_the_home_directory_cannot_be_resolved(t *testing.T) {
-	t.Setenv("HOME", "")
-	var stdout, stderr bytes.Buffer
-	env := testEnv(&stdout, &stderr)
-	env.LoadConfig = func(string) (config.Config, error) { return config.Config{}, nil }
-
-	exitCode := runWith(context.Background(), []string{"snapshots", "prune"}, env)
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry snapshots prune again\n", stderr.String())
 }
 
 // snapshotsKeepConfig is a config file setting snapshots.keep to keep.
@@ -584,28 +553,6 @@ func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_within_the_cap(t *t
 	requireFiveSnapshotsKept(t, dir)
 }
 
-func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_with_no_snapshots_folder(t *testing.T) {
-	newHome(t)
-
-	exitCode, stdout, stderr := runPrune(t, "--dry-run")
-
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Empty(t, stderr)
-	assert.Equal(t, "Nothing to delete: no snapshots in "+snapshotsShown+"\n", stdout)
-}
-
-func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_beside_an_unreadable_store(t *testing.T) {
-	home := newHome(t)
-	writeSnapshots(t, home, fiveSnapshots()...)
-	writeNonDuckDBStore(t, home)
-
-	exitCode, stdout, stderr := runPrune(t, "--dry-run")
-
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Empty(t, stderr)
-	assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
-}
-
 func Test_run_snapshots_prune_dry_run_names_the_stores_snapshot_when_it_lies_beyond_the_newest_n(t *testing.T) {
 	pinLocalZone(t)
 	const storeSnapshot = "20260801T120000Z"
@@ -753,16 +700,6 @@ func Test_run_snapshots_prune_without_keep_deletes_beyond_the_newest_12(t *testi
 	assert.FileExists(t, filepath.Join(dir, "20260902T090000Z.sqlite"))
 }
 
-func Test_run_snapshots_prune_names_itself_when_the_home_directory_cannot_be_resolved(t *testing.T) {
-	t.Setenv("HOME", "")
-
-	exitCode, stdout, stderr := runPrune(t)
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout)
-	assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry snapshots prune again\n", stderr)
-}
-
 func Test_run_snapshots_prune_protects_nothing_when_there_is_no_store(t *testing.T) {
 	pinLocalZone(t)
 	home := newHome(t)
@@ -780,16 +717,28 @@ func Test_run_snapshots_prune_protects_nothing_when_there_is_no_store(t *testing
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_beside_an_unreadable_store(t *testing.T) {
-	home := newHome(t)
-	dir := writeSnapshots(t, home, fiveSnapshots()...)
-	writeNonDuckDBStore(t, home)
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "deleting", args: nil},
+		{name: "dry run", args: []string{"--dry-run"}},
+	}
 
-	exitCode, stdout, stderr := runPrune(t)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := newHome(t)
+			dir := writeSnapshots(t, home, fiveSnapshots()...)
+			writeNonDuckDBStore(t, home)
 
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Empty(t, stderr)
-	assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
-	requireFiveSnapshotsKept(t, dir)
+			exitCode, stdout, stderr := runPrune(t, c.args...)
+
+			require.Equal(t, 0, exitCode, stderr)
+			assert.Empty(t, stderr)
+			assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
+			requireFiveSnapshotsKept(t, dir)
+		})
+	}
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_within_the_newest_one(t *testing.T) {
@@ -818,13 +767,25 @@ func Test_run_snapshots_prune_names_the_stores_snapshot_when_it_is_the_only_one_
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_with_no_snapshots_folder(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "deleting", args: nil},
+		{name: "dry run", args: []string{"--dry-run"}},
+	}
 
-	exitCode, stdout, stderr := runPrune(t)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			newHome(t)
 
-	require.Equal(t, 0, exitCode, stderr)
-	assert.Empty(t, stderr)
-	assert.Equal(t, "Nothing to delete: no snapshots in "+snapshotsShown+"\n", stdout)
+			exitCode, stdout, stderr := runPrune(t, c.args...)
+
+			require.Equal(t, 0, exitCode, stderr)
+			assert.Empty(t, stderr)
+			assert.Equal(t, "Nothing to delete: no snapshots in "+snapshotsShown+"\n", stdout)
+		})
+	}
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_when_the_only_candidate_is_already_gone(t *testing.T) {

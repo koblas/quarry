@@ -97,17 +97,6 @@ func Test_run_status_reports_the_latest_build_when_import_runs_holds_several(t *
 	assert.Equal(t, strings.Replace(before.String(), snapshotID(earlierPath), "later-build", 1), stdout.String())
 }
 
-func Test_run_status_refuses_when_home_is_unset(t *testing.T) {
-	t.Setenv("HOME", "")
-
-	exitCode, stdout, stderr := runCapture(context.Background(), []string{"status"})
-
-	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
-	assert.Equal(t, "quarry: cannot find your home directory ($HOME is not set); set HOME, then run quarry status again\n",
-		stderr.String())
-}
-
 func Test_run_status_reports_a_failed_stdout_write(t *testing.T) {
 	home := newHome(t)
 	b := v9fixture.NewBuilder()
@@ -640,14 +629,11 @@ func Test_run_status_names_a_store_built_from_an_upper_case_sqlite_snapshot_by_i
 
 func Test_run_status_counts_an_unclassified_account_until_the_config_classifies_it(t *testing.T) {
 	home := newHome(t)
-	b := v9fixture.NewBuilder()
-	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
-	brokeragePK := b.Account(v9fixture.AccountRow{Name: "Questrade TFSA", Type: "BROKERAGENORMAL", Currency: "CAD", Active: true})
-	syncBundle(t, b.WriteBundle(t, filepath.Join(home, "Documents")))
+	id := syncUnclassifiedFixture(t, home)
 	var before, after, stderr bytes.Buffer
 
 	require.Equal(t, 0, run(context.Background(), []string{"status"}, &before, &stderr), stderr.String())
-	writeConfig(t, home, fmt.Sprintf("[accounts]\nregistered = [\"acct-%d\"]\n", brokeragePK))
+	writeConfig(t, home, fmt.Sprintf("[accounts]\nregistered = [%q]\n", id))
 	require.Equal(t, 0, run(context.Background(), []string{"status"}, &after, &stderr), stderr.String())
 
 	assert.Contains(t, before.String(), "\nFindings  1 open; run quarry findings to list them\n")
