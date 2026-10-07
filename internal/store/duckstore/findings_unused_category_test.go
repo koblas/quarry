@@ -27,10 +27,7 @@ func cat(path string, parent int, mods ...func(*unusedCat)) unusedCat {
 
 func withKind(kind string) func(*unusedCat) { return func(c *unusedCat) { c.base.kind = kind } }
 func withSplits(n int) func(*unusedCat)     { return func(c *unusedCat) { c.base.splits = n } }
-func inAccount(id string) func(*unusedCat) {
-	return func(c *unusedCat) { c.base.splits, c.base.account = 1, id }
-}
-func hiddenCat(c *unusedCat) { c.base.hidden = true }
+func hiddenCat(c *unusedCat)                { c.base.hidden = true }
 
 // unusedFindings lists each unused-category finding as "id=item,item" joined by "; " in id order, items in stored order.
 func unusedFindings(t *testing.T, referenced []string, cats ...unusedCat) string {

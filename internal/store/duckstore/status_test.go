@@ -115,19 +115,6 @@ func Test_status_reports_no_dates_for_a_store_without_transactions(t *testing.T)
 	assert.True(t, got.LastDate.IsZero())
 }
 
-// addImportRun copies the store's first run as a run of its own id, snapshot path and accounts count,
-// through a writable connection closed before any read.
-func addImportRun(t *testing.T, st *duckstore.Store, id int, snapshotPath string, accounts int) {
-	t.Helper()
-	conn, err := duckdb.OpenReadWrite(t.Context(), st.Path())
-	require.NoError(t, err)
-	const clone = "INSERT INTO import_runs SELECT * REPLACE (? AS id, ? AS snapshot_path, ? AS accounts_rows) " + //nolint:unqueryvet // a copy of the row is the point
-		"FROM import_runs WHERE id = (SELECT min(id) FROM import_runs)"
-	_, err = conn.Exec(t.Context(), clone, id, snapshotPath, accounts)
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-}
-
 func Test_status_reads_the_latest_import_run(t *testing.T) {
 	t.Parallel()
 	st := duckstore.New(t.TempDir())
@@ -242,15 +229,6 @@ func Test_status_fails_on_a_missing_store_without_creating_it(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-// assertOtherFault requires err to be the *store.OpenError of an unclassified fault, its Reason the one line reason.
-func assertOtherFault(t *testing.T, err error, reason string) {
-	t.Helper()
-	openErr, ok := errors.AsType[*store.OpenError](err)
-	require.True(t, ok, "want *store.OpenError, got %v", err)
-	assert.Equal(t, store.OpenFaultOther, openErr.Fault)
-	assert.Equal(t, reason, openErr.Reason)
-}
-
 func Test_status_carries_each_finding_with_its_state_from_the_latest_build(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -273,25 +251,19 @@ func Test_status_carries_each_finding_with_its_state_from_the_latest_build(t *te
 	}, states)
 }
 
-func Test_status_returns_a_findings_query_fault_as_another_fault(t *testing.T) {
+func Test_status_returns_a_findings_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: 1}))
+	for _, c := range otherFaults("SELECT", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Status(t.Context())
+			_, err := st.Status(t.Context())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_status_returns_a_findings_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: 1}))
-
-	_, err := st.Status(t.Context())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 func Test_status_reads_every_account_closed_included_sorted_by_id(t *testing.T) {
@@ -315,23 +287,17 @@ func Test_status_reads_every_account_closed_included_sorted_by_id(t *testing.T) 
 	}, got.Accounts)
 }
 
-func Test_status_returns_an_accounts_query_fault_as_another_fault(t *testing.T) {
+func Test_status_returns_an_accounts_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT id"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{queryFault: fault, passQueries: 2}))
+	for _, c := range otherFaults("SELECT id", 2) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Status(t.Context())
+			_, err := st.Status(t.Context())
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_status_returns_an_account_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{scanFault: errScanFailed, passQueries: 2}))
-
-	_, err := st.Status(t.Context())
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
