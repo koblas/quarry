@@ -602,8 +602,8 @@ Architect sizing pass, 2026-10-05. S08 and S13 splits approved by the user 2026-
 - [x] SCENARIO-18: Nothing to show — delivered by SCENARIO-15 — `cmd/quarry/run_acb_year_test.go` `Test_run_acb_warns_when_no_non_registered_account_has_traded`
 - [x] SCENARIO-16: One security's history — `cmd/quarry/run_acb_security_test.go` `Test_run_acb_security_prints_every_event_of_the_named_security_with_shares_held_acb_and_gain`
 - [x] SCENARIO-17: ACB refuses what it cannot answer — `cmd/quarry/run_acb_refusals_test.go` `Test_run_acb_refuses_an_unclassified_account_and_a_currency_other_than_cad`
-- [x] SCENARIO-20: Docs carry the new surface — delivered by SCENARIO-17 — `cmd/quarry/run_skill_references_test.go` `Test_skill_has_claude_classify_accounts_before_the_first_acb`
-- [x] SCENARIO-19: MCP acb — `cmd/quarry/run_mcp_acb_test.go` `Test_run_mcp_acb_returns_the_acb_json_document`
+- [x] SCENARIO-20: Docs carry the new surface — delivered by SCENARIO-17 — `cmd/quarry/run_skill_test.go` `Test_skill_has_claude_classify_accounts_before_the_first_acb`
+- [x] SCENARIO-19: MCP acb — `cmd/quarry/run_mcp_investments_test.go` `Test_run_mcp_acb_returns_the_acb_json_document`
 
 ## Reference check
 

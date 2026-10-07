@@ -419,7 +419,7 @@ Architect sizing pass 2026-10-04 (one pass over all 16; folds change no scenario
 - [x] SCENARIO-08: A day with no exchange rate totals each currency separately — `cmd/quarry/run_holdings_no_rate_test.go` `Test_run_holdings_before_the_first_rate_shows_no_rate_and_totals_usd_separately`
 - [x] SCENARIO-10: Filtering by account — `cmd/quarry/run_holdings_account_test.go` `Test_run_holdings_account_filter_lists_the_named_accounts_and_warns_for_chequing`
 - [x] SCENARIO-09: Nothing held on the day — `cmd/quarry/run_holdings_empty_test.go` `Test_run_holdings_before_the_first_investment_transaction_warns_where_they_start_and_prints_no_total`
-- [x] SCENARIO-13: MCP holdings tool — `cmd/quarry/run_mcp_holdings_test.go` `Test_run_mcp_holdings_returns_the_holdings_json_document`
+- [x] SCENARIO-13: MCP holdings tool — `cmd/quarry/run_mcp_investments_test.go` `Test_run_mcp_holdings_returns_the_holdings_json_document`
 - [x] SCENARIO-15: Existing surfaces describe holdings — `cmd/quarry/run_holdings_surfaces_test.go` `Test_run_accounts_and_sql_help_carry_the_holdings_copy`
 
 ## Reference check

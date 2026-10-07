@@ -496,7 +496,7 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-07: Accounts shows investment balances — `cmd/quarry/run_accounts_investment_balance_test.go` `Test_run_accounts_shows_an_investment_balance_as_cash_plus_holdings_value`
 - [x] SCENARIO-08: Balances line says what is not checked — delivered by SCENARIO-07, `cmd/quarry/run_status_test.go` `Test_run_status_says_investment_accounts_cash_is_not_checked`
 - [x] SCENARIO-09: Net-worth view covers reported accounts — `cmd/quarry/run_net_worth_view_test.go` `Test_run_sql_sums_net_worth_by_type_and_currency_over_the_accounts_quickens_reports_count`
-- [x] SCENARIO-18: Docs and pins follow the new surface — delivered by SCENARIO-09, `cmd/quarry/run_skill_schema_reference_test.go` `Test_skill_schema_reference_carries_each_view_comment`
+- [x] SCENARIO-18: Docs and pins follow the new surface — delivered by SCENARIO-09, `cmd/quarry/run_skill_test.go` `Test_skill_schema_reference_carries_each_view_comment`
 - [x] SCENARIO-10: Net worth today — `cmd/quarry/run_networth_test.go` `Test_run_networth_prints_todays_balances_by_type_and_currency_with_a_total_in_the_reporting_currency`
 - [x] SCENARIO-12: Net worth month by month — `cmd/quarry/run_networth_history_test.go` `Test_run_networth_lists_each_month_end_with_a_column_per_type_ending_with_today`
 - [x] SCENARIO-15: Net worth refuses impossible dates — `cmd/quarry/run_networth_as_of_test.go` `Test_run_networth_refuses_a_future_as_of_a_future_since_and_as_of_with_since`
@@ -505,7 +505,7 @@ Architect sizing pass, 2026-10-04. The S01 and S14 splits were approved by the u
 - [x] SCENARIO-14a: Net worth warns about unpriced and unconvertible holdings — `cmd/quarry/run_networth_holdings_warnings_test.go` `Test_run_networth_warns_about_each_holding_it_leaves_out_and_accounts_gives_the_same_lines`
 - [x] SCENARIO-14b: Net worth warns about USD balances it cannot convert — `cmd/quarry/run_networth_rates_test.go` `Test_run_networth_warns_when_a_usd_balance_has_no_exchange_rate_and_totals_it_apart`
 - [x] SCENARIO-16: Net worth before any data — `cmd/quarry/run_networth_before_data_test.go` `Test_run_networth_before_the_first_transaction_prints_the_caption_and_the_first_balance_warning`
-- [x] SCENARIO-17: MCP net_worth — `cmd/quarry/run_mcp_net_worth_test.go` `Test_run_mcp_net_worth_returns_the_networth_json_document`
+- [x] SCENARIO-17: MCP net_worth — `cmd/quarry/run_mcp_investments_test.go` `Test_run_mcp_net_worth_returns_the_networth_json_document`
 
 ## Reference check
 

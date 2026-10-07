@@ -46,7 +46,7 @@ Method: read 3b spec Rules, §4.2, §5, §6 and triage §4 (lines 20-31, 76-81, 
 - service: `report.Server` methods follow the `Anomalies` shape (`internal/report/anomalies.go:90-100`): `s.namedAccounts` -> store read -> `s.readRefusal(ctx, <command>, err)`.
 - document: `internal/report/document` holds the builders (`NewAnomalies` etc.). A new `NewSearch` would follow them, with `[]` never null and warnings passed in (3a STATE:6-8).
 - mcp: tool consts are `internal/mcp/tools.go:17-25`. Registration is `tools.go:192-223` (`sdk.AddTool(... tool(name, desc, objectSchema(...)), handler(s.timeout, stoppedLine(name), s.fn))`). The handler template is `internal/mcp/anomalies.go:12-34`: `s.now()` once -> window parse (`windowRefusal`) -> `resolveCurrency` -> `s.newReport` -> `accountRefusal` -> `document.New*` -> `capList`.
-- copy that mentions the tool list and must change: `instructions` (`tools.go:36-38`, "Tools: describe_schema, query, ..."), `quarry mcp` Long (`internal/cli/mcp.go:24-36`, "every list a tool returns stops at 500"), `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools` (the only pin, with its own byte copies), and the `query` description redirect.
+- copy that mentions the tool list and must change: `instructions` (`tools.go:36-38`, "Tools: describe_schema, query, ..."), `quarry mcp` Long (`internal/cli/mcp.go:24-36`, "every list a tool returns stops at 500"), `cmd/quarry/run_mcp_test.go` `Test_run_mcp_describes_all_eight_tools` (the only pin, with its own byte copies), and the `query` description redirect.
 
 #### Prior art in this repo
 - CLI twin shape: `internal/cli/anomalies.go` (whole file). `reportFlags{}` + `flags.bind(cmd, reportFlagHelp)` (`internal/cli/window.go:14-37`) gives `--since`, `--until`, repeatable `--account`. `flags.window(cmd, at)` (`window.go:40-58`) calls `report.ParseWindow` and turns a refusal into `UsageError`. `currency.resolve` and `withConfigWarnings` handle currency. `openReport` -> `srv.X` -> `emitReport(cmd, *jsonOut, warnings, renderJSON, renderText)` (`output.go:33-40`, warnings on stderr as `quarry: warning: `). Table renderer: `renderTable(caption, aligns, rows)` (`render_table.go:23-47`), `windowCaption` (`:55`). `transactionFlagHelp` (`window.go:26-30`) is the "count transactions dated ..." help text, which fits search better than `anomaliesFlagHelp`.
@@ -89,7 +89,7 @@ Method: read 3b spec Rules, §4.2, §5, §6 and triage §4 (lines 20-31, 76-81, 
 | `registerTools` (AddTool calls) | `internal/mcp/tools.go:192-223` | grep |
 | tools list strings: `instructions` | `internal/mcp/tools.go:36-38` | grep |
 | `quarry mcp` Long | `internal/cli/mcp.go:24-36` | grep |
-| descriptions pin | `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools` | grep |
+| descriptions pin | `cmd/quarry/run_mcp_test.go` `Test_run_mcp_describes_all_eight_tools` | grep |
 
 #### Becomes dead if this ships
 Nothing becomes dead. `query` stays as the ad-hoc path; its description will want a "call search_transactions for payee/memo lookups" redirect (copy, not deletion).
@@ -752,8 +752,8 @@ Sizing pass (architect, opus) 2026-10-03 — 15 IDs → 6 runs, all code-first. 
 - [x] SCENARIO-09: search_transactions returns the quarry search --json document — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_returns_the_search_json_document`
 - [x] SCENARIO-11: search_transactions cuts to its limit with the MCP cut line — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_cuts_to_its_limit_with_the_mcp_cut_line`
 - [x] SCENARIO-12b: a broken config file never affects search_transactions — delivered by SCENARIO-09 — `cmd/quarry/run_config_test.go` `Test_run_mcp_search_transactions_ignores_a_malformed_config`
-- [x] SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr — `cmd/quarry/run_mcp_search_refusals_test.go` `Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_values_on_stderr`
-- [x] SCENARIO-13: the server names search to the client — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_every_tool`
+- [x] SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_values_on_stderr`
+- [x] SCENARIO-13: the server names search to the client — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_describes_every_tool`
 
 ---
 
