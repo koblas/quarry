@@ -25,26 +25,6 @@ func executeAnomalies(t *testing.T, fake fakeReportStore, stdout, stderr io.Writ
 	return cli.Execute(t.Context(), append([]string{"anomalies"}, args...), env)
 }
 
-func Test_anomalies_returns_the_report_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeAnomalies(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-	assert.Empty(t, stderr.String())
-}
-
-func Test_anomalies_returns_the_report_factory_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
-
-	err := cli.Execute(t.Context(), []string{"anomalies"}, env)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_anomalies_refuses_a_window_before_opening_the_report(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
@@ -93,20 +73,6 @@ accounts; the payee's charges in other accounts still count as history.
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), long)
-}
-
-func Test_anomalies_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry anomalies
-  quarry anomalies --since 2026-09 --until 2026-09
-  quarry anomalies --account "Visa Infinite" --json
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeAnomalies(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
 }
 
 func Test_anomalies_without_charges_prints_the_empty_table_and_footer_and_names_the_stores_span(t *testing.T) {

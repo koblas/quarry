@@ -76,20 +76,6 @@ together.
 	assert.Contains(t, stdout.String(), long)
 }
 
-func Test_summary_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry summary
-  quarry summary --month 2026-08 --currency USD
-  quarry summary --json
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeSummary(t, fakeReportStore{}, cadConfig, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
-}
-
 func Test_summary_help_shows_the_month_flag(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

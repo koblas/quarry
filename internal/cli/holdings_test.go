@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -95,29 +94,6 @@ included.
 	assert.Contains(t, stdout.String(), long)
 }
 
-func Test_holdings_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry holdings
-  quarry holdings --as-of 2025-12-31
-  quarry holdings --account RRSP --currency native --json
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
-}
-
-func Test_holdings_help_shows_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--currency code +`+regexp.QuoteMeta(holdingsCurrencyHelp)+`$`, stdout.String())
-}
-
 func Test_holdings_is_listed_in_the_root_help_with_its_short_description(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
@@ -136,15 +112,6 @@ func Test_holdings_reads_the_day_of_the_clock_as_its_as_of_day(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, store.HoldingsParams{AsOf: time.Date(2026, time.September, 29, 0, 0, 0, 0, time.UTC)}, got)
-}
-
-func Test_holdings_help_shows_the_as_of_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--as-of date +`+regexp.QuoteMeta(holdingsAsOfHelp)+`$`, stdout.String())
 }
 
 func Test_holdings_as_of_reads_the_last_day_of_the_period_it_names(t *testing.T) {
@@ -476,24 +443,6 @@ func Test_holdings_json_lists_no_holdings_as_an_empty_array(t *testing.T) {
 	assert.Contains(t, stdout.String(), `"totals": []`)
 }
 
-func Test_holdings_returns_a_failed_store_read(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
-func Test_holdings_returns_a_failed_report_open(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"holdings"}, refusedEnv(&stdout, &stderr))
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_holdings_returns_a_failed_stdout_write(t *testing.T) {
 	var stderr bytes.Buffer
 
@@ -517,15 +466,6 @@ func investmentAccounts() fakeReportStore {
 		store.Account{ID: alphaID, Name: "Alpha", Type: store.AccountTypeRetirement},
 		store.Account{ID: retiredID, Name: "Retired", Type: store.AccountTypeBrokerage, Closed: true},
 	)
-}
-
-func Test_holdings_help_shows_the_account_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeHoldings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--account name +`+regexp.QuoteMeta(holdingsAccountHelp)+`$`, stdout.String())
 }
 
 func Test_holdings_reads_the_accounts_named_by_id_and_by_name(t *testing.T) {

@@ -118,26 +118,6 @@ func Test_accounts_reports_a_failed_stdout_write(t *testing.T) {
 	assert.ErrorIs(t, err, errNoSpace)
 }
 
-func Test_accounts_returns_the_report_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeAccounts(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr, "--json")
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-	assert.Empty(t, stderr.String())
-}
-
-func Test_accounts_returns_the_report_factory_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := failingReportEnv(errStoreRead, &stdout, &stderr)
-
-	err := cli.Execute(t.Context(), []string{"accounts"}, env)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_status_and_accounts_take_no_arguments(t *testing.T) {
 	cases := []struct {
 		name string

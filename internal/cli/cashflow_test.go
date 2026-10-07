@@ -140,26 +140,6 @@ func Test_cashflow_refuses_a_period_it_cannot_use_before_reading_the_store(t *te
 	}
 }
 
-func Test_cashflow_returns_the_report_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeCashFlow(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-	assert.Empty(t, stderr.String())
-}
-
-func Test_cashflow_returns_the_report_factory_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
-
-	err := cli.Execute(t.Context(), []string{"cashflow"}, env)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_cashflow_returns_a_failed_stdout_write(t *testing.T) {
 	var stderr bytes.Buffer
 

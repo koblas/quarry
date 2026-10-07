@@ -106,26 +106,6 @@ func Test_spend_json_puts_the_report_window_and_rows_in_the_document(t *testing.
 	assert.Empty(t, stderr.String())
 }
 
-func Test_spend_returns_the_report_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeSpend(t, fakeReportStore{err: errStoreRead}, time.Now(), &stdout, &stderr)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-	assert.Empty(t, stderr.String())
-}
-
-func Test_spend_returns_the_report_factory_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
-
-	err := cli.Execute(t.Context(), []string{"spend"}, env)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_spend_reports_a_failed_stdout_write(t *testing.T) {
 	err := executeSpend(t, fakeReportStore{}, time.Now(), failingWriter{err: errNoSpace}, io.Discard)
 
@@ -652,25 +632,4 @@ func Test_spend_refuses_a_by_that_names_no_grouping_before_a_bad_period(t *testi
 	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--by", "vendor", "--since", "2024-13")
 
 	require.EqualError(t, err, "--by must be category, payee, tag or month")
-}
-
-func Test_spend_help_shows_the_since_and_until_flags(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `--since date +count transactions dated on or after date `+
-		`\(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year\)`, stdout.String())
-	assert.Regexp(t, `--until date +count transactions dated on or before date `+
-		`\(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`, stdout.String())
-}
-
-func Test_spend_help_shows_the_account_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Regexp(t, `--account name +count only the account with this name or id; repeat for more`, stdout.String())
 }

@@ -22,16 +22,6 @@ func executeRecurring(t *testing.T, fake fakeReportStore, stdout, stderr io.Writ
 	return cli.Execute(t.Context(), append([]string{"recurring"}, args...), env)
 }
 
-func Test_recurring_returns_the_report_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := executeRecurring(t, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-	assert.Empty(t, stderr.String())
-}
-
 func monthlyCharges(payee string, cents ...int64) store.Charges {
 	rows := make([]store.Charge, len(cents))
 	for i, c := range cents {
@@ -100,16 +90,6 @@ func Test_recurring_refuses_a_window_before_opening_the_report(t *testing.T) {
 	require.EqualError(t, err, `--since "2024-13" is not a date; use YYYY, YYYY-MM or YYYY-MM-DD`)
 }
 
-func Test_recurring_returns_the_report_factory_fault(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := failingReportEnv(errStoreRead, &stdout, &stderr, atWallClock)
-
-	err := cli.Execute(t.Context(), []string{"recurring"}, env)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_recurring_help_says_what_recurring_lists(t *testing.T) {
 	const long = `List charges that repeat on a schedule: the same payee and currency every
 week, month, quarter or year, at a steady amount. quarry finds them in all
@@ -144,20 +124,6 @@ times the charges in a year, for active series only.
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), long)
-}
-
-func Test_recurring_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry recurring
-  quarry recurring --since 2026-09 --until 2026-09 --json
-  quarry recurring --since 2000
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeRecurring(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
 }
 
 func Test_recurring_reports_a_failed_stdout_write(t *testing.T) {

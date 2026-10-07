@@ -73,21 +73,6 @@ times the charges in a year, for active series only.
 	assert.Contains(t, stdout.String(), priceChange)
 }
 
-func Test_spend_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry spend
-  quarry spend --by payee --since 2025-01 --until 2025-03
-  quarry spend --since 2024 --until 2024 --json
-  quarry spend --account "Visa Infinite" --account Chequing
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
-}
-
 func Test_spend_help_shows_the_by_flag_and_its_default(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -129,20 +114,6 @@ less. A period that --since or --until cuts short is marked partial.
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), long)
-}
-
-func Test_cashflow_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry cashflow
-  quarry cashflow --by year --since 2020 --until 2025
-  quarry cashflow --account Chequing --json
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeCashFlow(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
 }
 
 func Test_cashflow_help_shows_each_flag(t *testing.T) {
@@ -301,37 +272,6 @@ Examples:
 	assert.Contains(t, stdout.String(), long)
 }
 
-func Test_search_help_lists_the_limit_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
-
-	err := cli.Execute(t.Context(), []string{"search", "--help"}, env)
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--limit n +print at most n transactions, newest first \(500 unless set; 0 prints every one\)$`, stdout.String())
-}
-
-func Test_search_help_lists_the_min_and_max_flags(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
-
-	err := cli.Execute(t.Context(), []string{"search", "--help"}, env)
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--max amount +list only transactions of at most this amount, sign ignored, in the account's own currency$`, stdout.String())
-	assert.Regexp(t, `(?m)--min amount +list only transactions of at least this amount, sign ignored, in the account's own currency$`, stdout.String())
-}
-
-func Test_search_help_lists_the_category_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
-
-	err := cli.Execute(t.Context(), []string{"search", "--help"}, env)
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--category path +list only transactions with a split in this category or one under it, by full path such as Food:Groceries$`, stdout.String())
-}
-
 // Each read of the clock returns a day later than the one before, so a command that reads it twice
 // sees two different days.
 func advancingClock() func() time.Time {
@@ -380,4 +320,143 @@ func Test_anomalies_reads_charges_through_the_same_day_its_window_ends_on(t *tes
 	require.NoError(t, err)
 	assert.Equal(t, time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC), got.Through)
 	assert.Contains(t, stdout.String(), "Unusually large charges 2026-01-01 to 2026-09-29 in all accounts")
+}
+
+func Test_report_commands_return_the_report_factory_fault(t *testing.T) {
+	commands := []string{"accounts", "anomalies", "cashflow", "recurring", "spend", "holdings", "acb", "networth"}
+
+	for _, command := range commands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{command}, refusedEnv(&stdout, &stderr))
+
+			require.ErrorIs(t, err, errStoreRead)
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+func Test_report_commands_return_the_store_read_fault_with_nothing_printed(t *testing.T) {
+	cases := []struct {
+		command string
+		args    []string
+	}{
+		{command: "accounts", args: []string{"--json"}},
+		{command: "anomalies"},
+		{command: "cashflow"},
+		{command: "recurring"},
+		{command: "spend"},
+		{command: "holdings"},
+		{command: "acb"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := reportEnv(fakeReportStore{err: errStoreRead}, &stdout, &stderr, atSpendNow)
+
+			err := cli.Execute(t.Context(), append([]string{c.command}, c.args...), env)
+
+			require.ErrorIs(t, err, errStoreRead)
+			assert.NotErrorAs(t, err, new(cli.UsageError))
+			assert.Empty(t, stdout.String())
+			assert.Empty(t, stderr.String())
+		})
+	}
+}
+
+func Test_help_shows_examples_for_each_report_command(t *testing.T) {
+	cases := []struct {
+		command  string
+		examples string
+	}{
+		{command: "acb", examples: `Examples:
+  quarry acb
+  quarry acb --year 2024
+  quarry acb --security XEQT --json
+`},
+		{command: "anomalies", examples: `Examples:
+  quarry anomalies
+  quarry anomalies --since 2026-09 --until 2026-09
+  quarry anomalies --account "Visa Infinite" --json
+`},
+		{command: "findings", examples: `Examples:
+  quarry findings
+  quarry findings --type duplicate
+  quarry findings --status all --csv > findings.csv
+`},
+		{command: "holdings", examples: `Examples:
+  quarry holdings
+  quarry holdings --as-of 2025-12-31
+  quarry holdings --account RRSP --currency native --json
+`},
+		{command: "recurring", examples: `Examples:
+  quarry recurring
+  quarry recurring --since 2026-09 --until 2026-09 --json
+  quarry recurring --since 2000
+`},
+		{command: "spend", examples: `Examples:
+  quarry spend
+  quarry spend --by payee --since 2025-01 --until 2025-03
+  quarry spend --since 2024 --until 2024 --json
+  quarry spend --account "Visa Infinite" --account Chequing
+`},
+		{command: "cashflow", examples: `Examples:
+  quarry cashflow
+  quarry cashflow --by year --since 2020 --until 2025
+  quarry cashflow --account Chequing --json
+`},
+		{command: "summary", examples: `Examples:
+  quarry summary
+  quarry summary --month 2026-08 --currency USD
+  quarry summary --json
+`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, currencyEnv(&stdout, &stderr))
+
+			require.NoError(t, err)
+			assert.Contains(t, stdout.String(), c.examples)
+		})
+	}
+}
+
+func Test_help_lists_each_report_flag_with_its_description(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		line    string
+	}{
+		{name: "acb_currency", command: "acb", line: `(?m)--currency currency +` + regexp.QuoteMeta(acbCurrencyHelp) + `$`},
+		{name: "acb_year", command: "acb", line: `(?m)--year year +list the sales in tax year \(YYYY\) one by one$`},
+		{name: "acb_security", command: "acb", line: `(?m)--security name +show the full history of the security with this name, ticker or id; repeat for more$`},
+		{name: "holdings_currency", command: "holdings", line: `(?m)--currency code +` + regexp.QuoteMeta(holdingsCurrencyHelp) + `$`},
+		{name: "holdings_as_of", command: "holdings", line: `(?m)--as-of date +` + regexp.QuoteMeta(holdingsAsOfHelp) + `$`},
+		{name: "holdings_account", command: "holdings", line: `(?m)--account name +` + regexp.QuoteMeta(holdingsAccountHelp) + `$`},
+		{name: "search_limit", command: "search", line: `(?m)--limit n +print at most n transactions, newest first \(500 unless set; 0 prints every one\)$`},
+		{name: "search_max", command: "search", line: `(?m)--max amount +list only transactions of at most this amount, sign ignored, in the account's own currency$`},
+		{name: "search_min", command: "search", line: `(?m)--min amount +list only transactions of at least this amount, sign ignored, in the account's own currency$`},
+		{name: "search_category", command: "search", line: `(?m)--category path +list only transactions with a split in this category or one under it, by full path such as Food:Groceries$`},
+		{name: "spend_since", command: "spend", line: `--since date +count transactions dated on or after date ` +
+			`\(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year\)`},
+		{name: "spend_until", command: "spend", line: `--until date +count transactions dated on or before date ` +
+			`\(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`},
+		{name: "spend_account", command: "spend", line: `--account name +count only the account with this name or id; repeat for more`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, currencyEnv(&stdout, &stderr))
+
+			require.NoError(t, err)
+			assert.Regexp(t, c.line, stdout.String())
+		})
+	}
 }

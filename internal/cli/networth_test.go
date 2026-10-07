@@ -14,15 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_networth_returns_a_failed_report_open(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"networth"}, refusedEnv(&stdout, &stderr))
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.Empty(t, stdout.String())
-}
-
 func Test_networth_refuses_an_as_of_it_cannot_use_before_opening_the_store(t *testing.T) {
 	const conflict = "--as-of cannot be combined with --since or --until; pass --as-of for one day, or --since and --until for month ends"
 	cases := []struct {

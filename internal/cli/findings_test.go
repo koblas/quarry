@@ -104,20 +104,6 @@ prints one row per item, for a spreadsheet.
 	assert.Contains(t, stdout.String(), long)
 }
 
-func Test_findings_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry findings
-  quarry findings --type duplicate
-  quarry findings --status all --csv > findings.csv
-`
-	var stdout, stderr bytes.Buffer
-
-	err := executeFindings(t, fakeReportStore{}, &stdout, &stderr, "--help")
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
-}
-
 func Test_root_help_lists_findings_with_its_short_line(t *testing.T) {
 	var list bytes.Buffer
 
