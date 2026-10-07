@@ -2,6 +2,7 @@ package duckstore_test
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -314,3 +315,589 @@ func Test_holdings_lists_accounts_quicken_leaves_out_of_its_reports(t *testing.T
 
 	assert.Equal(t, []string{"acct-hidden/" + secAcme, "acct-linked/" + secAcme, "acct-plain/" + secAcme}, got)
 }
+
+const acctNone = "acct-none"
+
+// accountHoldingsStore holds Acme and Globex in acct-1 (Chequing) and Globex in acct-2 (Brokerage USD),
+// on 2026-03-02.
+func accountHoldingsStore(t *testing.T, mutate func(*store.Rows)) *duckstore.Store {
+	t.Helper()
+	rows := holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(1), oneShare),
+		buy(acctOne, secUSD, 2, marchDay(1), oneShare),
+		buy(acctTwo, secUSD, 3, marchDay(1), oneShare))
+	if mutate != nil {
+		mutate(&rows)
+	}
+	return newStoreWith(t, rows)
+}
+
+// heldIn is "account/security" ids of the holdings accountHoldingsStore's st has on 2026-03-02 in the named accounts.
+func heldIn(t *testing.T, st *duckstore.Store, ids ...string) []string {
+	t.Helper()
+	got, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: marchDay(2), AccountIDs: ids})
+	require.NoError(t, err)
+	order := make([]string, len(got.Holdings))
+	for i, h := range got.Holdings {
+		order[i] = h.AccountID + "/" + h.SecurityID
+	}
+	return order
+}
+
+func Test_holdings_reads_only_the_named_accounts(t *testing.T) {
+	t.Parallel()
+	st := accountHoldingsStore(t, nil)
+
+	assert.Equal(t, []string{acctOne + "/" + secAcme, acctOne + "/" + secUSD}, heldIn(t, st, acctOne))
+	assert.Equal(t, []string{acctTwo + "/" + secUSD}, heldIn(t, st, acctTwo))
+}
+
+func Test_holdings_reads_every_account_when_none_is_named(t *testing.T) {
+	t.Parallel()
+	st := accountHoldingsStore(t, nil)
+
+	got := heldIn(t, st)
+
+	assert.Equal(t, []string{acctTwo + "/" + secUSD, acctOne + "/" + secAcme, acctOne + "/" + secUSD}, got)
+}
+
+func Test_holdings_reads_two_named_accounts_in_table_order_whatever_order_they_are_named(t *testing.T) {
+	t.Parallel()
+	st := accountHoldingsStore(t, nil)
+
+	got := heldIn(t, st, acctOne, acctTwo)
+
+	assert.Equal(t, []string{acctTwo + "/" + secUSD, acctOne + "/" + secAcme, acctOne + "/" + secUSD}, got)
+}
+
+func Test_holdings_reads_nothing_for_an_id_that_names_no_account(t *testing.T) {
+	t.Parallel()
+	st := accountHoldingsStore(t, nil)
+
+	got := heldIn(t, st, acctNone)
+
+	assert.Empty(t, got)
+}
+
+func Test_holdings_reads_a_named_closed_account(t *testing.T) {
+	t.Parallel()
+	st := accountHoldingsStore(t, func(rows *store.Rows) { rows.Accounts[1].Closed = true })
+
+	got := heldIn(t, st, acctTwo)
+
+	assert.Equal(t, []string{acctTwo + "/" + secUSD}, got)
+}
+
+// holdingsRead reads st's holdings on date in the named accounts.
+func holdingsRead(t *testing.T, st *duckstore.Store, date time.Time, ids ...string) store.Holdings {
+	t.Helper()
+	got, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: date, AccountIDs: ids})
+	require.NoError(t, err)
+	return got
+}
+
+func Test_holdings_reads_the_first_and_last_investment_transaction_dates_of_every_account(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(3), oneShare),
+		buy(acctTwo, secUSD, 2, marchDay(1), oneShare),
+		buy(acctOne, secAcme, 3, marchDay(5), oneShare)))
+
+	got := holdingsRead(t, st, marchDay(5))
+
+	assert.Equal(t, []time.Time{marchDay(1), marchDay(5)}, []time.Time{got.FirstTransaction, got.LastTransaction})
+}
+
+func Test_holdings_reads_no_transaction_dates_for_a_store_without_investment_transactions(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows())
+
+	got := holdingsRead(t, st, marchDay(5))
+
+	assert.True(t, got.FirstTransaction.IsZero())
+	assert.True(t, got.LastTransaction.IsZero())
+}
+
+func Test_holdings_reads_the_transaction_span_of_only_the_named_accounts(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctTwo, secUSD, 1, marchDay(1), oneShare),
+		buy(acctOne, secAcme, 2, marchDay(3), oneShare),
+		buy(acctOne, secAcme, 3, marchDay(4), oneShare),
+		buy(acctTwo, secUSD, 4, marchDay(8), oneShare)))
+
+	got := holdingsRead(t, st, marchDay(5), acctOne)
+
+	assert.Equal(t, []time.Time{marchDay(3), marchDay(4)}, []time.Time{got.FirstTransaction, got.LastTransaction})
+}
+
+func Test_holdings_reads_no_transaction_dates_for_an_id_that_names_no_account(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(buy(acctOne, secAcme, 1, marchDay(3), oneShare)))
+
+	got := holdingsRead(t, st, marchDay(5), acctNone)
+
+	assert.True(t, got.FirstTransaction.IsZero())
+	assert.True(t, got.LastTransaction.IsZero())
+}
+
+func Test_holdings_reads_the_same_transaction_span_on_a_day_before_the_first_transaction(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(3), oneShare),
+		buy(acctOne, secAcme, 2, marchDay(5), oneShare)))
+
+	got := holdingsRead(t, st, marchDay(1))
+
+	assert.Empty(t, got.Holdings)
+	assert.Equal(t, []time.Time{marchDay(3), marchDay(5)}, []time.Time{got.FirstTransaction, got.LastTransaction})
+}
+
+func Test_holdings_counts_a_cash_only_and_a_future_dated_transaction_in_the_span(t *testing.T) {
+	t.Parallel()
+	cash := buy(acctOne, secAcme, 1, marchDay(1), 0)
+	cash.Action, cash.SecurityID, cash.Shares = "div", nil, nil
+	future := localToday().AddDate(0, 0, 3)
+	st := newStoreWith(t, holdingRows(cash, buy(acctOne, secAcme, 2, marchDay(2), oneShare), buy(acctOne, secAcme, 3, future, oneShare)))
+
+	got := holdingsRead(t, st, marchDay(2))
+
+	assert.Equal(t, []time.Time{marchDay(1), future}, []time.Time{got.FirstTransaction, got.LastTransaction})
+}
+
+func Test_holdings_returns_the_transaction_span_query_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	fault := ioFault(`query rows "SELECT min"`)
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, queryFault: fault}))
+
+	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: marchDay(2)})
+
+	assertOtherFault(t, err, "disk read failed")
+	assert.ErrorIs(t, err, fault)
+}
+
+func Test_holdings_returns_a_transaction_span_scan_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 2, scanFault: errScanFailed}))
+
+	_, err := st.Holdings(t.Context(), store.HoldingsParams{AsOf: marchDay(2)})
+
+	assertOtherFault(t, err, errScanFailed.Error())
+	assert.ErrorIs(t, err, errScanFailed)
+}
+
+const (
+	tenUnits         = 10_000_000
+	maxDecimal18x6   = 999_999_999_999_999_999
+	maxHoldingValue  = "999999999999999998000000.00"
+	maxHoldingInUSD  = "799999999999999998400000.00"
+	maxHoldingInCAD  = "1249999999999999997500000.00"
+	placeholderPrice = "1899-12-29"
+)
+
+// quote is a price of millionths for security on date.
+func quote(security string, source int64, date time.Time, millionths int64) store.Price {
+	return store.Price{SecurityID: security, SourceID: source, Date: date, Price: millionths}
+}
+
+func Test_holdings_view_takes_the_latest_price_on_or_before_the_date(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		prices []store.Price
+		want   []string
+	}{
+		{
+			name:   "a price dated on the date is used",
+			prices: []store.Price{quote(secAcme, 1, marchDay(3), tenUnits), quote(secAcme, 2, marchDay(5), 12_000_000)},
+			want:   []string{"12.000000", "2026-03-05", "24.00"},
+		},
+		{
+			name:   "the latest of two earlier prices is used",
+			prices: []store.Price{quote(secAcme, 1, marchDay(2), tenUnits), quote(secAcme, 2, marchDay(4), 12_000_000)},
+			want:   []string{"12.000000", "2026-03-04", "24.00"},
+		},
+		{
+			name:   "a price dated after the date is not used",
+			prices: []store.Price{quote(secAcme, 1, marchDay(3), tenUnits), quote(secAcme, 2, marchDay(6), 99_000_000)},
+			want:   []string{"10.000000", "2026-03-03", "20.00"},
+		},
+		{
+			name:   "an old price shows its own day",
+			prices: []store.Price{quote(secAcme, 1, marchDay(1), tenUnits)},
+			want:   []string{"10.000000", "2026-03-01", "20.00"},
+		},
+		{
+			name:   "another security's price is not used",
+			prices: []store.Price{quote(secUSD, 1, marchDay(4), tenUnits)},
+			want:   []string{"NULL", "NULL", "NULL"},
+		},
+		{
+			name:   "no price at all leaves price, price date and value NULL",
+			prices: nil,
+			want:   []string{"NULL", "NULL", "NULL"},
+		},
+		{
+			name:   "a zero price is used as recorded",
+			prices: []store.Price{quote(secAcme, 1, marchDay(2), 0)},
+			want:   []string{"0.000000", "2026-03-02", "0.00"},
+		},
+		{
+			name:   "the placeholder price date is used as recorded",
+			prices: []store.Price{quote(secAcme, 1, day(1899, time.December, 29), tenUnits)},
+			want:   []string{"10.000000", placeholderPrice, "20.00"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(1), 2*oneShare))
+			rows.Prices = c.prices
+			st := newStoreWithRates(t, rows)
+
+			got := queryTexts(t, st, "SELECT price, price_date, value FROM v_holdings WHERE date = '2026-03-05'")
+
+			assert.Equal(t, [][]string{c.want}, got)
+		})
+	}
+}
+
+func Test_holdings_view_rounds_a_half_cent_away_from_zero_and_below_half_down(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		shares int64
+		price  int64
+		want   string
+	}{
+		{name: "exactly half a cent rounds up", shares: 500_000, price: 10_000, want: "0.01"},
+		{name: "exactly minus half a cent rounds down", shares: -500_000, price: 10_000, want: "-0.01"},
+		{name: "just below half a cent rounds to zero", shares: oneShare, price: 4_999, want: "0.00"},
+		{name: "a product that is not whole cents rounds to the nearest", shares: 3_500_000, price: 12_345_678, want: "43.21"},
+		{name: "negative shares give a negative value", shares: -2 * oneShare, price: tenUnits, want: "-20.00"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(1), c.shares))
+			rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), c.price)}
+			st := newStoreWithRates(t, rows)
+
+			got := queryTexts(t, st, "SELECT value FROM v_holdings WHERE date = '2026-03-01'")
+
+			assert.Equal(t, [][]string{{c.want}}, got)
+		})
+	}
+}
+
+func Test_holdings_view_values_a_split_day_at_that_days_price(t *testing.T) {
+	t.Parallel()
+	rows := holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(1), 10*oneShare),
+		splitOf(acctOne, secAcme, 2, marchDay(3), 2, 1))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), tenUnits), quote(secAcme, 2, marchDay(3), 6_000_000)}
+	st := newStoreWithRates(t, rows)
+
+	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), shares, price, value FROM v_holdings WHERE date IN ('2026-03-02', '2026-03-03') ORDER BY date")
+
+	assert.Equal(t, [][]string{
+		{"2026-03-02", "10.000000", "10.000000", "100.00"},
+		{"2026-03-03", "20.000000", "6.000000", "120.00"},
+	}, got)
+}
+
+func Test_holdings_view_values_the_largest_holding_without_overflow(t *testing.T) {
+	t.Parallel()
+	rows := holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(1), maxDecimal18x6), buy(acctOne, secUSD, 2, marchDay(1), maxDecimal18x6),
+		buy(acctTwo, secAcme, 3, marchDay(1), -maxDecimal18x6), buy(acctTwo, secUSD, 4, marchDay(1), -maxDecimal18x6))
+	rows.Prices = []store.Price{quote(secAcme, 1, marchDay(1), maxDecimal18x6), quote(secUSD, 2, marchDay(1), maxDecimal18x6)}
+	st := newStoreWithRates(t, rows, ratesOn(1, 1_250_000, "FXUSDCAD"))
+
+	got := queryTexts(t, st, "SELECT account_id, security_id, value, value_cad, value_usd FROM v_holdings WHERE date = '2026-03-01' ORDER BY account_id, security_id")
+
+	assert.Equal(t, [][]string{
+		{acctOne, secAcme, maxHoldingValue, maxHoldingValue, maxHoldingInUSD},
+		{acctOne, secUSD, maxHoldingValue, maxHoldingInCAD, maxHoldingValue},
+		{acctTwo, secAcme, "-" + maxHoldingValue, "-" + maxHoldingValue, "-" + maxHoldingInUSD},
+		{acctTwo, secUSD, "-" + maxHoldingValue, "-" + maxHoldingInCAD, "-" + maxHoldingValue},
+	}, got)
+}
+
+func Test_holdings_view_leaves_every_value_NULL_for_a_holding_with_no_price_even_with_a_rate_in_force(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, security string }{{"a CAD holding", secAcme}, {"a USD holding", secUSD}}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWithRates(t, holdingRows(buy(acctOne, c.security, 1, marchDay(1), oneShare)), fridayAndMonday()...)
+
+			got := queryTexts(t, st, "SELECT value, value_cad, value_usd, usd_cad FROM v_holdings WHERE date = '2026-03-13'")
+
+			assert.Equal(t, [][]string{{"NULL", "NULL", "NULL", "1.250000"}}, got)
+		})
+	}
+}
+
+func Test_holdings_view_converts_a_value_at_the_rate_in_force_on_the_date(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		security string
+		account  string
+		date     string
+		rates    []store.Rate
+		want     []string
+	}{
+		{
+			name: "a CAD holding keeps its value and converts to USD", security: secAcme, account: acctOne, date: "2026-03-13", rates: fridayAndMonday(),
+			want: []string{"10.00", "10.00", "8.00", "1.250000"},
+		},
+		{
+			name: "a USD holding keeps its value and converts to CAD", security: secUSD, account: acctOne, date: "2026-03-13", rates: fridayAndMonday(),
+			want: []string{"10.00", "12.50", "10.00", "1.250000"},
+		},
+		{
+			name: "a Saturday takes the Friday rate", security: secUSD, account: acctOne, date: "2026-03-14", rates: fridayAndMonday(),
+			want: []string{"10.00", "12.50", "10.00", "1.250000"},
+		},
+		{
+			name: "a day after the last rate takes the last rate", security: secUSD, account: acctOne, date: "2026-03-20", rates: fridayAndMonday(),
+			want: []string{"10.00", "13.00", "10.00", "1.300000"},
+		},
+		{
+			name: "a CAD holding before the first rate keeps its own currency only", security: secAcme, account: acctOne, date: "2026-03-12", rates: fridayAndMonday(),
+			want: []string{"10.00", "10.00", "NULL", "NULL"},
+		},
+		{
+			name: "a USD holding before the first rate keeps its own currency only", security: secUSD, account: acctOne, date: "2026-03-12", rates: fridayAndMonday(),
+			want: []string{"10.00", "NULL", "10.00", "NULL"},
+		},
+		{
+			name: "a CAD holding with no rates in the store keeps its own currency only", security: secAcme, account: acctOne, date: "2026-03-13", rates: nil,
+			want: []string{"10.00", "10.00", "NULL", "NULL"},
+		},
+		{
+			name: "a USD holding with no rates in the store keeps its own currency only", security: secUSD, account: acctOne, date: "2026-03-13", rates: nil,
+			want: []string{"10.00", "NULL", "10.00", "NULL"},
+		},
+		{
+			name: "a security with no currency converts to nothing and does not borrow its account's", security: secNoCurrency, account: acctOne, date: "2026-03-13", rates: fridayAndMonday(),
+			want: []string{"10.00", "NULL", "NULL", "1.250000"},
+		},
+		{
+			name: "a security in another currency converts to nothing", security: secEUR, account: acctOne, date: "2026-03-13", rates: fridayAndMonday(),
+			want: []string{"10.00", "NULL", "NULL", "1.250000"},
+		},
+		{
+			name: "the security's currency wins over its account's", security: secAcme, account: acctTwo, date: "2026-03-13", rates: fridayAndMonday(),
+			want: []string{"10.00", "10.00", "8.00", "1.250000"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			rows := holdingRows(
+				buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secUSD, 2, marchDay(1), oneShare),
+				buy(acctOne, secEUR, 3, marchDay(1), oneShare), buy(acctOne, secNoCurrency, 4, marchDay(1), oneShare),
+				buy(acctTwo, secAcme, 5, marchDay(1), oneShare))
+			rows.Prices = []store.Price{
+				quote(secAcme, 1, marchDay(1), tenUnits), quote(secUSD, 2, marchDay(1), tenUnits),
+				quote(secEUR, 3, marchDay(1), tenUnits), quote(secNoCurrency, 4, marchDay(1), tenUnits),
+			}
+			st := newStoreWithRates(t, rows, c.rates...)
+
+			got := queryTexts(t, st, "SELECT value, value_cad, value_usd, usd_cad FROM v_holdings WHERE date = '"+c.date+
+				"' AND security_id = '"+c.security+"' AND account_id = '"+c.account+"'")
+
+			assert.Equal(t, [][]string{c.want}, got)
+		})
+	}
+}
+
+const (
+	secUSD        = "sec-usd"
+	secEUR        = "sec-eur"
+	secNoCurrency = "sec-none"
+	secGhost      = "sec-ghost"
+)
+
+// holdingRows is a store whose only investment transactions are txns, with a CAD account and a USD one; its securities are
+// Acme (CAD), Globex (USD), Euro Fund (EUR) and Plain Fund (no ticker, no currency), and it has no prices.
+func holdingRows(txns ...store.InvestmentTransaction) store.Rows {
+	rows := noTransactionRows()
+	rows.Accounts = append(rows.Accounts, store.Account{
+		ID: acctTwo, SourceID: 2, Name: "Brokerage USD", Type: store.AccountTypeBrokerage, Currency: "USD", Active: true,
+	})
+	rows.Securities = []store.Security{
+		{ID: secAcme, SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")},
+		{ID: secUSD, SourceID: 2, Name: "Globex Inc", Ticker: new("GLBX"), Currency: new("USD")},
+		{ID: secEUR, SourceID: 3, Name: "Euro Fund", Ticker: new("EURF"), Currency: new("EUR")},
+		{ID: secNoCurrency, SourceID: 4, Name: "Plain Fund"},
+	}
+	rows.Prices = nil
+	rows.InvestmentTransactions = txns
+	return rows
+}
+
+// dayList is dates joined with commas, as heldDaysQuery returns them.
+func dayList(days ...time.Time) string {
+	texts := make([]string, len(days))
+	for i, d := range days {
+		texts[i] = d.Format(time.DateOnly)
+	}
+	return strings.Join(texts, ",")
+}
+
+func Test_holdings_view_lists_each_day_of_a_closed_span_from_the_first_to_the_last(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(1), oneShare),
+		buy(acctOne, secAcme, 2, marchDay(4), -oneShare)))
+
+	got := queryTexts(t, st, heldDaysQuery)
+
+	assert.Equal(t, [][]string{{dayList(marchDay(1), marchDay(2), marchDay(3))}}, got)
+}
+
+func Test_holdings_view_stops_each_span_at_today(t *testing.T) {
+	t.Parallel()
+	today := localToday()
+	daysAgo := func(n int) time.Time { return today.AddDate(0, 0, -n) }
+	cases := []struct {
+		name string
+		txns []store.InvestmentTransaction
+		want string
+	}{
+		{
+			name: "an open span ends today",
+			txns: []store.InvestmentTransaction{buy(acctOne, secAcme, 1, daysAgo(2), oneShare)},
+			want: dayList(daysAgo(2), daysAgo(1), today),
+		},
+		{
+			name: "a span closed after today ends today",
+			txns: []store.InvestmentTransaction{
+				buy(acctOne, secAcme, 1, daysAgo(1), oneShare), buy(acctOne, secAcme, 2, today.AddDate(0, 0, 2), -oneShare),
+			},
+			want: dayList(daysAgo(1), today),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreWith(t, holdingRows(c.txns...))
+
+			got := queryTexts(t, st, heldDaysQuery)
+
+			assert.Equal(t, [][]string{{c.want}}, got)
+		})
+	}
+}
+
+func Test_holdings_view_has_no_rows_for_a_span_that_starts_after_today(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(buy(acctOne, secAcme, 1, localToday().AddDate(0, 0, 3), oneShare)))
+
+	got := queryTexts(t, st, heldDaysQuery)
+
+	assert.Equal(t, [][]string{{""}}, got)
+}
+
+func Test_holdings_view_has_no_rows_between_two_spans_of_one_holding(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secAcme, 2, marchDay(3), -oneShare),
+		buy(acctOne, secAcme, 3, marchDay(5), oneShare), buy(acctOne, secAcme, 4, marchDay(7), -oneShare)))
+
+	got := queryTexts(t, st, heldDaysQuery)
+
+	assert.Equal(t, [][]string{{dayList(marchDay(1), marchDay(2), marchDay(5), marchDay(6))}}, got)
+}
+
+func Test_holdings_view_has_one_row_a_day_where_two_spans_meet(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctOne, secAcme, 2, marchDay(3), oneShare),
+		buy(acctOne, secAcme, 3, marchDay(5), -2*oneShare)))
+
+	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), CAST(shares AS VARCHAR) FROM v_holdings ORDER BY date")
+
+	assert.Equal(t, [][]string{
+		{"2026-03-01", "1.000000"}, {"2026-03-02", "1.000000"}, {"2026-03-03", "2.000000"}, {"2026-03-04", "2.000000"},
+	}, got)
+}
+
+func Test_holdings_view_expands_a_span_of_negative_shares(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctOne, secAcme, 1, marchDay(1), -oneShare), buy(acctOne, secAcme, 2, marchDay(3), oneShare)))
+
+	got := queryTexts(t, st, "SELECT CAST(date AS VARCHAR), CAST(shares AS VARCHAR) FROM v_holdings ORDER BY date")
+
+	assert.Equal(t, [][]string{{"2026-03-01", "-1.000000"}, {"2026-03-02", "-1.000000"}}, got)
+}
+
+func Test_holdings_view_lists_a_holding_whose_security_row_is_missing(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows(
+		buy(acctOne, secGhost, 1, marchDay(1), oneShare), buy(acctOne, secGhost, 2, marchDay(2), -oneShare)))
+
+	got := queryTexts(t, st, "SELECT security_id, security, ticker, currency, price, value FROM v_holdings")
+
+	assert.Equal(t, [][]string{{secGhost, "NULL", "NULL", "NULL", "NULL", "NULL"}}, got)
+}
+
+func Test_holdings_view_lists_accounts_left_out_of_reports(t *testing.T) {
+	t.Parallel()
+	rows := holdingRows(buy(acctOne, secAcme, 1, marchDay(1), oneShare), buy(acctTwo, secAcme, 2, marchDay(1), oneShare))
+	rows.Accounts[0].NotInReports = true
+	rows.Accounts[1].LinkedTracking = true
+	st := newStoreWith(t, rows)
+
+	got := queryTexts(t, st, "SELECT account_id FROM v_holdings WHERE date = '2026-03-01' ORDER BY account_id")
+
+	assert.Equal(t, [][]string{{acctOne}, {acctTwo}}, got)
+}
+
+func Test_holdings_view_lists_its_columns_in_order(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows())
+
+	got, err := st.Query(t.Context(), "SELECT * FROM v_holdings", 0) //nolint:unqueryvet // every column is the point
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.QueryColumn{
+		{Name: "date", Type: "DATE"},
+		{Name: "account_id", Type: "VARCHAR"},
+		{Name: "security_id", Type: "VARCHAR"},
+		{Name: "security", Type: "VARCHAR"},
+		{Name: "ticker", Type: "VARCHAR"},
+		{Name: "shares", Type: "DECIMAL(18,6)"},
+		{Name: "price", Type: "DECIMAL(18,6)"},
+		{Name: "price_date", Type: "DATE"},
+		{Name: "currency", Type: "VARCHAR"},
+		{Name: "value", Type: "DECIMAL(38,2)"},
+		{Name: "value_cad", Type: "DECIMAL(38,2)"},
+		{Name: "value_usd", Type: "DECIMAL(38,2)"},
+		{Name: "usd_cad", Type: "DECIMAL(10,6)"},
+	}, got.Columns)
+}
+
+func Test_holdings_view_carries_its_note(t *testing.T) {
+	t.Parallel()
+	st := newStoreWith(t, holdingRows())
+
+	got := queryTexts(t, st, "SELECT comment FROM duckdb_views() WHERE view_name = 'v_holdings'")
+
+	assert.Equal(t, [][]string{{"one row per holding per day it is held, through today, so filter by date; " +
+		"value is shares times price rounded to the cent, value_cad and value_usd convert it at the rate for date as quarry holdings does; " +
+		"cash in investment accounts is not included."}}, got)
+}
+
+// heldDaysQuery is the dates of every v_holdings row of Acme, oldest first, joined by commas.
+const heldDaysQuery = `SELECT coalesce(string_agg(CAST(date AS VARCHAR), ',' ORDER BY date), '') FROM v_holdings WHERE security_id = 'sec-1'`
