@@ -45,7 +45,7 @@ func Test_run_stamps_the_store_with_its_format_and_the_build(t *testing.T) {
 
 	after := time.Now().UTC()
 	require.Equal(t, 0, exitCode, stderr.String())
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotsDir := snapshotsDir(home)
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))
 	require.NoError(t, err)
 	var manifest struct {
@@ -410,7 +410,7 @@ func Test_run_snapshots_prune_dry_run_lists_neither_the_recorded_snapshot_nor_it
 		"  20260930T141502Z  2026-09-30 10:15 EDT  0.2 MB\n"+
 		"  20260930T090000Z  2026-09-30 05:00 EDT  0.2 MB\n"+
 		"  20260929T090011Z  2026-09-29 05:00 EDT  2.2 MB\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 	assert.FileExists(t, filepath.Join(dir, linkID+".sqlite"))
 }
 
@@ -646,4 +646,11 @@ func Test_run_never_replaces_the_store_when_the_build_fails(t *testing.T) {
 			assert.Equal(t, sentinel, after)
 		})
 	}
+}
+
+// writeNonDuckDBStore puts a file DuckDB cannot open where the store lives under home.
+func writeNonDuckDBStore(tb testing.TB, home string) {
+	tb.Helper()
+	require.NoError(tb, os.MkdirAll(storeDirUnder(home), 0o700))
+	require.NoError(tb, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
 }

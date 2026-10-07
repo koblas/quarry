@@ -70,6 +70,12 @@ func requireSnapshotsGone(t *testing.T, dir string, ids ...string) {
 	}
 }
 
+// requireFiveSnapshotsKept checks that all of fiveSnapshots are still in dir.
+func requireFiveSnapshotsKept(t *testing.T, dir string) {
+	t.Helper()
+	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+}
+
 // requireSnapshotsKept asserts the snapshot file and manifest of each id are still in dir.
 func requireSnapshotsKept(t *testing.T, dir string, ids ...string) {
 	t.Helper()
@@ -124,8 +130,7 @@ func Test_run_snapshots_prune_keeps_the_stores_snapshot_when_it_is_older_than_th
 func Test_run_snapshots_prune_refuses_when_the_store_cannot_be_read(t *testing.T) {
 	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
-	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runPrune(t, "--keep", "1")
 
@@ -134,7 +139,7 @@ func Test_run_snapshots_prune_refuses_when_the_store_cannot_be_read(t *testing.T
 	assert.Equal(t, "quarry: cannot tell which snapshot the store at "+storeShown+" was built from "+
 		"(the file is not a DuckDB database), so no snapshot was deleted; "+
 		"run quarry sync to rebuild the store, then prune again\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_refuses_keep_0_as_a_usage_error(t *testing.T) {
@@ -148,7 +153,7 @@ func Test_run_snapshots_prune_refuses_keep_0_as_a_usage_error(t *testing.T) {
 	assert.Empty(t, stdout)
 	assert.Equal(t, "quarry: --keep must be 1 or more; the snapshot the store was built from is always kept; "+
 		"Run 'quarry snapshots prune --help' for usage.\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 // refusingRemove removes as os.Remove does, except that the file named refused fails with EACCES.
@@ -199,7 +204,7 @@ func Test_run_snapshots_prune_with_nothing_beyond_the_default_cap_deletes_nothin
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
 	assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one(t *testing.T) {
@@ -212,7 +217,7 @@ func Test_run_snapshots_prune_refuses_a_snapshots_keep_below_one(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, "quarry: "+configShown+": snapshots.keep must be a whole number of 1 or more, got 0"+configFix+"\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_refuses_a_malformed_config_with_nothing_deleted(t *testing.T) {
@@ -225,7 +230,7 @@ func Test_run_snapshots_prune_refuses_a_malformed_config_with_nothing_deleted(t 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Regexp(t, "^"+regexp.QuoteMeta("quarry: cannot read "+configShown+": line 1: ")+"[^\n]+"+regexp.QuoteMeta(configFix)+"\n$", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t *testing.T) {
@@ -267,7 +272,7 @@ func Test_run_snapshots_prune_refuses_a_bad_config_value_with_nothing_deleted(t 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout)
 			assert.Equal(t, "quarry: "+c.line+configFix+"\n", stderr)
-			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+			requireFiveSnapshotsKept(t, dir)
 		})
 	}
 }
@@ -282,7 +287,7 @@ func Test_run_snapshots_prune_refuses_a_config_it_cannot_read(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, "quarry: cannot read "+configShown+": is a directory"+configFix+"\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_refuses_a_bad_config_even_when_keep_is_given(t *testing.T) {
@@ -295,7 +300,7 @@ func Test_run_snapshots_prune_refuses_a_bad_config_even_when_keep_is_given(t *te
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, "quarry: "+configShown+": snapshots.keep must be a whole number of 1 or more, got 0"+configFix+"\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_keep_0_is_a_usage_error_beside_a_broken_config(t *testing.T) {
@@ -309,7 +314,7 @@ func Test_run_snapshots_prune_keep_0_is_a_usage_error_beside_a_broken_config(t *
 	assert.Empty(t, stdout)
 	assert.Equal(t, "quarry: --keep must be 1 or more; the snapshot the store was built from is always kept; "+
 		"Run 'quarry snapshots prune --help' for usage.\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_never_looks_for_the_quicken_path_it_is_configured_with(t *testing.T) {
@@ -322,15 +327,14 @@ func Test_run_snapshots_prune_never_looks_for_the_quicken_path_it_is_configured_
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
 	assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_prints_config_warnings_before_its_own_stderr(t *testing.T) {
 	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runPrune(t, "--keep", "1")
 
@@ -338,7 +342,7 @@ func Test_run_snapshots_prune_prints_config_warnings_before_its_own_stderr(t *te
 	assert.Empty(t, stdout)
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n"+
 		cannotTellRefusal("the file is not a DuckDB database"), stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_prints_only_the_config_warning_on_stderr_after_a_successful_run(t *testing.T) {
@@ -467,7 +471,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_when_snapshots_keep_equals_
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
 	assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 5\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_deletes_exactly_the_oldest_when_snapshots_keep_is_one_below_the_count(t *testing.T) {
@@ -521,21 +525,20 @@ func Test_run_snapshots_prune_dry_run_lists_what_it_would_delete_and_deletes_not
 		"Would delete 2 snapshots (3.5 MB), keeping the newest 3:\n"+
 		"  20260929T090011Z  2026-09-29 05:00 EDT  2.2 MB\n"+
 		"  20260927T143005Z  2026-09-27 10:30 EDT  1.2 MB\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_dry_run_refuses_when_the_store_cannot_be_read(t *testing.T) {
 	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
-	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runPrune(t, "--keep", "1", "--dry-run")
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, cannotTellRefusal("the file is not a DuckDB database"), stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_dry_run_uses_snapshots_keep(t *testing.T) {
@@ -553,7 +556,7 @@ func Test_run_snapshots_prune_dry_run_uses_snapshots_keep(t *testing.T) {
 		"Would delete 2 snapshots (3.5 MB), keeping the newest 3:\n"+
 		"  20260929T090011Z  2026-09-29 05:00 EDT  2.2 MB\n"+
 		"  20260927T143005Z  2026-09-27 10:30 EDT  1.2 MB\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_dry_run_refuses_a_bad_config(t *testing.T) {
@@ -566,7 +569,7 @@ func Test_run_snapshots_prune_dry_run_refuses_a_bad_config(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, "quarry: "+configShown+": snapshots.keep must be a whole number of 1 or more, got 0"+configFix+"\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_within_the_cap(t *testing.T) {
@@ -578,7 +581,7 @@ func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_within_the_cap(t *t
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
 	assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_with_no_snapshots_folder(t *testing.T) {
@@ -594,8 +597,7 @@ func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_with_no_snapshots_f
 func Test_run_snapshots_prune_dry_run_says_nothing_to_delete_beside_an_unreadable_store(t *testing.T) {
 	home := newHome(t)
 	writeSnapshots(t, home, fiveSnapshots()...)
-	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runPrune(t, "--dry-run")
 
@@ -658,7 +660,7 @@ func Test_run_snapshots_prune_dry_run_is_interrupted_before_the_store_read(t *te
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: snapshots prune interrupted\n", stderr.String())
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_dry_run_counts_the_cap_exactly(t *testing.T) {
@@ -681,7 +683,7 @@ func Test_run_snapshots_prune_dry_run_counts_the_cap_exactly(t *testing.T) {
 
 			require.Equal(t, 0, exitCode, stderr)
 			assert.Equal(t, c.want, stdout)
-			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+			requireFiveSnapshotsKept(t, dir)
 		})
 	}
 }
@@ -780,15 +782,14 @@ func Test_run_snapshots_prune_protects_nothing_when_there_is_no_store(t *testing
 func Test_run_snapshots_prune_says_nothing_to_delete_beside_an_unreadable_store(t *testing.T) {
 	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
-	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runPrune(t)
 
 	require.Equal(t, 0, exitCode, stderr)
 	assert.Empty(t, stderr)
 	assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_says_nothing_to_delete_within_the_newest_one(t *testing.T) {
@@ -862,7 +863,7 @@ func Test_run_snapshots_prune_prints_one_line_per_failure_and_nothing_on_stdout_
 	assert.Equal(t, ""+
 		"quarry: cannot delete snapshot "+pruneMiddle+": permission denied\n"+
 		"quarry: cannot delete snapshot "+pruneOldest+": permission denied\n", stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_says_it_was_interrupted_before_any_delete(t *testing.T) {
@@ -876,7 +877,7 @@ func Test_run_snapshots_prune_says_it_was_interrupted_before_any_delete(t *testi
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: snapshots prune interrupted\n", stderr.String())
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_prints_what_it_deleted_before_the_interrupt_line(t *testing.T) {
@@ -960,7 +961,7 @@ func Test_run_snapshots_prune_refuses_a_store_with_no_import_history(t *testing.
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, cannotTellRefusal("the store has no import history"), stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_refuses_a_store_of_another_format_naming_no_snapshot(t *testing.T) {
@@ -973,7 +974,7 @@ func Test_run_snapshots_prune_refuses_a_store_of_another_format_naming_no_snapsh
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, cannotTellRefusal("the store was built by another version of quarry"), stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_refuses_a_snapshots_folder_it_cannot_read(t *testing.T) {
@@ -1114,7 +1115,7 @@ func Test_run_snapshots_prune_refuses_when_the_recorded_snapshot_cannot_be_read(
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout)
 	assert.Equal(t, cannotTellRefusal("cannot read ~/Backup/"+pruneMiddle+".sqlite: permission denied"), stderr)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 // pruneMode is a way to run prune, named for its table row.
@@ -1138,7 +1139,7 @@ func Test_run_snapshots_prune_recorded_snapshot_cells(t *testing.T) {
 				assert.Equal(t, 1, exitCode)
 				assert.Empty(t, stdout)
 				assert.Equal(t, cannotTellRefusal(c.cannotReadPhrase("~/Backup/"+pruneMiddle+".sqlite")), stderr)
-				requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+				requireFiveSnapshotsKept(t, dir)
 			})
 		}
 	}
@@ -1176,7 +1177,7 @@ func Test_run_snapshots_prune_dry_run_lists_what_lies_beyond_the_newest_n_when_t
 				"  20260930T141502Z  2026-09-30 10:15 EDT  0.2 MB\n"+
 				"  20260930T090000Z  2026-09-30 05:00 EDT  0.2 MB\n"+
 				"  20260927T143005Z  2026-09-27 10:30 EDT  1.2 MB\n", stdout)
-			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+			requireFiveSnapshotsKept(t, dir)
 		})
 	}
 }
@@ -1190,7 +1191,7 @@ func Test_run_snapshots_prune_dry_run_json_lists_what_lies_beyond_the_newest_n_w
 			assert.Empty(t, stderr)
 			assert.Equal(t, []string{pruneNoon, pruneMorning, pruneOldest}, jsonIDs(t, stdout, "would_delete"))
 			assert.Empty(t, jsonIDs(t, stdout, "deleted"))
-			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+			requireFiveSnapshotsKept(t, dir)
 		})
 	}
 }
@@ -1203,7 +1204,7 @@ func Test_run_snapshots_prune_says_nothing_to_delete_within_the_newest_n_when_th
 			require.Equal(t, 0, exitCode, stderr)
 			assert.Empty(t, stderr)
 			assert.Equal(t, "Nothing to delete: 5 snapshots, within the newest 12\n", stdout)
-			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+			requireFiveSnapshotsKept(t, dir)
 		})
 	}
 }
@@ -1719,7 +1720,7 @@ func Test_run_snapshots_prune_json_fills_would_delete_and_leaves_deleted_and_fai
 		"  \"failed\": [],\n"+
 		"  \"warnings\": []\n"+
 		"}\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_json_prints_empty_lists_and_the_store_snapshot_when_nothing_is_beyond_the_cap(t *testing.T) {
@@ -1746,8 +1747,7 @@ func Test_run_snapshots_prune_json_prints_empty_lists_and_the_store_snapshot_whe
 func Test_run_snapshots_prune_json_gives_a_null_store_snapshot_without_a_warning_when_the_unreadable_store_blocks_nothing(t *testing.T) {
 	home := newHome(t)
 	dir := writeSnapshots(t, home, fiveSnapshots()...)
-	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runPrune(t, "--json")
 
@@ -1763,7 +1763,7 @@ func Test_run_snapshots_prune_json_gives_a_null_store_snapshot_without_a_warning
 		"  \"failed\": [],\n"+
 		"  \"warnings\": []\n"+
 		"}\n", stdout)
-	requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+	requireFiveSnapshotsKept(t, dir)
 }
 
 func Test_run_snapshots_prune_json_gives_a_null_store_snapshot_when_there_is_no_store(t *testing.T) {
@@ -1902,7 +1902,7 @@ func Test_run_snapshots_prune_json_prints_no_document_when_interrupted_before_an
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout)
 			assert.Equal(t, "quarry: snapshots prune interrupted\n", stderr)
-			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+			requireFiveSnapshotsKept(t, dir)
 		})
 	}
 }
@@ -2035,8 +2035,7 @@ func Test_run_snapshots_prune_json_prints_no_document_when_the_run_refuses(t *te
 			name: "store cannot say which snapshot built it",
 			setup: func(t *testing.T, home string) {
 				t.Helper()
-				require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-				require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+				writeNonDuckDBStore(t, home)
 			},
 			args:       []string{"--keep", "1", "--json"},
 			wantExit:   1,
@@ -2046,8 +2045,7 @@ func Test_run_snapshots_prune_json_prints_no_document_when_the_run_refuses(t *te
 			name: "store cannot say which snapshot built it under --dry-run",
 			setup: func(t *testing.T, home string) {
 				t.Helper()
-				require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-				require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+				writeNonDuckDBStore(t, home)
 			},
 			args:       []string{"--keep", "1", "--dry-run", "--json"},
 			wantExit:   1,
@@ -2100,7 +2098,7 @@ func Test_run_snapshots_prune_json_prints_no_document_when_the_run_refuses(t *te
 			assert.Equal(t, c.wantExit, exitCode)
 			assert.Empty(t, stdout)
 			assert.Equal(t, c.wantStderr, stderr)
-			requireSnapshotsKept(t, dir, pruneOldest, pruneMiddle, pruneMorning, pruneNoon, pruneNewest)
+			requireFiveSnapshotsKept(t, dir)
 		})
 	}
 }

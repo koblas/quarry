@@ -76,7 +76,7 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
 
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotsDir := snapshotsDir(home)
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	manifestPath := onlyFileWithSuffix(t, snapshotsDir, ".json")
 	raw, err := os.ReadFile(snapshotPath)
@@ -212,7 +212,7 @@ func Test_run_records_an_import_runs_row_for_the_build(t *testing.T) {
 	exitCode, _, _ := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotsDir := snapshotsDir(home)
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))
 	require.NoError(t, err)
 	var manifest struct {

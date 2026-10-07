@@ -26,7 +26,7 @@ func Test_run_status_describes_the_store_sync_built(t *testing.T) {
 
 	syncBundle(t, bundle)
 	editStore(t, home, "DELETE FROM fx_rates") // the Rates line's age follows the real clock; the none arm does not
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotsDir := snapshotsDir(home)
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))
 	require.NoError(t, err)
@@ -411,7 +411,7 @@ func Test_run_status_json_describes_the_store_sync_built(t *testing.T) {
 	home := newHome(t)
 	bundle := writeStatusFixtureBundle(t, home)
 	syncBundle(t, bundle)
-	snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+	snapshotsDir := snapshotsDir(home)
 	snapshotPath := onlyFileWithSuffix(t, snapshotsDir, ".sqlite")
 	raw, err := os.ReadFile(onlyFileWithSuffix(t, snapshotsDir, ".json"))
 	require.NoError(t, err)

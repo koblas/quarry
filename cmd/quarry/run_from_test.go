@@ -230,7 +230,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				home := newHome(t)
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				return home, filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 			},
 			want: func(t *testing.T, home, from string) string {
@@ -243,14 +243,14 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				home := newHome(t)
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				dir := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 				require.NoError(t, os.MkdirAll(dir, 0o700))
 				return home, dir
 			},
 			want: func(t *testing.T, home, from string) string {
 				t.Helper()
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				return "quarry: " + abbreviated(t, from, home) + " is not a snapshot file; pass a .sqlite snapshot from " +
 					abbreviated(t, snapshotsDir, home) + " with --from <snapshot>"
 			},
@@ -274,14 +274,14 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				home := newHome(t)
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
 				require.NoError(t, os.WriteFile(filepath.Join(snapshotsDir, "20260927T143005Z.sqlite"), []byte("x"), 0o600))
 				return home, "20260927T143005Z"
 			},
 			want: func(t *testing.T, home, _ string) string {
 				t.Helper()
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				path := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 				return "quarry: " + abbreviated(t, path, home) +
 					" is not a quarry snapshot (no .json manifest next to it); pass a snapshot taken by quarry sync with --from <snapshot>"
@@ -295,7 +295,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 					t.Skip("root ignores file permissions")
 				}
 				home := newHome(t)
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				require.NoError(t, os.MkdirAll(snapshotsDir, 0o700))
 				path := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 				content := []byte("x")
@@ -307,7 +307,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			},
 			want: func(t *testing.T, home, _ string) string {
 				t.Helper()
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				path := filepath.Join(snapshotsDir, "20260927T143005Z.sqlite")
 				return "quarry: cannot read " + abbreviated(t, path, home) + ": permission denied; check the file's permissions"
 			},
@@ -320,7 +320,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 				bundle := v9fixture.OpenBundle(t, filepath.Join(home, "Documents"))
 				var stdout, stderr bytes.Buffer
 				require.Equal(t, 0, run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr))
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				id := snapshotID(onlyFileWithSuffix(t, snapshotsDir, ".sqlite"))
 				manifestPath := filepath.Join(snapshotsDir, id+".json")
 				raw, err := os.ReadFile(manifestPath)
@@ -336,7 +336,7 @@ func Test_run_refuses_from_input_that_is_not_a_usable_snapshot(t *testing.T) {
 			},
 			want: func(t *testing.T, home, from string) string {
 				t.Helper()
-				snapshotsDir := filepath.Join(home, "Library", "Application Support", "quarry", "snapshots")
+				snapshotsDir := snapshotsDir(home)
 				path := filepath.Join(snapshotsDir, from+".sqlite")
 				return "quarry: " + abbreviated(t, path, home) +
 					" has changed since quarry took it (its SHA-256 does not match its manifest); take a new snapshot with quarry sync"

@@ -176,7 +176,7 @@ func Test_run_snapshots_warns_when_the_store_cannot_be_read(t *testing.T) {
 	pinLocalZone(t)
 	home := newHome(t)
 	writeSnapshots(t, home, olderPair()...)
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runSnapshots(t)
 
@@ -445,8 +445,7 @@ func Test_run_snapshots_says_it_was_interrupted(t *testing.T) {
 
 func Test_run_snapshots_prints_the_no_snapshots_note_before_the_store_warning(t *testing.T) {
 	home := newHome(t)
-	require.NoError(t, os.MkdirAll(storeDirUnder(home), 0o700))
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 
 	exitCode, stdout, stderr := runSnapshots(t)
 
@@ -744,7 +743,7 @@ func Test_run_snapshots_json_prints_an_empty_list_and_the_no_snapshots_line_when
 func Test_run_snapshots_json_lists_config_then_no_snapshots_then_store_warnings_and_prefixes_them_on_stderr(t *testing.T) {
 	home := newHome(t)
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 	configWarning := configShown + ": unknown key snapshot.keep; quarry ignores it"
 	absoluteConfigWarning := configPath(home) + ": unknown key snapshot.keep; quarry ignores it"
 	noSnapshots := "no snapshots in " + snapshotsShown + " yet; run quarry sync to take one"
@@ -781,7 +780,7 @@ func Test_run_snapshots_json_gives_a_null_store_snapshot_when_the_store_cannot_n
 		{name: "no store", setup: func(*testing.T, string, string) {}},
 		{name: "store is not a DuckDB database", setup: func(t *testing.T, home, _ string) {
 			t.Helper()
-			require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+			writeNonDuckDBStore(t, home)
 		}},
 		{name: "store has no import runs", setup: func(t *testing.T, home, dir string) {
 			t.Helper()
@@ -994,7 +993,7 @@ func Test_run_snapshots_json_puts_the_stray_letter_case_warning_between_the_conf
 	home := newHome(t)
 	writeConfig(t, home, "snapshot.keep = 3\n")
 	dir := writeSnapshots(t, home, snapshotFixture{id: oldestID, bytes: oldestBytes})
-	require.NoError(t, os.WriteFile(storePathUnder(home), []byte("this is not a DuckDB file"), 0o600))
+	writeNonDuckDBStore(t, home)
 	readDir := readDirWithVariant(oldestID+".SQLITE", oldestID+".sqlite")
 	stray := " holds both " + oldestID + ".sqlite and " + oldestID + ".SQLITE; " +
 		"quarry lists, prunes and uses only " + oldestID + ".sqlite; rename or remove the other"
