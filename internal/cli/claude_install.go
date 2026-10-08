@@ -10,8 +10,9 @@ import (
 const installCommand = "install"
 
 // newClaudeInstallCommand builds claude install: it refuses arguments, then --json, then has the
-// plugin Server add quarry's marketplace and install its plugin, reporting each step on stdout.
-func newClaudeInstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, _ claudedesktop.Executable, jsonOut *bool) *cobra.Command {
+// plugin Server add quarry's marketplace and install its plugin, reporting each step on stdout, then
+// has the Claude Desktop Server add quarry's MCP server to Desktop's config when Desktop is on this Mac.
+func newClaudeInstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, executable claudedesktop.Executable, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   installCommand,
 		Short: "Install quarry's plugin (skill and MCP server) in Claude Code",
@@ -45,7 +46,17 @@ starts "quarry" from your PATH. Restart Claude Code to load it.`,
 			if res.QuarryNotOnPath {
 				writeClaudeLine(cmd, installCommand, installQuarryNotOnPathWarning)
 			}
-			return nil
+			return installDesktop(cmd, home, executable)
 		},
 	}
+}
+
+// installDesktop adds quarry's MCP server to Claude Desktop and reports the outcome on stdout.
+func installDesktop(cmd *cobra.Command, home string, executable claudedesktop.Executable) error {
+	srv := claudedesktop.NewServer(claudedesktop.WithHome(home), claudedesktop.WithExecutable(executable))
+	res, err := srv.Install(cmd.Context())
+	if err != nil {
+		return reportDesktopFailure(cmd, installCommand, err)
+	}
+	return writeResult(cmd, []byte(renderDesktopInstalled(home, res)))
 }

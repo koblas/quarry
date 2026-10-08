@@ -38,6 +38,7 @@ const (
 	marketplacePresentLine = "The quarry marketplace is already in Claude Code.\n"
 	pluginInstalledLine    = "Installed the quarry plugin (skill and MCP server) for all your projects.\n"
 	installRestartLine     = "Restart Claude Code to load it.\n"
+	desktopSkippedLine     = "Skipped Claude Desktop: \"~/Library/Application Support/Claude\" does not exist.\n"
 )
 
 var errNoStart = errors.New("fork/exec /opt/claude: permission denied")
@@ -105,10 +106,11 @@ func runClaude(t *testing.T, tool *toolCalls, args ...string) (string, string, e
 	return runClaudeFinding(t, tool, nil, args...)
 }
 
-// runClaudeFinding is runClaude with lookPath as the process's command lookup.
+// runClaudeFinding is runClaude with lookPath as the process's command lookup, over a home
+// directory that holds no Claude Desktop folder.
 func runClaudeFinding(t *testing.T, tool *toolCalls, lookPath claudeplugin.LookPath, args ...string) (string, string, error) {
 	t.Helper()
-	return runClaudeAt(t, tool, lookPath, "", args...)
+	return runClaudeAt(t, tool, lookPath, t.TempDir(), args...)
 }
 
 // ctxMarker keys the value runClaudeAt puts on the command's context.
@@ -152,7 +154,7 @@ func Test_claude_install_warns_when_quarry_is_not_on_the_path(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"Installed the quarry plugin (skill and MCP server) for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
 		"add the directory holding quarry to your PATH\n", stderr)
 }
@@ -174,7 +176,7 @@ func Test_claude_install_warns_after_the_turned_off_hint(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: the quarry plugin is installed but turned off; "+
 		"to turn it on, run claude plugin enable quarry@quarry\n"+
 		`quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
@@ -188,7 +190,7 @@ func Test_claude_install_warns_when_quarry_is_not_on_the_path_and_nothing_ran(t 
 
 	require.NoError(t, err)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
 		"add the directory holding quarry to your PATH\n", stderr)
 }
@@ -289,7 +291,7 @@ func Test_claude_install_reports_a_claude_it_cannot_run_at_a_path_outside_home(t
 func Test_claude_install_runs_both_steps_when_nothing_is_installed(t *testing.T) {
 	tool := &toolCalls{}
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{Stdout: &stdout, Stderr: &stderr, RunTool: tool.run}
+	env := cli.Env{Stdout: &stdout, Stderr: &stderr, RunTool: tool.run, Home: t.TempDir()}
 
 	err := cli.Execute(t.Context(), []string{"claude", "install"}, env)
 
@@ -302,7 +304,7 @@ func Test_claude_install_runs_both_steps_when_nothing_is_installed(t *testing.T)
 	}, tool.argv)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"Installed the quarry plugin (skill and MCP server) for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout.String())
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout.String())
 	assert.Empty(t, stderr.String())
 }
 
@@ -314,7 +316,7 @@ func Test_claude_install_skips_both_steps_when_both_are_present(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -327,7 +329,7 @@ func Test_claude_install_installs_only_the_plugin_when_the_marketplace_is_presen
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, installPluginArgv}, tool.argv)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
 		"Installed the quarry plugin (skill and MCP server) for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -338,7 +340,7 @@ func Test_claude_install_hints_when_the_user_copy_is_turned_off(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: the quarry plugin is installed but turned off; "+
 		"to turn it on, run claude plugin enable quarry@quarry\n", stderr)
 }
@@ -601,7 +603,7 @@ func Test_claude_install_finishes_on_a_rerun_after_a_partial_install(t *testing.
 	require.ErrorIs(t, firstErr, cli.ReportedError{})
 	require.NoError(t, secondErr)
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, installPluginArgv}, tool.argv[callsAfterFirst:])
-	assert.Equal(t, marketplacePresentLine+pluginInstalledLine+installRestartLine, stdout)
+	assert.Equal(t, marketplacePresentLine+pluginInstalledLine+installRestartLine+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -625,7 +627,7 @@ func Test_claude_install_reports_when_the_user_copy_is_on_but_the_marketplace_is
 	require.NoError(t, err)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"The quarry plugin is already installed for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -637,7 +639,7 @@ func Test_claude_install_hints_after_adding_the_marketplace_when_the_user_copy_i
 	require.NoError(t, err)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"The quarry plugin is already installed for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: the quarry plugin is installed but turned off; "+
 		"to turn it on, run claude plugin enable quarry@quarry\n", stderr)
 }

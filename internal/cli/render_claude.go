@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/koblas/quarry/internal/platform/homepath"
 	"github.com/koblas/quarry/internal/platform/osreason"
@@ -28,6 +29,10 @@ const (
 	installClaudeNotFoundRefusal = "cannot find the claude command on your PATH; install Claude Code, then run quarry claude install again"
 
 	installAddedLead = "added the quarry marketplace, but "
+
+	desktopQuitLine = "Quit and reopen Claude Desktop to load it.\n"
+	desktopNoHome   = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
+		"set HOME, then run quarry claude install again"
 
 	pluginUninstalledLine  = "Uninstalled the quarry plugin from Claude Code.\n"
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
@@ -149,6 +154,25 @@ func uninstallDoneLead(res claudeplugin.UninstallResult) string {
 		return uninstallRemovedLead
 	}
 	return ""
+}
+
+// renderDesktopInstalled returns the stdout of a Claude Desktop install: the skip line when Desktop
+// is not on this Mac, else the added line and the quit line.
+func renderDesktopInstalled(home string, res claudedesktop.Result) string {
+	if res.Skipped {
+		return fmt.Sprintf("Skipped Claude Desktop: %q does not exist.\n", claudePath(home, res.Folder))
+	}
+	return fmt.Sprintf("Added the quarry MCP server to Claude Desktop; it starts %q.\n", claudePath(home, res.Command)) + desktopQuitLine
+}
+
+// reportDesktopFailure writes err's report for a failed Claude Desktop step and returns
+// ReportedError; an unclassified error is a runtime error.
+func reportDesktopFailure(cmd *cobra.Command, verb string, err error) error {
+	if errors.Is(err, claudedesktop.ErrNoHome) {
+		writeClaudeLine(cmd, verb, desktopNoHome)
+		return ReportedError{}
+	}
+	return &runtimeError{err: err}
 }
 
 // claudePath returns p as printed to the user: "~/..." under home, raw when home is unset.

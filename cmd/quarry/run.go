@@ -203,6 +203,7 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		RunTool:      toolrun.Run,
 		LookPath:     exec.LookPath,
 		Home:         home,
+		Executable:   os.Executable,
 		IsTerminal:   isTerminal,
 		Now:          time.Now,
 	}
