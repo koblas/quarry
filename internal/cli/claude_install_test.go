@@ -32,7 +32,6 @@ const (
 	foreignMarketplace = `[{"name":"quarry","source":"github","repo":"someone/quarry"}]`
 	userPluginOn       = `[{"id":"quarry@quarry","scope":"user","enabled":true}]`
 	userPluginOff      = `[{"id":"quarry@quarry","scope":"user","enabled":false}]`
-	projectPlugin      = `{"id":"quarry@quarry","scope":"project","enabled":true,"projectPath":"/home/ada/repos/foo"}`
 
 	marketplaceAddedLine   = "Added the quarry marketplace to Claude Code.\n"
 	marketplacePresentLine = "The quarry marketplace is already in Claude Code.\n"
@@ -40,6 +39,11 @@ const (
 	installRestartLine     = "Restart Claude Code to load it.\n"
 	desktopSkippedLine     = "Skipped Claude Desktop: \"~/Library/Application Support/Claude\" does not exist.\n"
 )
+
+// projectPluginUnder is the plugin-list entry of a project copy at repos/foo under home.
+func projectPluginUnder(home string) string {
+	return `{"id":"quarry@quarry","scope":"project","enabled":true,"projectPath":"` + home + `/repos/foo"}`
+}
 
 var errNoStart = errors.New("fork/exec /opt/claude: permission denied")
 

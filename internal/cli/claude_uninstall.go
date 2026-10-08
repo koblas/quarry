@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/spf13/cobra"
 )
@@ -39,7 +40,16 @@ store and snapshots are not touched.`,
 			for _, hint := range uninstallRemainingHints(home, res) {
 				writeClaudeLine(cmd, uninstallCommand, hint)
 			}
-			return nil
+			return uninstallDesktop(cmd, home)
 		},
 	}
+}
+
+// uninstallDesktop removes quarry's MCP server from Claude Desktop and reports the outcome on stdout.
+func uninstallDesktop(cmd *cobra.Command, home string) error {
+	res, err := claudedesktop.NewServer(claudedesktop.WithHome(home)).Uninstall(cmd.Context())
+	if err != nil {
+		return reportDesktopFailure(cmd, uninstallCommand, home, err)
+	}
+	return writeResult(cmd, []byte(renderDesktopUninstalled(home, res)))
 }

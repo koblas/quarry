@@ -37,8 +37,17 @@ const (
 	desktopAddedFmt   = "Added the quarry MCP server to Claude Desktop; it starts %q.\n"
 	desktopKeptFmt    = "The quarry MCP server is already in Claude Desktop; it starts %q.\n"
 	desktopUpdatedFmt = "Updated the quarry MCP server in Claude Desktop to start %q instead of %q.\n"
+	desktopSkippedFmt = "Skipped Claude Desktop: %q does not exist.\n"
 	desktopNoHome     = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
-		"set HOME, then run quarry claude install again"
+		"set HOME, then run quarry claude %s again"
+
+	desktopRemovedLine      = "Removed the quarry MCP server from Claude Desktop.\n"
+	desktopAbsentLine       = "The quarry MCP server is not in Claude Desktop.\n"
+	desktopQuitUnloadLine   = "Quit and reopen Claude Desktop to unload it.\n"
+	desktopForeignUninstall = `Claude Desktop has an MCP server named "quarry" that does not run quarry mcp, ` +
+		"so quarry leaves it alone; to remove it, delete it from %q yourself"
+	desktopSymlinkUninstall = `%q is a symbolic link, so quarry leaves it alone; ` +
+		`if it has a "quarry" entry under mcpServers, remove it yourself`
 
 	desktopPathQuarryWarning = `warning: Claude Desktop starts %q, but the quarry on your PATH is %q; ` +
 		"run quarry claude install with the quarry you want Claude Desktop to start"
@@ -191,7 +200,7 @@ func uninstallDoneLead(res claudeplugin.UninstallResult) string {
 // line for what happened to the entry plus the quit line when the config changed.
 func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 	if res.Skipped {
-		return fmt.Sprintf("Skipped Claude Desktop: %q does not exist.\n", claudePath(home, res.Folder))
+		return fmt.Sprintf(desktopSkippedFmt, claudePath(home, res.Folder))
 	}
 	started := claudePath(home, res.Command)
 	switch res.Outcome {
@@ -202,6 +211,18 @@ func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 	case claudedesktop.Added:
 	}
 	return fmt.Sprintf(desktopAddedFmt, started) + desktopQuitLine
+}
+
+// renderDesktopUninstalled returns the stdout of a Claude Desktop uninstall: the skip line, else the
+// removal line plus the quit line, else the line saying the entry is not there.
+func renderDesktopUninstalled(home string, res claudedesktop.UninstallResult) string {
+	switch {
+	case res.Skipped:
+		return fmt.Sprintf(desktopSkippedFmt, claudePath(home, res.Folder))
+	case res.Removed:
+		return desktopRemovedLine + desktopQuitUnloadLine
+	}
+	return desktopAbsentLine
 }
 
 // reportDesktopFailure writes err's report for a failed Claude Desktop step and returns
@@ -218,7 +239,7 @@ func reportDesktopFailure(cmd *cobra.Command, verb, home string, err error) erro
 // desktopFailureLine returns the stderr text for a classified Claude Desktop failure, else false.
 func desktopFailureLine(verb, home string, err error) (string, bool) {
 	if errors.Is(err, claudedesktop.ErrNoHome) {
-		return desktopNoHome, true
+		return fmt.Sprintf(desktopNoHome, verb), true
 	}
 	if line, ok := desktopBinaryFailureLine(home, err); ok {
 		return line, true
@@ -257,10 +278,10 @@ func desktopWriteFailureLine(verb, home string, err error) (string, bool) {
 // desktopConfigFailureLine classifies the failures of reading and understanding the config.
 func desktopConfigFailureLine(verb, home string, err error) (string, bool) {
 	if foreign, ok := errors.AsType[*claudedesktop.ForeignEntryError](err); ok {
-		return fmt.Sprintf(desktopForeignRefusal, claudePath(home, foreign.Path), verb), true
+		return desktopForeignLine(verb, claudePath(home, foreign.Path)), true
 	}
 	if link, ok := errors.AsType[*claudedesktop.SymlinkError](err); ok {
-		return fmt.Sprintf(desktopSymlinkRefusal, claudePath(home, link.Path), desktopEntryJSON(link.Command)), true
+		return desktopSymlinkLine(verb, claudePath(home, link.Path), link.Command), true
 	}
 	if notFile, ok := errors.AsType[*claudedesktop.NotAFileError](err); ok {
 		return fmt.Sprintf(desktopNotAFileRefusal, claudePath(home, notFile.Path)), true
@@ -278,6 +299,24 @@ func desktopConfigFailureLine(verb, home string, err error) (string, bool) {
 		return fmt.Sprintf(desktopServersRefusal, claudePath(home, servers.Path), servers.Kind, installCommand), true
 	}
 	return "", false
+}
+
+// desktopForeignLine returns the refusal for a quarry entry that does not run quarry mcp: install
+// asks for it to be renamed, uninstall leaves its removal to the user.
+func desktopForeignLine(verb, config string) string {
+	if verb == uninstallCommand {
+		return fmt.Sprintf(desktopForeignUninstall, config)
+	}
+	return fmt.Sprintf(desktopForeignRefusal, config, verb)
+}
+
+// desktopSymlinkLine returns the refusal for a config that is a symbolic link: install names the entry
+// to add by hand, uninstall the entry to remove.
+func desktopSymlinkLine(verb, config, command string) string {
+	if verb == uninstallCommand {
+		return fmt.Sprintf(desktopSymlinkUninstall, config)
+	}
+	return fmt.Sprintf(desktopSymlinkRefusal, config, desktopEntryJSON(command))
 }
 
 // invalidJSONDetail returns ", at byte N" for a syntax error, else "".
