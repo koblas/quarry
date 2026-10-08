@@ -672,6 +672,10 @@ func Test_install_fails_without_writing_when_the_executable_path_is_unknown(t *t
 	_, err := install(t, home, &fakeExecutable{err: errNoExecutable})
 
 	require.ErrorIs(t, err, errNoExecutable)
+	execErr, ok := errors.AsType[*claudedesktop.ExecutableError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, filepath.Join(folder, configName), execErr.Config)
+	assert.Equal(t, "find the quarry binary: "+errNoExecutable.Error(), err.Error())
 	assert.Empty(t, snapshot(t, folder))
 }
 

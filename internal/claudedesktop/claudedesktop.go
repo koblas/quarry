@@ -134,12 +134,24 @@ type TempBuildError struct {
 	Path string // the path under the temporary directory
 }
 
-func (e *TempBuildError) Error() string { return "" }
+func (e *TempBuildError) Error() string { return e.Path + " is a temporary build" }
+
+// ExecutableError is returned by Install when the path of the running quarry binary cannot be
+// learned; nothing is written.
+type ExecutableError struct {
+	Config string // the config file Install would have edited
+	Err    error
+}
+
+func (e *ExecutableError) Error() string { return "find the quarry binary: " + e.Err.Error() }
+func (e *ExecutableError) Unwrap() error { return e.Err }
 
 // Server installs quarry's MCP server into Claude Desktop's config file.
 type Server struct {
 	home       string
 	executable Executable
+	lookPath   LookPath
+	tempDir    string
 }
 
 // Option configures a Server.
@@ -158,17 +170,18 @@ func WithExecutable(e Executable) Option {
 
 // WithLookPath sets how Install finds the quarry a shell would run.
 func WithLookPath(l LookPath) Option {
-	return func(*Server) {}
+	return func(s *Server) { s.lookPath = l }
 }
 
-// WithTempDir sets the temporary directory root a quarry binary must not live under.
+// WithTempDir sets the temporary directory root a quarry binary must not live under; an empty
+// root turns that check off. NewServer defaults it to os.TempDir().
 func WithTempDir(root string) Option {
-	return func(*Server) {}
+	return func(s *Server) { s.tempDir = root }
 }
 
 // NewServer returns a Server configured by opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{}
+	s := &Server{tempDir: os.TempDir()}
 	for _, o := range opts {
 		o(s)
 	}
@@ -199,9 +212,12 @@ type Result struct {
 
 // Install adds the quarry entry to Claude Desktop's config, creating the file or merging into
 // it after saving a backup beside it; an entry of ours is repointed, or left alone when it
-// already starts this binary. It refuses a symlink (*SymlinkError), any other non-regular path
-// (*NotAFileError) and a quarry key that is not ours (*ForeignEntryError), and names a config it
-// cannot check or read, a failed backup and a failed write as *ReadError, *BackupError and *WriteError.
+// already starts this binary. The entry starts the quarry on PATH when that is the running
+// binary, else the running binary; Result.PathQuarry names a different quarry on PATH. It refuses
+// a binary in a temporary location (*TempBuildError), a symlink (*SymlinkError), any other
+// non-regular path (*NotAFileError) and a quarry key that is not ours (*ForeignEntryError); it names
+// an unknown binary path, a config it cannot check or read, a failed backup and a failed write
+// as *ExecutableError, *ReadError, *BackupError and *WriteError.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	if s.home == "" {
 		return Result{}, ErrNoHome
@@ -215,9 +231,15 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 		}
 		return res, fmt.Errorf("check %s: %w", folder, err)
 	}
-	command, err := s.executable()
+	exe, err := s.executable()
 	if err != nil {
-		return res, fmt.Errorf("find the quarry binary: %w", err)
+		return res, &ExecutableError{Config: res.Config, Err: err}
+	}
+	command, pathQuarry := s.choosePath(exe)
+	for _, p := range []string{exe, command} {
+		if s.isTemporary(p) {
+			return res, &TempBuildError{Path: p}
+		}
 	}
 	current, err := readConfig(res.Config)
 	if symlink, ok := errors.AsType[*SymlinkError](err); ok {
@@ -231,7 +253,7 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 		return res, err
 	}
 	if plan.outcome == Unchanged {
-		res.Outcome, res.Command = Unchanged, command
+		res.Outcome, res.Command, res.PathQuarry = Unchanged, command, pathQuarry
 		return res, nil
 	}
 	// The backup goes first: a config that could not be saved must not be replaced.
@@ -244,8 +266,48 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	if err := replacefile.Write(res.Config, plan.doc, current.mode); err != nil {
 		return res, &WriteError{Path: res.Config, Err: err}
 	}
-	res.Outcome, res.Command, res.Previous = plan.outcome, command, plan.previous
+	res.Outcome, res.Command, res.Previous, res.PathQuarry = plan.outcome, command, plan.previous, pathQuarry
 	return res, nil
+}
+
+// choosePath returns the path the entry should start and, when PATH holds a different quarry
+// that could be checked, that quarry's path. A PATH quarry that is the same file as exe is
+// the one to write, so a Homebrew link survives upgrades. Stat follows links, so the link and
+// its target compare equal.
+func (s *Server) choosePath(exe string) (string, string) {
+	if s.lookPath == nil {
+		return exe, ""
+	}
+	onPath, err := s.lookPath(quarryName)
+	if err != nil || !filepath.IsAbs(onPath) {
+		return exe, ""
+	}
+	pathInfo, err := os.Stat(onPath)
+	if err != nil {
+		return exe, ""
+	}
+	if exeInfo, err := os.Stat(exe); err == nil && os.SameFile(pathInfo, exeInfo) {
+		return onPath, ""
+	}
+	return exe, onPath
+}
+
+// goBuildPrefix starts the name of the directory `go run` builds into.
+const goBuildPrefix = "go-build"
+
+// isTemporary reports whether path lies under the temporary directory root or inside a go-build
+// directory. The test is lexical: links are not resolved.
+func (s *Server) isTemporary(path string) bool {
+	for element := range strings.SplitSeq(filepath.ToSlash(path), "/") {
+		if strings.HasPrefix(element, goBuildPrefix) {
+			return true
+		}
+	}
+	if s.tempDir == "" {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(s.tempDir), path)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // existing is what Install found at the config path: whether a config was there, the bytes to
