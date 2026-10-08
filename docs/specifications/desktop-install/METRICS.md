@@ -24,6 +24,7 @@
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| final pass | README Desktop paragraph omits uninstall backup + quit-first (contradicts uninstall Long) | README.md (Desktop paragraph) | SCENARIO-16 |
 | gate R1 | D9 temp check's `exe` half unpinned (mutant drops `exe` from the slice, survives) | internal/claudedesktop/claudedesktop.go:263 | SCENARIO-08 |
 
 ## Escaped defects
