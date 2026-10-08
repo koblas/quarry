@@ -513,7 +513,7 @@ Binding for every plan: test-fixture `Executable` values are fixed absolute stri
 ## BDD Acceptance Progress
 - [x] SCENARIO-01: Install reaches both Claude Code and Claude Desktop — `internal/cli/claude_install_desktop_test.go` `Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code`
 - [x] SCENARIO-02: Install merges into an existing Desktop config and keeps a backup (folds 07, whose acceptance test is `internal/cli/claude_install_desktop_test.go` `Test_claude_install_reports_a_failed_backup_or_write_and_leaves_the_config_as_it_was`) — `internal/cli/claude_install_desktop_test.go` `Test_claude_install_merges_into_an_existing_desktop_config_and_keeps_a_backup`
-- [ ] SCENARIO-04: Install repoints a stale quarry entry (folds 03, 05)
+- [x] SCENARIO-04: Install repoints a stale quarry entry (folds 03, whose acceptance test is `internal/cli/claude_install_desktop_test.go` `Test_claude_install_leaves_the_desktop_config_alone_when_it_already_starts_this_quarry`, and 05, whose acceptance test is `internal/cli/claude_install_desktop_test.go` `Test_claude_install_refuses_a_quarry_entry_that_does_not_run_quarry_mcp`) — `internal/cli/claude_install_desktop_test.go` `Test_claude_install_repoints_a_stale_quarry_entry_and_keeps_its_env`
 - [ ] SCENARIO-06: Install refuses a config it cannot safely change
 - [ ] SCENARIO-08: Install picks the quarry path Claude Desktop will start
 - [ ] SCENARIO-13: Uninstall removes quarry's Desktop entry (folds 14, 15)

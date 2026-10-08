@@ -393,7 +393,6 @@ func Test_claude_install_reports_a_failed_backup_or_write_and_leaves_the_config_
 	}
 }
 
-// desktopUpdatedLine is the line for an entry repointed from the old command to the fixed quarry binary.
 func desktopUpdatedLine(old string) string {
 	return "Updated the quarry MCP server in Claude Desktop to start \"" + desktopQuarryBinary + "\" instead of \"" + old + "\".\n"
 }

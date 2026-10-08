@@ -333,6 +333,38 @@ func Test_install_refuses_a_quarry_entry_that_does_not_start_quarry_mcp(t *testi
 			var foreign *claudedesktop.ForeignEntryError
 			require.ErrorAs(t, err, &foreign)
 			assert.Equal(t, config, foreign.Path)
+			require.EqualError(t, err, config+": mcpServers.quarry is not an entry that starts quarry mcp")
+			assert.Equal(t, before, snapshot(t, folder))
+		})
+	}
+}
+
+func Test_install_refuses_a_quarry_entry_that_links_to_a_quarry_binary_under_another_name(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		link func(oldname, newname string) error
+	}{
+		{name: "symlink", link: os.Symlink},
+		{name: "hard link", link: os.Link},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			bin := t.TempDir()
+			binary := filepath.Join(bin, "quarry")
+			require.NoError(t, os.WriteFile(binary, []byte("#!/bin/sh\n"), 0o600))
+			alias := filepath.Join(bin, "qry")
+			require.NoError(t, c.link(binary, alias))
+			writeConfig(t, folder, quarryEntryConfig(`{"command":"`+alias+`","args":["mcp"]}`), 0o644)
+			before := snapshot(t, folder)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			var foreign *claudedesktop.ForeignEntryError
+			require.ErrorAs(t, err, &foreign)
 			assert.Equal(t, before, snapshot(t, folder))
 		})
 	}

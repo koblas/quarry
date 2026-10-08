@@ -167,9 +167,8 @@ func uninstallDoneLead(res claudeplugin.UninstallResult) string {
 	return ""
 }
 
-// renderDesktopInstalled returns the stdout of a Claude Desktop install: the skip line when Desktop
-// is not on this Mac, else the line for what happened to the entry, then the quit line when the
-// config changed.
+// renderDesktopInstalled returns the stdout of a Claude Desktop install: the skip line, else the
+// line for what happened to the entry plus the quit line when the config changed.
 func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 	if res.Skipped {
 		return fmt.Sprintf("Skipped Claude Desktop: %q does not exist.\n", claudePath(home, res.Folder))

@@ -220,9 +220,8 @@ type merged struct {
 	previous string
 }
 
-// merge returns original (empty meaning "{}") with the quarry entry set under mcpServers, other
-// values untouched. It refuses a non-object config or mcpServers, and a quarry key that is not
-// ours (errForeignEntry); an entry that is ours keeps everything but its command.
+// merge returns original (empty meaning "{}") with the quarry entry set under mcpServers.
+// It refuses a quarry key that is not ours (errForeignEntry); an entry of ours keeps all but its command.
 func merge(original []byte, command string) (merged, error) {
 	top, err := decodeObject(original)
 	if err != nil {
@@ -294,9 +293,8 @@ func decodeObject(data []byte) (map[string]json.RawMessage, error) {
 	return obj, nil
 }
 
-// parseOurs reports whether raw is an entry that starts `quarry mcp`: a JSON object whose command
-// is a string with a final path element exactly "quarry" and whose args are exactly ["mcp"]. It
-// returns the entry's fields and command. Names are compared as text, never resolved on disk.
+// parseOurs reports whether raw is an entry that starts `quarry mcp`, returning its fields and
+// command. Names are compared as text, never resolved on disk.
 func parseOurs(raw json.RawMessage) (map[string]json.RawMessage, string, bool) {
 	fields, err := decodeObject(raw)
 	if err != nil {

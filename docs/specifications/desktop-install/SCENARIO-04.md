@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-04
-status: open
+status: done
 ---
 
 # SCENARIO-04: Install repoints a stale quarry entry (folds SCENARIO-03 DK no-op, SCENARIO-05 D4 refusal)
@@ -30,10 +30,10 @@ Surface surveyed (existing, from `go doc` + grep): `claudedesktop.Result` is rea
 - [x] Step 4 (batch 3): `internal/cli/render_claude.go:34,39-41,165-192` and `claude_install.go:54-61` — D4 copy const plus `*ForeignEntryError` arm in `reportDesktopFailure` ahead of the `runtimeError` default (install wording, `claudePath` + `%q` of `Path`, then `ReportedError`); `renderDesktopInstalled` switches on `res.Outcome` (exhaustive): DA, DU (`claudePath(home, res.Command)` and `claudePath(home, res.Previous)`, both `%q`), DK; `desktopQuitLine` only for Added and Updated. Copy verbatim from spec §C DU/DK and §D D4. `installDesktop` keeps `writeResult` as its last action so SCENARIO-08 can append W1 after DA/DU/DK; do not emit W1. cli pins beyond the acceptance tests: old command under home prints `~/...`; DK, DU and D4 each in the same test file, DU's stderr empty.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; refresh doc comments on `Install` (`claudedesktop.go:98-100`, drops the `ErrEntryPresent` sentence), `Result`, `ForeignEntryError`.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; refresh doc comments on `Install` (`claudedesktop.go:98-100`, drops the `ErrEntryPresent` sentence), `Result`, `ForeignEntryError`.
 
 ### Verify
-- [ ] Step 6: full verification (`.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...`) + `.claude/scripts/spec-check.py desktop-install`; tick SCENARIO-04 in `specification.md` with its acceptance test, and record 03 and 05 as folded with their tests; rewrite `STATE.md`.
+- [x] Step 6: full verification (`.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...`) + `.claude/scripts/spec-check.py desktop-install`; tick SCENARIO-04 in `specification.md` with its acceptance test, and record 03 and 05 as folded with their tests; rewrite `STATE.md`.
 
 ## Handoff
 
@@ -56,11 +56,8 @@ Surface surveyed (existing, from `go doc` + grep): `claudedesktop.Result` is rea
 
 ## Phase report
 
-Runs A, B1 and B2 done (steps 1-4 ticked); V (steps 5-6: sweep, verify, ticks, STATE.md) is next.
+Run V done; scenario complete (`status: done`, SCENARIO-04 ticked with folded 03 and 05 tests, spec-check OK).
 
-- B1: `internal/claudedesktop` complete (see commit 5659eb0b): `*ForeignEntryError{Path}`, `Outcome`/`Previous`, `parseOurs(raw) (fields, command, ok)` is the identity rule (SCENARIO-13 must call `parseOurs`, not the plan's `isOurs`), Unchanged returns before backup and write.
-- B2: `internal/cli/render_claude.go`: consts `desktopAddedFmt`/`desktopKeptFmt`/`desktopUpdatedFmt`/`desktopForeignRefusal`; `renderDesktopInstalled` switches exhaustively on `res.Outcome` (Updated: DU with `claudePath` of Command and Previous; Unchanged: DK, no quit line; Added: DA and quit line, via an empty `case Added:` because `exhaustive` rejects `default`); `reportDesktopFailure` has a `*ForeignEntryError` arm (D4, verb-parameterised so SCENARIO-13 can branch for D4u) ahead of the `runtimeError` default. `claude_install.go` unchanged: `installDesktop` still ends on `writeResult`, no W1.
-- Green: `go test ./internal/cli/ -run 'Test_claude_install'` (all three acceptance tests); `go build ./... && golangci-lint run ./...` 0 issues.
-- Mutation run, red: DK prints quit line -> `Test_claude_install_leaves_the_desktop_config_alone_when_it_already_starts_this_quarry`.
-- cli pins beyond acceptance already in the repoint table: home-relative old command prints `~/...`; DU stderr empty.
-- V still owes: `verify.sh 9fb1b6341ea4bae49a81b3d0752b86938069d7e5 ./internal/claudedesktop/... ./internal/cli/...`, doc-comment refresh (`Install`, `Result`, `ForeignEntryError`), spec-check, ticks of 04/03/05 in `specification.md`, STATE.md rewrite.
+- Checkpoint pins: `install_test.go` `Test_install_refuses_a_quarry_entry_that_does_not_start_quarry_mcp` gained `require.EqualError` (covers `(*ForeignEntryError).Error`); new `Test_install_refuses_a_quarry_entry_that_links_to_a_quarry_binary_under_another_name` (symlink and hard link `qry` to a real `quarry` file). Comment trims in `claudedesktop.go` (`merge`, `parseOurs`), `render_claude.go` (`renderDesktopInstalled`), `claude_install_desktop_test.go` (`desktopUpdatedLine`).
+- Mutations, red: Error() text without Path -> `.../command_named_quarry.sh` (EqualError); `filepath.EvalSymlinks` before the name check -> `.../symlink`; `os.SameFile` against sibling `quarry` -> `.../symlink` and `.../hard_link`. All restored, diffed identical.
+- verify.sh: go build rc=0, go test rc=0, uncovered-diff 0 added lines, race rc=0, golangci-lint 0 issues rc=0; test-stats claudedesktop 27 (+4), cli 684 (+3), total 711 (+7).
