@@ -274,6 +274,7 @@ func Test_claude_uninstall_reports_a_partial_uninstall_when_the_marketplace_step
 		"exited with status 1; see its message above, then run quarry claude uninstall again\n", stderr)
 }
 
+// The helper's home has no Desktop folder, so neither target is present.
 func Test_claude_uninstall_refuses_when_claude_is_not_on_the_path(t *testing.T) {
 	tool := &toolCalls{}
 	lookPath := func(string) (string, error) { return "", &exec.Error{Name: "claude", Err: exec.ErrNotFound} }

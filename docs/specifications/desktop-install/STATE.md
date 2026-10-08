@@ -1,13 +1,16 @@
 # desktop-install — current state
 
-Scenarios complete: SCENARIO-01, SCENARIO-02 (folds 07), SCENARIO-04 (folds 03, 05), SCENARIO-06, SCENARIO-08, SCENARIO-13 (folds 14, 15). Last updated by SCENARIO-13.
+Scenarios complete: SCENARIO-01, SCENARIO-02 (folds 07), SCENARIO-04 (folds 03, 05), SCENARIO-06, SCENARIO-08, SCENARIO-09 (folds 10, 12), SCENARIO-13 (folds 14, 15). Last updated by SCENARIO-09.
 
 ## Binding decisions
 - BR-D20 / D9b: `Install` refuses `*BinaryNameError{Base}` when `lastElement(command)` (text after the last `/`, the same helper `parseOurs` uses) is not exactly `quarry`; checked on the chosen path (so a SameFile `quarry` link on PATH makes a renamed binary acceptable), after D9, before `readConfig`. Install can therefore never write an entry `parseOurs` calls foreign, which keeps D4/D4u unreachable from our own writes; round-trip tests (install then uninstall, install-update then uninstall) pin it. cli renders it in `desktopBinaryFailureLine` (`<base>` via `%q`, no path); uninstall is unaffected (mid-feature ruling, SCENARIO-13).
 - `(*claudedesktop.Server).Uninstall(ctx)` returns only `ErrNoHome`, a wrapped folder-stat error, `*SymlinkError` (`Command` empty), `*ReadError`, `*InvalidJSONError`, `*ForeignEntryError`, `*BackupError`, `*WriteError`; every shape that cannot hold our entry (`*NotAFileError`, top level or `mcpServers` of the wrong kind, no `quarry` key, empty file) becomes `Removed: false` inside the package. Order: `locate` (shared with `Install`) -> `readConfig` -> `decodeObject` -> `parseOurs` guard -> backup (0600, before write) -> write with the config's mode. Takes only `home`: no `Executable`, `LookPath` or temp check, so uninstall cli tests omit `Env.Executable` (SCENARIO-13).
 - The removal guard is `parseOurs` and only that, whatever the path; duplicate `quarry` keys collapse to the last on decode (SCENARIO-13).
 - cli: `uninstallDesktop` runs after the Code hints; `renderDesktopUninstalled` prints DQu only when `Removed`; S2 is shared (`desktopSkippedFmt`); `desktopNoHome`, D4u/D5su, D1/D6/D7/D8 branch on `verb == uninstallCommand`, never on `Command == ""` (SCENARIO-13).
-- Desktop runs only after a Code success, after the Code hints; Code failure and `ErrClaudeNotFound` keep their early return — continuing early breaks the `Empty(stdout)` wiring pins 11 re-points (SCENARIO-01). 11 owns continue-on-failure, 09 owns S1.
+- Desktop runs after a Code success (after the Code hints) or when Code is absent; any other Code failure keeps its early return — continuing early breaks the `Empty(stdout)` wiring pins 11 re-points (SCENARIO-01). 11 owns continue-on-failure and must keep S1/N1 off the failure path (S1 is a skip, not a failure) (SCENARIO-09).
+- `(*Server).locate` is the one classifier of the Desktop folder, shared by both verbs: missing and not-a-folder are both `Skipped`, told apart by `NotAFolder`; any other stat error is `*FolderError{Path, Err}` (D12). cli never stats, it branches on type (SCENARIO-09).
+- `ErrClaudeNotFound` is intercepted in the two `RunE` funcs, never in `reportClaudeFailure`; they call `installDesktop`/`uninstallDesktop(..., codeAbsent=true)`. Code absent + Desktop skipped = `refuseNeitherPresent` (N1/N1b/N1u/N1bu, stdout empty, `ReportedError`); otherwise `skipClaudeCode` writes S1 to stdout first, then the usual Desktop lines or stderr line (D4/D7/D8/D11/D12..., exit 1). Code present + Desktop skipped stays S2/S2b, exit 0 (SCENARIO-09).
+- The two `claude_install_test.go` / `claude_uninstall_test.go` "refuses_when_claude_is_not_on_the_path" tests keep their names (the mcp-install spec cites them) but now assert N1/N1u: their home has no Desktop folder (SCENARIO-09).
 - `(*claudedesktop.Server).Install` order: empty home (`ErrNoHome`) -> folder `os.Stat` -> `Executable()` (`*ExecutableError`, D10) -> `choosePath` -> D9 `isTemporary` on the exe and the chosen path (`*TempBuildError`) -> `readConfig` (Lstat, regular check, ReadFile) -> `merge` -> (Unchanged returns here) -> backup -> config write. D9 and D10 precede the config read, so a refused build never touches or reads the config (SCENARIO-01, 02, 08).
 - Path choice (`choosePath`): `os.Stat` (never `Lstat`) on the PATH quarry and the exe, `os.SameFile`; same file -> write the PATH path, else the exe plus `Result.PathQuarry` (the sole W1 signal; cli never stats). `Result.Command` is the written path for every outcome; `Unchanged` and `SymlinkError.Command` use it. Nil/erroring/relative `LookPath` or an unstat-able PATH file -> exe, no W1 (SCENARIO-08).
 - `claudedesktop.LookPath` is its own type (cli converts `claudeplugin.LookPath`). `NewServer` defaults only `tempDir` to `os.TempDir()`; `WithTempDir("")` disables the root check, so a claudedesktop test with a temp-dir exe passes `WithTempDir`. cli has no temp seam: tests set `TMPDIR` (`outsideTemp` after `desktopHome`) (SCENARIO-08).
@@ -29,8 +32,7 @@ Scenarios complete: SCENARIO-01, SCENARIO-02 (folds 07), SCENARIO-04 (folds 03, 
 
 ## Left unbuilt
 - W1 under uninstall: none (install-only).
-- Folder stat error (D12; a `runtimeError` for both verbs through the shared `locate`) and `Claude` is a file (S2b: config Lstat ENOTDIR prints D6 for both verbs), S1, N1u/N1bu — SCENARIO-09.
-- Continue-on-Code-failure and D13 for both verbs — SCENARIO-11; the dead not-found copy (`render_claude.go:28,42,50,199-202`) stays until 09.
+- Continue-on-Code-failure and D13 for both verbs — SCENARIO-11.
 - Help Long for uninstall/install/mcp, README, PRD — SCENARIO-16.
 
 ## Traps
@@ -42,11 +44,13 @@ Scenarios complete: SCENARIO-01, SCENARIO-02 (folds 07), SCENARIO-04 (folds 03, 
 
 - Claude folder mode `0o100` does not fault the config Lstat (search permission is granted); use `0o000`. A FIFO config row hangs the suite if the non-regular guard is missing: run mutations and the narrow loop with `-timeout` (SCENARIO-06).
 - The BOM row's D1 text is the stdlib's escaped `'\ufeff'` (literal backslash-u), not the rune. `notObjectError.Error` is declared `// unreachable:` (merge converts it, `parseOurs` drops it) (SCENARIO-06).
-- The `runtimeError` arm of `reportDesktopFailure` is covered only by `claude_desktop_internal_test.go`; D12 (SCENARIO-09) makes a Library `0o000` a classified failure, so re-check which test reaches the arm then (SCENARIO-06).
+- The `runtimeError` arm of `reportDesktopFailure` is covered only by `claude_desktop_internal_test.go:30` (`errBoom`); D12 is now classified (`*FolderError`) and no longer reaches it (SCENARIO-06, 09).
+- D12 fixture is `Library/Application Support` chmod `0o000` (not `Claude`, whose `0o000` only fails the config Lstat and prints D6); restore in `t.Cleanup` (SCENARIO-09).
 - `json.Unmarshal` of `null` into a `string` succeeds and leaves `""`: `command: null` is foreign only because `""` has no `quarry` element; the row is pinned, do not rely on the decode error. `filepath.Base("/opt/x/quarry/")` is `quarry`, so the name rule splits on the last `/` instead (SCENARIO-04).
 - `readConfig` maps a folder or FIFO to `*NotAFileError` (uninstall: DN) and checks a symlink first (D5su); an empty config is "present" for install (backup) but DN for uninstall (no write, no backup). `encodeConfig` takes the final servers map so removal reuses the BR-D8 encoder; a FIFO row hangs without `-timeout` (SCENARIO-13).
 
 ## Open debts
+- Refactor NIT: `if codeAbsent { skipClaudeCode }` is duplicated in `installDesktop` (`claude_install.go:69`) and `uninstallDesktop` (`claude_uninstall.go:61`). Unowned — dies unless re-opened (SCENARIO-09).
 - `internal/claudedesktop/claudedesktop.go` Lstat-then-ReadFile-then-rename window: a config swapped or rewritten between Lstat and rename (Desktop running) is read or replaced via the path; spec mitigation is "quit Desktop first". Unowned beyond 02 acknowledging it — dies unless re-opened.
 - The chmod-0o000 / 0o555 fault tests (`install_test.go`, `claude_install_desktop_test.go`, including the D6 unreadable-file and Claude-folder-0o000 rows and the config-cannot-be-checked test) assume a non-root runner; root ignores mode bits and they would fail. Unowned — dies unless re-opened.
 - D9's temp-root check is lexical, so macOS `/var` vs `/private/var` is not unified: accepted design residual. Unowned — dies unless re-opened (SCENARIO-08).

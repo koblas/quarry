@@ -221,6 +221,7 @@ func Test_claude_install_runs_claude_at_the_path_it_was_found(t *testing.T) {
 	}
 }
 
+// The helper's home has no Desktop folder, so neither target is present.
 func Test_claude_install_refuses_when_claude_is_not_on_the_path(t *testing.T) {
 	cases := []struct {
 		name string

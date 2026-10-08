@@ -231,11 +231,9 @@ type Result struct {
 }
 
 // Install adds the quarry entry to Claude Desktop's config, backing up an existing file first, or
-// repoints or leaves alone an entry of ours. It skips (Result.Skipped) a Desktop folder that is
-// missing or not a folder, and refuses a folder it cannot check (ErrNoHome, *FolderError), a temporary
-// build (*TempBuildError), a path not named quarry (*BinaryNameError) and a config it cannot safely edit
-// (*ExecutableError, *SymlinkError, *NotAFileError, *ForeignEntryError, *ReadError, *BackupError,
-// *WriteError); Result.PathQuarry names a different quarry on PATH.
+// repoints or leaves alone an entry of ours. A Desktop folder that is missing or not a folder is
+// skipped (Result.Skipped); anything it cannot safely read or write is refused with a typed error.
+// Result.PathQuarry names a different quarry on PATH.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	loc, err := s.locate()
 	res := Result{Folder: loc.folder, Config: loc.config}
@@ -295,9 +293,8 @@ type location struct {
 	notAFolder     bool // something other than a folder is there, as opposed to nothing
 }
 
-// locate finds Claude Desktop's folder. A missing folder and one that is not a folder both report
-// found false, told apart by notAFolder; ErrNoHome for an empty home and *FolderError for any other
-// stat failure.
+// locate finds Claude Desktop's folder: found, missing, or not a folder (notAFolder); any other
+// stat failure is *FolderError.
 func (s *Server) locate() (location, error) {
 	if s.home == "" {
 		return location{}, ErrNoHome
@@ -327,9 +324,8 @@ type UninstallResult struct {
 
 // Uninstall removes the quarry entry from Claude Desktop's config, backing up the file first, but
 // only an entry that starts `quarry mcp` (*ForeignEntryError otherwise). A config that cannot hold
-// our entry is left alone. A Desktop folder that is missing or not a folder is skipped as in Install.
-// It refuses ErrNoHome, *FolderError, *SymlinkError, *ReadError, *InvalidJSONError, *ForeignEntryError,
-// *BackupError and *WriteError.
+// our entry is left alone, and a Desktop folder that is missing or not a folder is skipped
+// (UninstallResult.Skipped).
 func (s *Server) Uninstall(_ context.Context) (UninstallResult, error) {
 	loc, err := s.locate()
 	config := loc.config
