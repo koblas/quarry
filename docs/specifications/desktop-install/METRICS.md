@@ -16,12 +16,14 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, test, refactor | 0/1/17/7 | 0 / 20 (2 killed, 18 timed out), 2589s; reviewer export 1 / 29 survived | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | D9 temp check's `exe` half unpinned (mutant drops `exe` from the slice, survives) | internal/claudedesktop/claudedesktop.go:263 | SCENARIO-08 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
