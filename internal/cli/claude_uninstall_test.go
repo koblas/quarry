@@ -268,7 +268,7 @@ func Test_claude_uninstall_reports_a_partial_uninstall_when_the_marketplace_step
 	stdout, stderr, err := runClaude(t, tool, "claude", "uninstall")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Equal(t, pluginUninstalledLine, stdout)
+	assert.Equal(t, pluginUninstalledLine+desktopSkippedLine, stdout)
 	assert.Equal(t, "denied\n"+
 		"quarry: claude uninstall: uninstalled the quarry plugin, but claude plugin marketplace remove --scope user quarry "+
 		"exited with status 1; see its message above, then run quarry claude uninstall again\n", stderr)
@@ -306,7 +306,7 @@ func Test_claude_uninstall_refuses_a_foreign_quarry_marketplace(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude uninstall: Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub, `+
 		"so quarry leaves it and its plugin alone; to remove them, run claude plugin uninstall quarry@quarry, "+
 		"then claude plugin marketplace remove quarry\n", stderr)
@@ -348,8 +348,8 @@ func Test_claude_uninstall_reports_each_outcome(t *testing.T) {
 
 func Test_claude_uninstall_reports_each_failure(t *testing.T) {
 	const (
-		claudeAt  = "/home/ada/bin/claude"
-		cannotRun = `cannot run claude at "~/bin/claude" (permission denied); ` +
+		claudeAt  = "/opt/bin/claude"
+		cannotRun = `cannot run claude at "/opt/bin/claude" (permission denied); ` +
 			"check that it is Claude Code and that you can run it, then run quarry claude uninstall again\n"
 	)
 	killed := func(output string) toolReply {
@@ -362,52 +362,58 @@ func Test_claude_uninstall_reports_each_failure(t *testing.T) {
 		wantStderr string
 	}{
 		{
-			name: "first step, exit status, output",
-			tool: (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(uninstallPluginArgv, toolReply{output: "nope\n", status: 2}),
+			name:       "first step, exit status, output",
+			tool:       (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(uninstallPluginArgv, toolReply{output: "nope\n", status: 2}),
+			wantStdout: desktopSkippedLine,
 			wantStderr: "nope\n" +
 				"quarry: claude uninstall: claude plugin uninstall --scope user quarry@quarry exited with status 2; see its message above\n",
 		},
 		{
 			name:       "partial, exit status, no output",
 			tool:       (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, toolReply{status: 1}),
-			wantStdout: pluginUninstalledLine,
+			wantStdout: pluginUninstalledLine + desktopSkippedLine,
 			wantStderr: "quarry: claude uninstall: uninstalled the quarry plugin, but claude plugin marketplace remove --scope user quarry " +
 				"exited with status 1, then run quarry claude uninstall again\n",
 		},
 		{
 			name:       "partial, signal, output",
 			tool:       (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, killed("lost\n")),
-			wantStdout: pluginUninstalledLine,
+			wantStdout: pluginUninstalledLine + desktopSkippedLine,
 			wantStderr: "lost\n" +
 				"quarry: claude uninstall: uninstalled the quarry plugin, but claude plugin marketplace remove --scope user quarry " +
 				"was stopped by signal killed; see its message above, then run quarry claude uninstall again\n",
 		},
 		{
-			name: "second step with the first skipped, exit status, output",
-			tool: (&toolCalls{}).lists(ourMarketplace, "[]").reply(removeMarketplaceArgv, toolReply{output: "nope\n", status: 2}),
+			name:       "second step with the first skipped, exit status, output",
+			tool:       (&toolCalls{}).lists(ourMarketplace, "[]").reply(removeMarketplaceArgv, toolReply{output: "nope\n", status: 2}),
+			wantStdout: desktopSkippedLine,
 			wantStderr: "nope\n" +
 				"quarry: claude uninstall: claude plugin marketplace remove --scope user quarry exited with status 2; see its message above\n",
 		},
 		{
 			name:       "marketplace list, exit status, no output",
 			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{status: 1}),
+			wantStdout: desktopSkippedLine,
 			wantStderr: "quarry: claude uninstall: claude plugin marketplace list --json exited with status 1\n",
 		},
 		{
-			name: "plugin list that is not JSON",
-			tool: (&toolCalls{}).lists(ourMarketplace, "not json"),
+			name:       "plugin list that is not JSON",
+			tool:       (&toolCalls{}).lists(ourMarketplace, "not json"),
+			wantStdout: desktopSkippedLine,
 			wantStderr: "quarry: claude uninstall: cannot read what claude plugin list --json printed; " +
 				"update Claude Code, or run the two commands in quarry claude uninstall --help yourself\n",
 		},
 		{
-			name: "marketplace list that is not JSON",
-			tool: (&toolCalls{}).lists("not json", userPluginOn),
+			name:       "marketplace list that is not JSON",
+			tool:       (&toolCalls{}).lists("not json", userPluginOn),
+			wantStdout: desktopSkippedLine,
 			wantStderr: "quarry: claude uninstall: cannot read what claude plugin marketplace list --json printed; " +
 				"update Claude Code, or run the two commands in quarry claude uninstall --help yourself\n",
 		},
 		{
-			name: "plugin list, exit status, output",
-			tool: (&toolCalls{}).lists(ourMarketplace, "").reply(pluginListArgv, toolReply{output: "boom", status: 2}),
+			name:       "plugin list, exit status, output",
+			tool:       (&toolCalls{}).lists(ourMarketplace, "").reply(pluginListArgv, toolReply{output: "boom", status: 2}),
+			wantStdout: desktopSkippedLine,
 			wantStderr: "boom\n" +
 				"quarry: claude uninstall: claude plugin list --json exited with status 2; see its message above\n",
 		},
@@ -433,19 +439,22 @@ func Test_claude_uninstall_reports_each_failure(t *testing.T) {
 		{
 			name:       "claude that cannot run, first step",
 			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart(claudeAt)}),
+			wantStdout: desktopSkippedLine,
 			wantStderr: "quarry: claude uninstall: " + cannotRun,
 		},
 		{
 			name:       "claude that cannot run after the plugin uninstall",
 			tool:       (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, toolReply{err: cannotStart(claudeAt)}),
-			wantStdout: pluginUninstalledLine,
+			wantStdout: pluginUninstalledLine + desktopSkippedLine,
 			wantStderr: "quarry: claude uninstall: uninstalled the quarry plugin, but " + cannotRun,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			stdout, stderr, err := runClaudeAt(t, c.tool, findsAt(claudeAt), "/home/ada", "claude", "uninstall")
+			home := t.TempDir()
+
+			stdout, stderr, err := runClaudeAt(t, c.tool, findsAt(claudeAt), home, "claude", "uninstall")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
 			assert.Equal(t, c.wantStdout, stdout)
@@ -455,12 +464,35 @@ func Test_claude_uninstall_reports_each_failure(t *testing.T) {
 }
 
 func Test_claude_uninstall_prints_an_unclassified_claude_failure_in_place(t *testing.T) {
-	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: errNoStart})
+	cases := []struct {
+		name       string
+		tool       *toolCalls
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:       "before any step ran",
+			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: errNoStart}),
+			wantStdout: desktopSkippedLine,
+			wantStderr: "quarry: claude uninstall: fork/exec /opt/claude: permission denied\n",
+		},
+		{
+			name:       "after the plugin uninstall",
+			tool:       (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, toolReply{err: errNoStart}),
+			wantStdout: pluginUninstalledLine + desktopSkippedLine,
+			wantStderr: "quarry: claude uninstall: uninstalled the quarry plugin, but fork/exec /opt/claude: permission denied\n",
+		},
+	}
 
-	_, stderr, err := runClaude(t, tool, "claude", "uninstall")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runClaude(t, c.tool, "claude", "uninstall")
 
-	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Equal(t, "quarry: claude uninstall: fork/exec /opt/claude: permission denied\n", stderr)
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
 }
 
 func Test_claude_uninstall_returns_the_stdout_write_error_when_the_result_cannot_be_printed(t *testing.T) {

@@ -38,7 +38,10 @@ store and snapshots are not touched.`,
 				return uninstallDesktop(cmd, home, true)
 			}
 			if err != nil {
-				return reportClaudeFailure(cmd, uninstallCommand, home, uninstallDoneLead(res), renderUninstallDone(res), err)
+				reported := reportClaudeFailure(cmd, uninstallCommand, home, uninstallDoneLead(res), renderUninstallDone(res), err)
+				return continueAfterCodeFailure(err, reported, func() error {
+					return uninstallDesktop(cmd, home, false)
+				})
 			}
 			if err := writeResult(cmd, []byte(renderUninstalled(res))); err != nil {
 				return err

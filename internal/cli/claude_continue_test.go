@@ -193,3 +193,130 @@ func Test_claude_install_returns_the_stdout_write_error_of_claude_desktop_after_
 	require.ErrorIs(t, err, errPipeClosed)
 	assert.NotErrorIs(t, err, cli.ReportedError{})
 }
+
+func Test_claude_uninstall_removes_quarry_from_claude_desktop_after_a_claude_code_failure(t *testing.T) {
+	cases := []struct {
+		name       string
+		tool       *toolCalls
+		wantStderr string
+	}{
+		{
+			name: "a foreign quarry marketplace",
+			tool: (&toolCalls{}).lists(foreignMarketplace, userPluginOn),
+			wantStderr: `quarry: claude uninstall: Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub, ` +
+				"so quarry leaves it and its plugin alone; to remove them, run claude plugin uninstall quarry@quarry, " +
+				"then claude plugin marketplace remove quarry\n",
+		},
+		{
+			name: "a step that exits non-zero",
+			tool: (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(uninstallPluginArgv, toolReply{output: "denied\n", status: 1}),
+			wantStderr: "denied\n" +
+				"quarry: claude uninstall: claude plugin uninstall --scope user quarry@quarry exited with status 1; see its message above\n",
+		},
+		{
+			name: "a plugin list that is not json",
+			tool: (&toolCalls{}).lists(ourMarketplace, "not json"),
+			wantStderr: "quarry: claude uninstall: cannot read what claude plugin list --json printed; " +
+				"update Claude Code, or run the two commands in quarry claude uninstall --help yourself\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, folder := desktopHome(t)
+			config := filepath.Join(folder, desktopConfigName)
+			writeDesktopConfig(t, config, desktopOurEntryConfig)
+			var out, errOut bytes.Buffer
+
+			err := uninstallDesktop(t, c.tool, home, &out, &errOut)
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, desktopRemovedLine+desktopQuitUnloadLine, out.String())
+			assert.Equal(t, c.wantStderr, errOut.String())
+			written, err := os.ReadFile(config)
+			require.NoError(t, err)
+			assert.JSONEq(t, `{"mcpServers":{}}`, string(written))
+			backup, err := os.ReadFile(config + ".before-quarry")
+			require.NoError(t, err)
+			assert.JSONEq(t, desktopOurEntryConfig, string(backup))
+		})
+	}
+}
+
+func Test_claude_uninstall_prints_both_failures_in_target_order(t *testing.T) {
+	home, folder := desktopHome(t)
+	foreign := `{"mcpServers":{"quarry":{"command":"/usr/bin/other","args":[]}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(folder, desktopConfigName), []byte(foreign), 0o600))
+	tool := (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(uninstallPluginArgv, toolReply{output: "denied\n", status: 1})
+	var shared bytes.Buffer
+
+	err := uninstallDesktop(t, tool, home, &shared, &shared)
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, "denied\n"+
+		"quarry: claude uninstall: claude plugin uninstall --scope user quarry@quarry exited with status 1; see its message above\n"+
+		`quarry: claude uninstall: Claude Desktop has an MCP server named "quarry" that does not run quarry mcp, `+
+		"so quarry leaves it alone; to remove it, delete it from "+desktopConfigShown+" yourself\n", shared.String())
+	kept, err := os.ReadFile(filepath.Join(folder, desktopConfigName))
+	require.NoError(t, err)
+	assert.Equal(t, foreign, string(kept))
+}
+
+func Test_claude_uninstall_does_not_touch_claude_desktop_after_an_interrupt_during_a_code_step(t *testing.T) {
+	cases := []struct {
+		name       string
+		tool       *toolCalls
+		wantStdout string
+		wantAfter  string
+	}{
+		{
+			name:       "during a step",
+			tool:       (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, toolReply{cancel: true, ctxErr: true}),
+			wantStdout: pluginUninstalledLine,
+			wantAfter:  "claude plugin marketplace remove --scope user quarry",
+		},
+		{
+			name:      "before the command runs",
+			tool:      &toolCalls{cancelBefore: true},
+			wantAfter: "claude plugin marketplace list --json",
+		},
+		{
+			name:      "between two children",
+			tool:      (&toolCalls{}).reply(marketplaceListArgv, toolReply{output: ourMarketplace}).reply(pluginListArgv, toolReply{output: userPluginOn, cancel: true}),
+			wantAfter: "claude plugin uninstall --scope user quarry@quarry",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, folder := desktopHome(t)
+			config := filepath.Join(folder, desktopConfigName)
+			require.NoError(t, os.WriteFile(config, []byte(desktopOurEntryConfig), 0o600))
+
+			stdout, stderr, err := runCancellable(t, c.tool, home, "uninstall")
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, "quarry: claude uninstall: stopped before "+c.wantAfter+" finished; run quarry claude uninstall again\n", stderr)
+			kept, err := os.ReadFile(config)
+			require.NoError(t, err)
+			assert.JSONEq(t, desktopOurEntryConfig, string(kept))
+			listing, err := os.ReadDir(folder)
+			require.NoError(t, err)
+			assert.Len(t, listing, 1)
+		})
+	}
+}
+
+func Test_claude_uninstall_returns_the_stdout_write_error_of_claude_desktop_after_a_claude_code_failure(t *testing.T) {
+	home, folder := desktopHome(t)
+	config := filepath.Join(folder, desktopConfigName)
+	require.NoError(t, os.WriteFile(config, []byte(desktopOurEntryConfig), 0o600))
+	tool := (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, toolReply{status: 1})
+	stdout := &failsAfterFirstWrite{err: errPipeClosed}
+
+	err := uninstallDesktop(t, tool, home, stdout, &bytes.Buffer{})
+
+	require.ErrorIs(t, err, errPipeClosed)
+	assert.NotErrorIs(t, err, cli.ReportedError{})
+}
