@@ -3,6 +3,7 @@ package cli_test
 import (
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -347,11 +348,6 @@ func Test_claude_uninstall_reports_each_outcome(t *testing.T) {
 }
 
 func Test_claude_uninstall_reports_each_failure(t *testing.T) {
-	const (
-		claudeAt  = "/opt/bin/claude"
-		cannotRun = `cannot run claude at "/opt/bin/claude" (permission denied); ` +
-			"check that it is Claude Code and that you can run it, then run quarry claude uninstall again\n"
-	)
 	killed := func(output string) toolReply {
 		return toolReply{output: output, status: -1, err: &toolrun.SignalError{Signal: syscall.SIGKILL}}
 	}
@@ -436,29 +432,55 @@ func Test_claude_uninstall_reports_each_failure(t *testing.T) {
 			wantStderr: "quarry: claude uninstall: stopped before claude plugin marketplace list --json finished; " +
 				"run quarry claude uninstall again\n",
 		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runClaudeAt(t, c.tool, findsAt("/opt/bin/claude"), t.TempDir(), "claude", "uninstall")
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
+}
+
+func Test_claude_uninstall_reports_a_claude_it_cannot_run_with_its_path_under_home_abbreviated(t *testing.T) {
+	const tail = `cannot run claude at "~/bin/claude" (permission denied); ` +
+		"check that it is Claude Code and that you can run it, then run quarry claude uninstall again\n"
+	cases := []struct {
+		name       string
+		tool       func(claude string) *toolCalls
+		wantStdout string
+		wantLead   string
+	}{
 		{
-			name:       "claude that cannot run, first step",
-			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart(claudeAt)}),
+			name: "first step",
+			tool: func(claude string) *toolCalls {
+				return (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart(claude)})
+			},
 			wantStdout: desktopSkippedLine,
-			wantStderr: "quarry: claude uninstall: " + cannotRun,
 		},
 		{
-			name:       "claude that cannot run after the plugin uninstall",
-			tool:       (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, toolReply{err: cannotStart(claudeAt)}),
+			name: "after the plugin uninstall",
+			tool: func(claude string) *toolCalls {
+				return (&toolCalls{}).lists(ourMarketplace, userPluginOn).reply(removeMarketplaceArgv, toolReply{err: cannotStart(claude)})
+			},
 			wantStdout: pluginUninstalledLine + desktopSkippedLine,
-			wantStderr: "quarry: claude uninstall: uninstalled the quarry plugin, but " + cannotRun,
+			wantLead:   "uninstalled the quarry plugin, but ",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
+			claude := filepath.Join(home, "bin", "claude")
 
-			stdout, stderr, err := runClaudeAt(t, c.tool, findsAt(claudeAt), home, "claude", "uninstall")
+			stdout, stderr, err := runClaudeAt(t, c.tool(claude), findsAt(claude), home, "claude", "uninstall")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
 			assert.Equal(t, c.wantStdout, stdout)
-			assert.Equal(t, c.wantStderr, stderr)
+			assert.Equal(t, "quarry: claude uninstall: "+c.wantLead+tail, stderr)
 		})
 	}
 }

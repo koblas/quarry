@@ -7,7 +7,9 @@
 // running binary; a binary in a temporary location, or one not named quarry,
 // is refused. Uninstall removes mcpServers.quarry only when it starts
 // `quarry mcp`, whatever the path, and leaves any other entry in place. Both
-// save the original config beside it before replacing it. The home directory,
-// the path of the running binary, the PATH lookup and the temporary root arrive
-// as options, so every decision here is testable against a temporary folder.
+// save the original config beside it before replacing it, and both refuse with
+// ErrInterrupted, writing nothing, once their context has ended. The home
+// directory, the path of the running binary, the PATH lookup and the temporary
+// root arrive as options, so every decision here is testable against a
+// temporary folder.
 package claudedesktop

@@ -15,7 +15,6 @@ const (
 	otherServers = `{"globalShortcut":"Cmd+Shift+Space"}`
 )
 
-// cancelledContext returns a context that has already ended with context.Canceled.
 func cancelledContext(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())

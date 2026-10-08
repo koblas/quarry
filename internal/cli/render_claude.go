@@ -450,9 +450,8 @@ func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err 
 	return ReportedError{}
 }
 
-// continueAfterCodeFailure runs desktop after a Claude Code failure that reportClaudeFailure turned into
-// reported, and returns desktop's error if it has one, else reported. It returns reported untouched,
-// without running desktop, when it is not ReportedError (stdout could not be written) or codeErr is an interrupt.
+// continueAfterCodeFailure runs desktop after a Claude Code failure and returns its error, else reported.
+// An interrupt, or a reported error that is not ReportedError (stdout failed), skips desktop.
 func continueAfterCodeFailure(codeErr, reported error, desktop func() error) error {
 	if !errors.Is(reported, ReportedError{}) {
 		return reported

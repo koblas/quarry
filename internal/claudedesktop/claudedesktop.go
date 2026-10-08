@@ -242,10 +242,9 @@ type Result struct {
 }
 
 // Install adds the quarry entry to Claude Desktop's config, backing up an existing file first, or
-// repoints or leaves alone an entry of ours. A Desktop folder that is missing or not a folder is
-// skipped (Result.Skipped); anything it cannot safely read or write is refused with a typed error.
-// Result.PathQuarry names a different quarry on PATH. A context that ended before the write is
-// ErrInterrupted, and nothing is written.
+// repoints an entry of ours. A missing Desktop folder is skipped (Result.Skipped); anything it
+// cannot safely read or write is a typed error. A context that ended before the write is
+// ErrInterrupted, with nothing written.
 func (s *Server) Install(ctx context.Context) (Result, error) {
 	loc, err := s.locate()
 	res := Result{Folder: loc.folder, Config: loc.config}
@@ -339,9 +338,8 @@ type UninstallResult struct {
 
 // Uninstall removes the quarry entry from Claude Desktop's config, backing up the file first, but
 // only an entry that starts `quarry mcp` (*ForeignEntryError otherwise). A config that cannot hold
-// our entry is left alone, and a Desktop folder that is missing or not a folder is skipped
-// (UninstallResult.Skipped). A context that ended before the removal is ErrInterrupted, and nothing
-// is written.
+// it, or a missing Desktop folder, is left alone. A context that ended before the removal is
+// ErrInterrupted, with nothing written.
 func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 	loc, err := s.locate()
 	config := loc.config

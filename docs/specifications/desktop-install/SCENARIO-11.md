@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-11
-status: open
+status: done
 ---
 
 # SCENARIO-11: A Claude Code failure does not stop Claude Desktop, an interrupt does
@@ -25,10 +25,10 @@ User contract (copy verbatim from spec §D, D13; BR-D13/D16/D19, both verbs): a 
 - [x] Step 4: uninstall side — `claude_uninstall.go:35-47` same helper call with `uninstallDesktop(..., false)`; uninstall pins beyond Gherkin in `claude_continue_test.go`: `Test_claude_uninstall_removes_quarry_from_claude_desktop_after_a_claude_code_failure` (rows foreign marketplace, step exits non-zero, unreadable list; ours entry removed, backup kept), `Test_claude_uninstall_prints_both_failures_in_target_order` (Code step failure + D4u), `Test_claude_uninstall_does_not_touch_claude_desktop_after_an_interrupt_during_a_code_step` (ours entry survives, no backup), unclassified-failure in-place line with `uninstallDoneLead`. Re-points in `claude_uninstall_test.go`: `:264-276`, `:302-313` gain `desktopSkippedLine`; the table `:349-455` moves from `/home/ada` to a temp home (`claudeAt` and `cannotRun` built from it), non-interrupt rows' `wantStdout` gain S2 (the 3 interrupt rows stay Empty/unchanged); `:457-464` becomes the in-place line + `ReportedError`. `cmd/quarry/run_claude_wiring_test.go:29` and `:60` `Empty(stdout)` become the S2 line (`Skipped Claude Desktop: "~/Library/Application Support/Claude" does not exist.\n`, HOME is a temp dir). Departure from sibling precedent: SCENARIO-09's "Code failure keeps its early return" is reversed here; STATE.md must say so.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc` on `ErrInterrupted`, `Install`, `Uninstall` (name the D13 refusal), `doc.go` one line, `continueAfterCodeFailure`, update the "does not run Desktop on failure" wording in `installDesktop`/`uninstallDesktop` docs if any.
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc` on `ErrInterrupted`, `Install`, `Uninstall` (name the D13 refusal), `doc.go` one line, `continueAfterCodeFailure`, update the "does not run Desktop on failure" wording in `installDesktop`/`uninstallDesktop` docs if any.
 
 ### Verify
-- [ ] Step 6: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...` + `spec-check.py desktop-install` → tick SCENARIO-11 with its acceptance test, rewrite STATE.md (drop the "early return" decision and the "Left unbuilt" line for 11).
+- [x] Step 6: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...` + `spec-check.py desktop-install` → tick SCENARIO-11 with its acceptance test, rewrite STATE.md (drop the "early return" decision and the "Left unbuilt" line for 11).
 
 ## Handoff
 
@@ -46,11 +46,5 @@ User contract (copy verbatim from spec §D, D13; BR-D13/D16/D19, both verbs): a 
 
 ## Phase report
 
-Run B2 (step 4) done, step 4 ticked; B1 (steps 2-3) done earlier. Build is complete: the acceptance test and every narrow-loop test are green, `golangci-lint run ./...` 0 issues. `cmd/quarry` was not run here (V runs it).
-
-- `internal/cli/claude_uninstall.go:40-45`: the Code-failure branch is now `reported := reportClaudeFailure(...)` then `continueAfterCodeFailure(err, reported, func() error { return uninstallDesktop(cmd, home, false) })`; the `ErrClaudeNotFound` branch is untouched.
-- `internal/cli/claude_uninstall_test.go`: re-points done as planned (`desktopSkippedLine` on stdout in the partial, foreign-marketplace and every non-interrupt row of `Test_claude_uninstall_reports_each_failure`; the three interrupt rows stay `Empty` stdout). Deviation: that table's `claude` is `/opt/bin/claude` under a `t.TempDir()` home (printed unabbreviated, not `~/bin/claude`) because the rows are built before the per-case home exists; `~` abbreviation stays pinned by the install-side tests. `Test_claude_uninstall_prints_an_unclassified_claude_failure_in_place` is now two rows (before any step; after the plugin uninstall, pinning the `uninstalled the quarry plugin, but ` lead) with S2.
-- `internal/cli/claude_continue_test.go`: added `Test_claude_uninstall_removes_quarry_from_claude_desktop_after_a_claude_code_failure` (3 rows; entry removed, backup kept), `..._prints_both_failures_in_target_order`, `..._does_not_touch_claude_desktop_after_an_interrupt_during_a_code_step` (3 rows; ours entry survives, one file in folder), plus `..._returns_the_stdout_write_error_of_claude_desktop_after_a_claude_code_failure` (uninstall twin of the install pin). `cmd/quarry/run_claude_wiring_test.go` needed nothing more (both pins are install, re-pointed in B1).
-- Mutations, all red and restored: uninstall continue call replaced by `return reported` -> 7 tests red including the 4 new non-interrupt pins and the re-pointed ones; helper's `InterruptedError` stop disabled -> the new uninstall interrupt test (3 rows) plus the 3 interrupt rows of `reports_each_failure`.
-- Lint note: `testifylint` rejects `assert.Equal` on a JSON string, so the new tests use `assert.JSONEq` on the compact `desktopOurEntryConfig`.
-- V must: Sweep (step 5: `go doc` on `ErrInterrupted`, `Install`, `Uninstall`, `continueAfterCodeFailure`, `doc.go` line, docs of `installDesktop`/`uninstallDesktop`; grep for "does not run Desktop" wording), then `verify.sh 200d9ac9d2337822252904de58a47a86f3448d26 ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...` (cmd/quarry ~150s), `spec-check.py desktop-install`, tick SCENARIO-11, rewrite STATE.md (drop the "early return" decision and the "Left unbuilt" line for 11; state that SCENARIO-09's "Code failure keeps its early return" is reversed).
+Run V done; scenario complete. Checkpoint pins folded: `Test_claude_uninstall_reports_a_claude_it_cannot_run_with_its_path_under_home_abbreviated` (2 rows, `~/bin/claude`; mutation `home`->`""` at `claude_uninstall.go:41` reddened both rows, restored) replaces the two cannot-run rows of `reports_each_failure`; docs shortened (`continueAfterCodeFailure`, `Install`, `Uninstall`), `cancelledContext` doc deleted, `doc.go` names `ErrInterrupted`. No stale "does not run Desktop" wording existed.
+verify.sh rc=0 all steps: 0 uncovered added lines, race rc=0, lint 0 issues; test-stats TOTAL 1842 (+19) tests, tempdir 762 (+4), disk 683 (+9) (claudedesktop 86 +8, cli 731 +11, cmd/quarry 1025 +0).
