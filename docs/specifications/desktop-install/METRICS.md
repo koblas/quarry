@@ -5,6 +5,7 @@
 | --- | --- | --- | --- | --- |
 | SCENARIO-01 | test-first | A, B1, B2, V | 0/2/4/2 | folded into V |
 | SCENARIO-02 | test-first | A, B1, B2, V | 0/0/4/1 | folded into V |
+| SCENARIO-04 | test-first | A, B1, B2, V | 0/1/2/1 | folded into V |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
