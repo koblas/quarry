@@ -175,6 +175,36 @@ func Test_install_refuses_a_config_path_that_is_not_a_regular_file(t *testing.T)
 		setup func(config string) error
 	}{
 		{name: "a folder", setup: func(config string) error { return os.Mkdir(config, 0o755) }},
+		{name: "a FIFO", setup: func(config string) error { return syscall.Mkfifo(config, 0o600) }},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			config := filepath.Join(folder, configName)
+			require.NoError(t, c.setup(config))
+			before := snapshot(t, folder)
+			exe := &fakeExecutable{path: quarryBinary}
+
+			_, err := install(t, home, exe)
+
+			notAFile, ok := errors.AsType[*claudedesktop.NotAFileError](err)
+			require.True(t, ok, "got %v", err)
+			assert.Equal(t, config, notAFile.Path)
+			require.NotErrorIs(t, err, fs.ErrExist)
+			assert.Equal(t, before, snapshot(t, folder))
+			assert.Equal(t, 1, exe.calls)
+		})
+	}
+}
+
+func Test_install_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		setup func(config string) error
+	}{
 		{name: "a dangling symlink", setup: func(config string) error { return os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config) }},
 		{name: "a symlink to a regular file", setup: func(config string) error {
 			target := filepath.Join(filepath.Dir(config), "real.json")
@@ -183,20 +213,23 @@ func Test_install_refuses_a_config_path_that_is_not_a_regular_file(t *testing.T)
 			}
 			return os.Symlink(target, config)
 		}},
-		{name: "a FIFO", setup: func(config string) error { return syscall.Mkfifo(config, 0o600) }},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			home, folder := desktopFolder(t)
-			require.NoError(t, c.setup(filepath.Join(folder, configName)))
+			config := filepath.Join(folder, configName)
+			require.NoError(t, c.setup(config))
 			before := snapshot(t, folder)
 			exe := &fakeExecutable{path: quarryBinary}
 
 			_, err := install(t, home, exe)
 
-			require.ErrorIs(t, err, fs.ErrExist)
+			symlink, ok := errors.AsType[*claudedesktop.SymlinkError](err)
+			require.True(t, ok, "got %v", err)
+			assert.Equal(t, config, symlink.Path)
+			assert.Equal(t, quarryBinary, symlink.Command)
 			assert.Equal(t, before, snapshot(t, folder))
 			assert.Equal(t, 1, exe.calls)
 		})
@@ -453,30 +486,83 @@ func Test_install_repoints_only_the_command_of_an_entry_that_starts_quarry_mcp(t
 	}
 }
 
-func Test_install_writes_nothing_when_the_config_is_not_a_json_object_it_can_merge_into(t *testing.T) {
+func Test_install_refuses_a_config_that_is_not_valid_json(t *testing.T) {
 	t.Parallel()
 	cases := []struct{ name, body string }{
-		{name: "invalid JSON", body: `{"mcpServers": `},
-		{name: "a top-level array", body: `[]`},
-		{name: "a top-level null", body: `null`},
-		{name: "a top-level string", body: `"servers"`},
-		{name: "mcpServers an array", body: `{"mcpServers": []}`},
-		{name: "mcpServers a string", body: `{"mcpServers": "none"}`},
+		{name: "truncated", body: `{"mcpServers": `},
+		{name: "trailing data", body: `{} x`},
+		{name: "a byte order mark", body: "\ufeff{}"},
+		{name: "garbage", body: `not json`},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			home, folder := desktopFolder(t)
-			writeConfig(t, folder, c.body, 0o644)
+			config := writeConfig(t, folder, c.body, 0o644)
 			before := snapshot(t, folder)
 
 			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
 
-			require.Error(t, err)
-			require.NotErrorIs(t, err, fs.ErrExist)
-			var foreign *claudedesktop.ForeignEntryError
-			require.NotErrorAs(t, err, &foreign)
+			invalid, ok := errors.AsType[*claudedesktop.InvalidJSONError](err)
+			require.True(t, ok, "got %v", err)
+			assert.Equal(t, config, invalid.Path)
+			require.Error(t, invalid.Err)
+			assert.Equal(t, before, snapshot(t, folder))
+		})
+	}
+}
+
+func Test_install_refuses_a_config_whose_top_level_is_not_an_object(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, body, kind string }{
+		{name: "null", body: `null`, kind: "null"},
+		{name: "an array", body: `[]`, kind: "array"},
+		{name: "a string", body: `"servers"`, kind: "string"},
+		{name: "a number", body: `5`, kind: "number"},
+		{name: "true", body: `true`, kind: "boolean"},
+		{name: "false", body: `false`, kind: "boolean"},
+		{name: "a negative number", body: "\n -5", kind: "number"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			config := writeConfig(t, folder, c.body, 0o644)
+			before := snapshot(t, folder)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			top, ok := errors.AsType[*claudedesktop.TopLevelError](err)
+			require.True(t, ok, "got %v", err)
+			assert.Equal(t, &claudedesktop.TopLevelError{Path: config, Kind: c.kind}, top)
+			assert.Equal(t, before, snapshot(t, folder))
+		})
+	}
+}
+
+func Test_install_refuses_a_config_whose_mcpservers_is_not_an_object(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, body, kind string }{
+		{name: "an array", body: `{"mcpServers": []}`, kind: "array"},
+		{name: "a string", body: `{"mcpServers": "none"}`, kind: "string"},
+		{name: "a number", body: `{"mcpServers": 7}`, kind: "number"},
+		{name: "a boolean", body: `{"mcpServers": false}`, kind: "boolean"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			config := writeConfig(t, folder, c.body, 0o644)
+			before := snapshot(t, folder)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			servers, ok := errors.AsType[*claudedesktop.ServersError](err)
+			require.True(t, ok, "got %v", err)
+			assert.Equal(t, &claudedesktop.ServersError{Path: config, Kind: c.kind}, servers)
 			assert.Equal(t, before, snapshot(t, folder))
 		})
 	}
@@ -493,6 +579,9 @@ func Test_install_fails_without_writing_when_the_config_cannot_be_read(t *testin
 	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
 
 	require.ErrorIs(t, err, fs.ErrPermission)
+	readErr, ok := errors.AsType[*claudedesktop.ReadError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, config, readErr.Path)
 	require.NoError(t, os.Chmod(config, 0o644))
 	assert.Equal(t, before, snapshot(t, folder))
 }
@@ -553,15 +642,20 @@ func Test_install_fails_without_writing_when_the_folder_cannot_be_checked(t *tes
 
 func Test_install_fails_without_writing_when_the_config_cannot_be_checked(t *testing.T) {
 	t.Parallel()
-	home := t.TempDir()
-	support := filepath.Join(home, "Library", "Application Support")
-	require.NoError(t, os.MkdirAll(support, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(support, "Claude"), []byte("not a folder"), 0o600))
+	home, folder := desktopFolder(t)
+	config := writeConfig(t, folder, `{}`, 0o644)
+	before := snapshot(t, folder)
+	require.NoError(t, os.Chmod(folder, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(folder, 0o755) })
 
 	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
 
-	require.ErrorIs(t, err, syscall.ENOTDIR)
-	assert.Equal(t, []string{"Claude -rw------- not a folder"}, snapshot(t, support))
+	require.NoError(t, os.Chmod(folder, 0o755))
+	require.ErrorIs(t, err, fs.ErrPermission)
+	readErr, ok := errors.AsType[*claudedesktop.ReadError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, config, readErr.Path)
+	assert.Equal(t, before, snapshot(t, folder))
 }
 
 func Test_install_fails_without_writing_when_the_executable_path_is_unknown(t *testing.T) {

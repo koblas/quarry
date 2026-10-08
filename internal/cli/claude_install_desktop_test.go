@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -194,7 +195,8 @@ func Test_claude_install_returns_the_desktop_error_unreported_when_the_config_is
 
 	err := installDesktop(t, &toolCalls{}, home, &out, &errOut)
 
-	require.ErrorIs(t, err, fs.ErrExist)
+	_, isSymlink := errors.AsType[*claudedesktop.SymlinkError](err)
+	require.True(t, isSymlink, "got %v", err)
 	require.NotErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine, out.String())
 	assert.Empty(t, errOut.String())
