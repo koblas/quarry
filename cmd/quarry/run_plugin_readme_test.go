@@ -94,7 +94,7 @@ claude plugin marketplace remove --scope user quarry
 
 A copy of the plugin installed only for a project, or by your organization, stays; ¤quarry claude uninstall¤ names each one, and does not remove the quarry marketplace while any remains.
 
-In Claude Desktop, ¤quarry claude install¤ adds quarry's MCP server, not the skill, as the ¤quarry¤ entry under ¤mcpServers¤ in ¤~/Library/Application Support/Claude/claude_desktop_config.json¤, with the full path to quarry, and saves the file it replaces as ¤claude_desktop_config.json.before-quarry¤ beside it. Every other setting stays as it was. Quit Claude Desktop before you run it, since Desktop can rewrite that file while it runs, then reopen Desktop to load quarry. ¤quarry claude uninstall¤ removes that entry and nothing else. If Claude Code or Claude Desktop is not on this Mac, both commands skip it and say so.
+In Claude Desktop, ¤quarry claude install¤ adds quarry's MCP server, not the skill, as the ¤quarry¤ entry under ¤mcpServers¤ in ¤~/Library/Application Support/Claude/claude_desktop_config.json¤, with the full path to quarry; ¤quarry claude uninstall¤ removes that entry and nothing else. Every other setting stays as it was, and whenever either command changes the file it saves the file it replaces as ¤claude_desktop_config.json.before-quarry¤ beside it. Quit Claude Desktop before you run either command, since Desktop can rewrite that file while it runs, then reopen Desktop. If Claude Code or Claude Desktop is not on this Mac, both commands skip it and say so.
 
 To add only the MCP server to Claude Code, without the skill, run:
 
