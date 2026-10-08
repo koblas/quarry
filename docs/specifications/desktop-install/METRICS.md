@@ -8,6 +8,7 @@
 | SCENARIO-04 | test-first | A, B1, B2, V | 0/1/2/1 | folded into V |
 | SCENARIO-06 | test-first | A, B1, B2, V | 0/2/3/0 | folded into V |
 | SCENARIO-08 | code-first | A, B1, B2, V | 0/3/2/1 | folded into V |
+| SCENARIO-13 | test-first | A, B1, B2, V (+1 checkpoint fix) | 0/2/2/0 | yes |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
