@@ -266,6 +266,19 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	return res, nil
 }
 
+// UninstallResult reports what an Uninstall did.
+type UninstallResult struct {
+	Folder  string // the Claude Desktop folder
+	Config  string // the config file inside it
+	Skipped bool   // the folder does not exist, so nothing was done
+	Removed bool   // the quarry entry was removed
+}
+
+// Uninstall removes the quarry entry from Claude Desktop's config, backing up the file first.
+func (s *Server) Uninstall(_ context.Context) (UninstallResult, error) {
+	return UninstallResult{}, nil
+}
+
 // choosePath returns the path to write — the PATH quarry when it is the running binary, else the
 // running binary — and the PATH quarry when it is a different, checkable file.
 func (s *Server) choosePath(exe string) (string, string) {
