@@ -266,6 +266,7 @@ All data stays on the Mac; the only data that leaves is the result of a query Da
 - **Encrypted at rest.** Snapshots and `quarry.duckdb` live under `~/Library/Application Support/quarry/` on a FileVault volume; files are `0600`. Optional DuckDB encryption with the key in the macOS Keychain.
 - **Account numbers in configuration.** `quarry` imports no account-number field from Quicken. Where the user writes an account number into `quarry`'s config (for example to name an account in the account-classification setting), `quarry` shows it masked to the last four digits in everything it prints or serves, CLI and MCP alike. Free text (payees, memos, notes) is not scanned: card and account numbers there are already masked by the institution's download or by Quicken, so `quarry` passes it through as Quicken holds it.
 - **MCP boundary.** The MCP server is local stdio only (no network listener), SQL is read-only (enforced by a read-only connection), and results are row-capped so a stray `SELECT *` can't dump the whole history into a conversation.
+- **Claude Desktop config.** quarry claude install and uninstall change only the quarry entry in Claude Desktop's config file, never another key, and save the file they replace beside it.
 - **Snapshot retention.** Snapshots are capped by count (default 12) and the oldest are deleted after each successful sync; the rules live under Sync.
 - **No telemetry.** The only outbound network call in v1 is `quarry sync` fetching exchange rates from the Bank of Canada; it sends no user data.
 
@@ -330,7 +331,7 @@ The main risk is Quicken's undocumented schema; reconciliation on every sync is 
 - History: everything, including closed accounts.
 - Input: `quarry sync` takes its own snapshot with SQLite's backup API while Quicken is open; no hand-made snapshot or import step.
 - Interfaces: CLI, MCP server and a Claude skill, the skill as Claude's primary path.
-- Plugin install: `quarry claude install` / `uninstall` install and remove the Claude Code plugin by running the `claude` command (user scope); quarry never edits Claude Code's files, and the download is Claude Code's, not quarry's.
+- Claude install: quarry claude install / uninstall act on Claude Code and Claude Desktop, whichever is on the Mac. Claude Code gets the plugin by running the claude command (user scope); quarry never edits Claude Code's files, and the download is Claude Code's, not quarry's. Claude Desktop gets only the MCP server, as the mcpServers.quarry entry in its config file with quarry's full path; quarry changes only that entry, keeps a backup of the file it replaces, and refuses a file it cannot parse or an entry it does not own.
 - Reuse: build on dweekly/quicken-mac-mcp (and hardkoded/quicken-skills), both MIT, with notices preserved.
 - Reporting currency: selectable, CAD, USD or native (each account's own currency, unconverted); default from config `reporting.currency`, else CAD. CLI and MCP accept the same values; MCP's are exact-case.
 - Search: defaults to all dates; --min/--max compare absolute native amounts; no --currency; search is a lookup, not a report.

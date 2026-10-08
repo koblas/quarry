@@ -70,6 +70,22 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 				"cash in investment accounts not included |",
 		},
 		{
+			"prd describes the Claude install on both targets",
+			"docs/initial-prd.md",
+			"- Claude install: quarry claude install / uninstall act on Claude Code and Claude Desktop, " +
+				"whichever is on the Mac. Claude Code gets the plugin by running the claude command (user scope); " +
+				"quarry never edits Claude Code's files, and the download is Claude Code's, not quarry's. " +
+				"Claude Desktop gets only the MCP server, as the mcpServers.quarry entry in its config file " +
+				"with quarry's full path; quarry changes only that entry, keeps a backup of the file it replaces, " +
+				"and refuses a file it cannot parse or an entry it does not own.",
+		},
+		{
+			"prd security bullet limits the Claude Desktop change to the quarry entry",
+			"docs/initial-prd.md",
+			"- **Claude Desktop config.** quarry claude install and uninstall change only the quarry entry " +
+				"in Claude Desktop's config file, never another key, and save the file they replace beside it.",
+		},
+		{
 			"prd names the investment transactions table and its cash side in transactions",
 			"docs/initial-prd.md",
 			"| `investment_transactions` (commission DECIMAL(18,4)) | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount " +
