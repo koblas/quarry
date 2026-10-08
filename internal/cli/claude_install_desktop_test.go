@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -22,6 +23,7 @@ const (
 
 	desktopAddedLine = "Added the quarry MCP server to Claude Desktop; it starts \"" + desktopQuarryBinary + "\".\n"
 	desktopQuitLine  = "Quit and reopen Claude Desktop to load it.\n"
+	desktopKeptLine  = "The quarry MCP server is already in Claude Desktop; it starts \"" + desktopQuarryBinary + "\".\n"
 
 	desktopNoHomeLine = "quarry: claude install: cannot find your home directory ($HOME is not set), " +
 		"so quarry cannot look for Claude Desktop; set HOME, then run quarry claude install again\n"
@@ -36,6 +38,14 @@ const (
 	desktopConfigShown = `"~/Library/Application Support/Claude/` + desktopConfigName + `"`
 	desktopBackupShown = `"~/Library/Application Support/Claude/` + desktopBackupName + `"`
 	desktopFolderShown = `"~/Library/Application Support/Claude"`
+
+	desktopForeignLine = "quarry: claude install: Claude Desktop has an MCP server named \"quarry\" that does not run quarry mcp, " +
+		"so quarry leaves it alone; rename or remove it in " + desktopConfigShown + ", then run quarry claude install again\n"
+
+	// staleEntryTail is what follows an entry's command: args, env and a key quarry does not know.
+	staleEntryTail = `"args": ["mcp"], "env": {"TOKEN": "t0k3n", "ID": 12345678901234567890}, "note": "a<b>&c"`
+
+	staleEntryRest = `"globalShortcut": "Cmd+Shift+Space", "mcpServers": {"github": {"command": "npx", "args": ["-y", "server-github"]}`
 
 	otherServersConfig = `{
   "globalShortcut": "Cmd+Shift+Space",
@@ -381,4 +391,86 @@ func Test_claude_install_reports_a_failed_backup_or_write_and_leaves_the_config_
 			assert.Equal(t, c.wantFold, entryNames(t, folder))
 		})
 	}
+}
+
+// desktopUpdatedLine is the line for an entry repointed from the old command to the fixed quarry binary.
+func desktopUpdatedLine(old string) string {
+	return "Updated the quarry MCP server in Claude Desktop to start \"" + desktopQuarryBinary + "\" instead of \"" + old + "\".\n"
+}
+
+func Test_claude_install_repoints_a_stale_quarry_entry_and_keeps_its_env(t *testing.T) {
+	cases := []struct {
+		name string
+		old  string
+		said string
+	}{
+		{name: "another absolute path", old: "/usr/local/bin/quarry", said: "/usr/local/bin/quarry"},
+		{name: "the bare name", old: "quarry", said: "quarry"},
+		{name: "a path under home", old: "<home>/bin/quarry", said: "~/bin/quarry"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, folder := desktopHome(t)
+			config := filepath.Join(folder, desktopConfigName)
+			existing := `{` + staleEntryRest + `, "quarry": {"command": "` + strings.ReplaceAll(c.old, "<home>", home) + `", ` + staleEntryTail + `}}}` + "\n"
+			writeDesktopConfig(t, config, existing)
+			var out, errOut bytes.Buffer
+
+			err := installDesktop(t, &toolCalls{}, home, &out, &errOut)
+
+			require.NoError(t, err)
+			assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine+desktopUpdatedLine(c.said)+desktopQuitLine, out.String())
+			assert.Empty(t, errOut.String())
+			backup, err := os.ReadFile(filepath.Join(folder, desktopBackupName))
+			require.NoError(t, err)
+			assert.Equal(t, existing, string(backup))
+			info, err := os.Stat(config)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+			written, err := os.ReadFile(config)
+			require.NoError(t, err)
+			others, entry := splitQuarryEntry(t, written)
+			assert.Equal(t, decodeConfig(t, []byte(`{`+staleEntryRest+`}}`)), others)
+			assert.Equal(t, decodeConfig(t, []byte(`{"command": "`+desktopQuarryBinary+`", `+staleEntryTail+`}`)), entry)
+			assert.Contains(t, string(written), "a<b>&c")
+			assert.Equal(t, []string{desktopConfigName, desktopBackupName}, entryNames(t, folder))
+		})
+	}
+}
+
+func Test_claude_install_leaves_the_desktop_config_alone_when_it_already_starts_this_quarry(t *testing.T) {
+	home, folder := desktopHome(t)
+	config := filepath.Join(folder, desktopConfigName)
+	existing := `{"mcpServers":{"quarry":{"command":"` + desktopQuarryBinary + `","args":["mcp"]}},"globalShortcut":"Cmd+Shift+Space"}`
+	writeDesktopConfig(t, config, existing)
+	var out, errOut bytes.Buffer
+
+	err := installDesktop(t, &toolCalls{}, home, &out, &errOut)
+
+	require.NoError(t, err)
+	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine+desktopKeptLine, out.String())
+	assert.Empty(t, errOut.String())
+	body, err := os.ReadFile(config)
+	require.NoError(t, err)
+	assert.Equal(t, existing, string(body))
+	assert.Equal(t, []string{desktopConfigName}, entryNames(t, folder))
+}
+
+func Test_claude_install_refuses_a_quarry_entry_that_does_not_run_quarry_mcp(t *testing.T) {
+	home, folder := desktopHome(t)
+	config := filepath.Join(folder, desktopConfigName)
+	existing := `{"mcpServers": {"quarry": {"command": "/usr/local/bin/other-tool", "args": ["serve"]}}}` + "\n"
+	writeDesktopConfig(t, config, existing)
+	var out, errOut bytes.Buffer
+
+	err := installDesktop(t, &toolCalls{}, home, &out, &errOut)
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine, out.String())
+	assert.Equal(t, desktopForeignLine, errOut.String())
+	body, readErr := os.ReadFile(config)
+	require.NoError(t, readErr)
+	assert.Equal(t, existing, string(body))
+	assert.Equal(t, []string{desktopConfigName}, entryNames(t, folder))
 }

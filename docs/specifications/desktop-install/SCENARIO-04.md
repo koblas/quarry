@@ -19,7 +19,7 @@ Surface surveyed (existing, from `go doc` + grep): `claudedesktop.Result` is rea
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/claude_install_desktop_test.go` (append after `:376`, reuse `desktopHome`/`writeDesktopConfig`/`entryNames`/`splitQuarryEntry`) — the three acceptance tests above through `cli.Execute`. Repoint: rows "other absolute path" and bare `"quarry"`, entry carries `env` and one extra entry-level key beside a sibling server; asserts DU, DQ, backup = original, config mode kept, only `command` changed. DK: compact non-canonical config, DK line and no quit line, folder listing and bytes unchanged. D4: foreign entry, D4 line verbatim on stderr with `ReportedError`, Code lines on stdout, no Desktop stdout line, config unchanged, no backup. No stubs needed (black-box); each fails at its assertion on the interim `ErrEntryPresent` runtime error — quote that in the report.
+- [x] Step 1: `internal/cli/claude_install_desktop_test.go` (append after `:376`, reuse `desktopHome`/`writeDesktopConfig`/`entryNames`/`splitQuarryEntry`) — the three acceptance tests above through `cli.Execute`. Repoint: rows "other absolute path" and bare `"quarry"`, entry carries `env` and one extra entry-level key beside a sibling server; asserts DU, DQ, backup = original, config mode kept, only `command` changed. DK: compact non-canonical config, DK line and no quit line, folder listing and bytes unchanged. D4: foreign entry, D4 line verbatim on stderr with `ReportedError`, Code lines on stdout, no Desktop stdout line, config unchanged, no backup. No stubs needed (black-box); each fails at its assertion on the interim `ErrEntryPresent` runtime error — quote that in the report.
 
 ### Build
 - [ ] Step 2 (batch 1, test-first): `internal/claudedesktop/claudedesktop.go:34-35,181-216` `merge`, new unexported `isOurs(raw json.RawMessage) bool`, new exported `*ForeignEntryError{Path string}` (typed like `BackupError`; carries the config path because D4 prints it); delete `ErrEntryPresent`; `install_test.go:288-309` replaced by `Test_install_refuses_a_quarry_entry_that_does_not_start_quarry_mcp`, `:333` becomes `NotErrorAs` the new type.
@@ -53,3 +53,12 @@ Surface surveyed (existing, from `go doc` + grep): `claudedesktop.Result` is rea
 - `filepath.Base("/opt/x/quarry/")` is `quarry`: using it would call a directory path ours.
 - Repacking the entry as a Go struct drops `env` and unknown keys; keep the raw map. Entry key order may change, values may not.
 - Removing `ErrEntryPresent` breaks `install_test.go:305,333` at compile time; the "our own entry" row of the old test is now DK, not a refusal.
+
+## Phase report
+
+Run A (acceptance, red) done.
+
+- `internal/cli/claude_install_desktop_test.go`: three acceptance tests appended at the end (after the D7/D8 test); new consts `desktopKeptLine`, `desktopForeignLine`, `staleEntryTail`, `staleEntryRest`, helper `desktopUpdatedLine(old)`; `strings` import added. No production code, no stubs.
+- Red now (all at their assertion, on the interim `ErrEntryPresent` runtime error): repoint test fails `require.NoError` ("the config already has a quarry entry") in all 3 rows (other absolute path, bare `quarry`, path under home -> `~/bin/quarry`); DK test fails `require.NoError`; D4 test fails `require.ErrorIs(err, cli.ReportedError{})`.
+- `golangci-lint run ./internal/cli/...`: 0 issues.
+- Next run (B1) starts at step 2; do not re-add these tests. B2 (step 4) must make the D4 stderr equal `desktopForeignLine` (install wording, `%q` of the tilde config path).
