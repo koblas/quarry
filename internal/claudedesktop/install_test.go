@@ -33,6 +33,34 @@ func (f *fakeExecutable) executable() (string, error) {
 	return f.path, f.err
 }
 
+// quarryOnlyConfig is the config Install writes when nothing else is in it.
+const quarryOnlyConfig = "{\n" +
+	"  \"mcpServers\": {\n" +
+	"    \"quarry\": {\n" +
+	"      \"command\": \"/opt/homebrew/bin/quarry\",\n" +
+	"      \"args\": [\n" +
+	"        \"mcp\"\n" +
+	"      ]\n" +
+	"    }\n" +
+	"  }\n" +
+	"}\n"
+
+// writeConfig puts body in the folder's config at exactly mode and returns its path.
+func writeConfig(t *testing.T, folder, body string, mode fs.FileMode) string {
+	t.Helper()
+	config := filepath.Join(folder, configName)
+	require.NoError(t, os.WriteFile(config, []byte(body), 0o600))
+	require.NoError(t, os.Chmod(config, mode))
+	return config
+}
+
+func readConfig(t *testing.T, folder string) string {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join(folder, configName))
+	require.NoError(t, err)
+	return string(body)
+}
+
 // desktopFolder creates a home holding Claude Desktop's folder and returns both paths.
 func desktopFolder(t *testing.T) (string, string) {
 	t.Helper()
@@ -87,6 +115,9 @@ func Test_install_creates_the_config_with_the_quarry_entry_when_the_folder_holds
 	info, err := os.Stat(config)
 	require.NoError(t, err)
 	assert.Equal(t, fs.FileMode(0o600), info.Mode().Perm())
+	entries, err := os.ReadDir(folder)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
 }
 
 func Test_install_writes_two_space_indented_json_with_a_trailing_newline(t *testing.T) {
@@ -137,16 +168,21 @@ func Test_install_skips_a_missing_desktop_folder_without_asking_for_the_executab
 	assert.Empty(t, snapshot(t, home))
 }
 
-func Test_install_refuses_a_config_path_that_already_holds_anything(t *testing.T) {
+func Test_install_refuses_a_config_path_that_is_not_a_regular_file(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name  string
 		setup func(config string) error
 	}{
-		{name: "an empty file", setup: func(config string) error { return os.WriteFile(config, nil, 0o600) }},
-		{name: "a JSON object", setup: func(config string) error { return os.WriteFile(config, []byte(`{"mcpServers": {}}`), 0o600) }},
 		{name: "a folder", setup: func(config string) error { return os.Mkdir(config, 0o755) }},
 		{name: "a dangling symlink", setup: func(config string) error { return os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config) }},
+		{name: "a symlink to a regular file", setup: func(config string) error {
+			target := filepath.Join(filepath.Dir(config), "real.json")
+			if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
+				return err
+			}
+			return os.Symlink(target, config)
+		}},
 		{name: "a FIFO", setup: func(config string) error { return syscall.Mkfifo(config, 0o600) }},
 	}
 
@@ -163,6 +199,180 @@ func Test_install_refuses_a_config_path_that_already_holds_anything(t *testing.T
 			require.ErrorIs(t, err, fs.ErrExist)
 			assert.Equal(t, before, snapshot(t, folder))
 			assert.Equal(t, 1, exe.calls)
+		})
+	}
+}
+
+func Test_install_keeps_other_values_byte_for_byte_in_value(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	writeConfig(t, folder, `{"theme":"dark","mcpServers":{"other":{"command":"x","env":{"K":"<>&"},"big":12345678901234567890}}}`, 0o600)
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	require.NoError(t, err)
+	want := "{\n" +
+		"  \"mcpServers\": {\n" +
+		"    \"other\": {\n" +
+		"      \"command\": \"x\",\n" +
+		"      \"env\": {\n" +
+		"        \"K\": \"<>&\"\n" +
+		"      },\n" +
+		"      \"big\": 12345678901234567890\n" +
+		"    },\n" +
+		"    \"quarry\": {\n" +
+		"      \"command\": \"/opt/homebrew/bin/quarry\",\n" +
+		"      \"args\": [\n" +
+		"        \"mcp\"\n" +
+		"      ]\n" +
+		"    }\n" +
+		"  },\n" +
+		"  \"theme\": \"dark\"\n" +
+		"}\n"
+	assert.Equal(t, want, readConfig(t, folder))
+}
+
+func Test_install_merges_into_an_empty_or_whitespace_config(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, body, want string }{
+		{name: "an empty file", body: "", want: quarryOnlyConfig},
+		{name: "only whitespace", body: " \n\t\n", want: quarryOnlyConfig},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			writeConfig(t, folder, c.body, 0o600)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, readConfig(t, folder))
+		})
+	}
+}
+
+func Test_install_merges_into_a_config_whose_mcpservers_is_null_or_absent(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, body, want string }{
+		{name: "an empty object", body: `{}`, want: quarryOnlyConfig},
+		{name: "mcpServers null", body: `{"mcpServers": null}`, want: quarryOnlyConfig},
+		{name: "mcpServers absent", body: `{"theme": "dark"}`, want: "{\n" +
+			"  \"mcpServers\": {\n" +
+			"    \"quarry\": {\n" +
+			"      \"command\": \"/opt/homebrew/bin/quarry\",\n" +
+			"      \"args\": [\n" +
+			"        \"mcp\"\n" +
+			"      ]\n" +
+			"    }\n" +
+			"  },\n" +
+			"  \"theme\": \"dark\"\n" +
+			"}\n"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			writeConfig(t, folder, c.body, 0o600)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, readConfig(t, folder))
+		})
+	}
+}
+
+func Test_install_never_overwrites_a_present_quarry_entry(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, body string }{
+		{name: "our own entry", body: `{"mcpServers":{"quarry":{"command":"/opt/homebrew/bin/quarry","args":["mcp"]}}}`},
+		{name: "a foreign entry", body: `{"mcpServers":{"quarry":{"command":"/usr/bin/other","args":[]}}}`},
+		{name: "a null entry", body: `{"mcpServers":{"quarry":null}}`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			writeConfig(t, folder, c.body, 0o644)
+			before := snapshot(t, folder)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			require.ErrorIs(t, err, claudedesktop.ErrEntryPresent)
+			assert.Equal(t, before, snapshot(t, folder))
+		})
+	}
+}
+
+func Test_install_writes_nothing_when_the_config_is_not_a_json_object_it_can_merge_into(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, body string }{
+		{name: "invalid JSON", body: `{"mcpServers": `},
+		{name: "a top-level array", body: `[]`},
+		{name: "a top-level null", body: `null`},
+		{name: "a top-level string", body: `"servers"`},
+		{name: "mcpServers an array", body: `{"mcpServers": []}`},
+		{name: "mcpServers a string", body: `{"mcpServers": "none"}`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			writeConfig(t, folder, c.body, 0o644)
+			before := snapshot(t, folder)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			require.Error(t, err)
+			require.NotErrorIs(t, err, fs.ErrExist)
+			require.NotErrorIs(t, err, claudedesktop.ErrEntryPresent)
+			assert.Equal(t, before, snapshot(t, folder))
+		})
+	}
+}
+
+func Test_install_fails_without_writing_when_the_config_cannot_be_read(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	config := writeConfig(t, folder, `{}`, 0o644)
+	before := snapshot(t, folder)
+	require.NoError(t, os.Chmod(config, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(config, 0o644) })
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	require.ErrorIs(t, err, fs.ErrPermission)
+	require.NoError(t, os.Chmod(config, 0o644))
+	assert.Equal(t, before, snapshot(t, folder))
+}
+
+func Test_install_keeps_the_mode_of_the_config_it_replaces(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		mode fs.FileMode
+	}{
+		{name: "a 0644 config", mode: 0o644},
+		{name: "a 0600 config", mode: 0o600},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			config := writeConfig(t, folder, `{}`, c.mode)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			require.NoError(t, err)
+			info, err := os.Stat(config)
+			require.NoError(t, err)
+			assert.Equal(t, c.mode, info.Mode().Perm())
 		})
 	}
 }

@@ -22,6 +22,12 @@ const configMode fs.FileMode = 0o600
 // ErrNoHome is returned by Install when the Server has no home directory to look in.
 var ErrNoHome = errors.New("home directory is not set")
 
+// errNotObject is why a value cannot be merged into: it decoded, but not to a JSON object.
+var errNotObject = errors.New("not a JSON object")
+
+// ErrEntryPresent is returned by Install when the config already holds a quarry entry.
+var ErrEntryPresent = errors.New("the config already has a quarry entry")
+
 // Executable reports the absolute path of the running quarry binary, as os.Executable does.
 type Executable func() (string, error)
 
@@ -62,10 +68,11 @@ type Result struct {
 	Command string // the quarry path the entry starts
 }
 
-// Install adds the quarry entry to Claude Desktop's config file, creating the file.
-// It returns a Skipped Result when Desktop's folder does not exist, ErrNoHome when the
-// Server has no home, and an error wrapping fs.ErrExist when anything is already at the
-// config path. Any other failure leaves the folder as it was.
+// Install adds the quarry entry to Claude Desktop's config file, creating the file when
+// there is none. It returns a Skipped Result when Desktop's folder does not exist, ErrNoHome
+// when the Server has no home, an error wrapping fs.ErrExist when the config path is not a
+// regular file, and ErrEntryPresent when the config already has a quarry entry. A config it
+// cannot read or merge into is left as it was, and a replaced config keeps its mode.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	if s.home == "" {
 		return Result{}, ErrNoHome
@@ -83,22 +90,54 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	if err != nil {
 		return res, fmt.Errorf("find the quarry binary: %w", err)
 	}
-	// Lstat, not Stat: a dangling symlink looks missing to Stat, and the rename would replace it.
-	if _, err := os.Lstat(res.Config); err == nil {
-		return res, fmt.Errorf("%s already exists: %w", res.Config, fs.ErrExist)
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return res, fmt.Errorf("check %s: %w", res.Config, err)
-	}
-	doc, err := encode(command)
+	current, err := readConfig(res.Config)
 	if err != nil {
-		return res, err // unreachable: encode fails only when json cannot encode a value, and every value is a string or string slice built here
+		return res, err
 	}
-	if err := replacefile.Write(res.Config, doc, configMode); err != nil {
+	doc, err := merge(current.data, command)
+	if err != nil {
+		return res, fmt.Errorf("merge into %s: %w", res.Config, err)
+	}
+	if err := replacefile.Write(res.Config, doc, current.mode); err != nil {
 		return res, fmt.Errorf("write %s: %w", res.Config, err)
 	}
 	res.Command = command
 	return res, nil
 }
+
+// existing is what Install found at the config path: the bytes to merge into and the mode
+// the written config takes.
+type existing struct {
+	data []byte
+	mode fs.FileMode
+}
+
+// readConfig reads the config at path. A missing config yields no data and configMode; a
+// path that is not a regular file is refused with an error wrapping fs.ErrExist.
+func readConfig(path string) (existing, error) {
+	// Lstat, not Stat: a dangling symlink looks missing to Stat, and the rename would replace it.
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return existing{mode: configMode}, nil
+	}
+	if err != nil {
+		return existing{}, fmt.Errorf("check %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return existing{}, fmt.Errorf("%s already exists: %w", path, fs.ErrExist)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return existing{}, fmt.Errorf("read %s: %w", path, err)
+	}
+	return existing{data: data, mode: info.Mode().Perm()}, nil
+}
+
+// serversKey and entryKey are the config keys the quarry entry lives under.
+const (
+	serversKey = "mcpServers"
+	entryKey   = "quarry"
+)
 
 // entry is the value of mcpServers.quarry: how Desktop starts the quarry MCP server.
 type entry struct {
@@ -106,18 +145,58 @@ type entry struct {
 	Args    []string `json:"args"`
 }
 
-// encode returns a config document holding only the quarry entry, indented by two spaces
-// with a trailing newline and no HTML escaping, so "<>&" in the path stays literal.
-func encode(command string) ([]byte, error) {
-	doc := map[string]map[string]entry{
-		"mcpServers": {"quarry": {Command: command, Args: []string{"mcp"}}},
+// merge returns original, empty or whitespace-only meaning "{}", with the quarry entry added
+// under mcpServers, indented by two spaces with a trailing newline and no HTML escaping.
+// Every other value is carried through as the raw JSON it was read as. It returns
+// ErrEntryPresent when mcpServers already has a quarry key, and an error when original
+// or mcpServers is not a JSON object.
+func merge(original []byte, command string) ([]byte, error) {
+	top, err := decodeObject(original)
+	if err != nil {
+		return nil, fmt.Errorf("config: %w", err)
 	}
+	var servers map[string]json.RawMessage
+	if raw, ok := top[serversKey]; ok && string(raw) != "null" {
+		if servers, err = decodeObject(raw); err != nil {
+			return nil, fmt.Errorf("%s: %w", serversKey, err)
+		}
+	}
+	if _, ok := servers[entryKey]; ok {
+		return nil, ErrEntryPresent
+	}
+	doc := make(map[string]any, len(top)+1)
+	for k, v := range top {
+		doc[k] = v
+	}
+	merged := make(map[string]any, len(servers)+1)
+	for k, v := range servers {
+		merged[k] = v
+	}
+	merged[entryKey] = entry{Command: command, Args: []string{"mcp"}}
+	doc[serversKey] = merged
+
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		return nil, fmt.Errorf("encode the config: %w", err) // unreachable: json fails only on unsupported types or marshalers, and doc holds only strings
+		return nil, fmt.Errorf("encode the config: %w", err) // unreachable: every value is a RawMessage from a successful decode, or a string or string slice built here
 	}
 	return buf.Bytes(), nil
+}
+
+// decodeObject decodes data as one JSON object, reading empty or whitespace-only data as
+// "{}". A JSON null decodes without error but is not an object, so it returns errNotObject.
+func decodeObject(data []byte) (map[string]json.RawMessage, error) {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return map[string]json.RawMessage{}, nil
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	if obj == nil {
+		return nil, errNotObject
+	}
+	return obj, nil
 }
