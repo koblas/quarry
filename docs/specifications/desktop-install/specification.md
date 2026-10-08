@@ -28,6 +28,7 @@
 - **BR-D16 Code failures print in place.** Every Claude Code failure prints inside the Code block, never at process end. The `default:` arm of `reportClaudeFailure` writes `quarry: claude <verb>: <lead><err.Error()>` via `writeClaudeLine` (`<lead>` = existing `installDoneLead`/`uninstallDoneLead`, empty when no step ran) and returns `ReportedError`; Desktop then runs as for any Code failure; exit 1. Existing `assert.Same` pins on a bare returned error change to asserting the stderr line + `ReportedError`.
 - **BR-D17 unclassified Desktop errors.** An Lstat/Stat error on the config file other than not-exist → D6. A JSON encode error on the merged document may be marked `// unreachable:` only when every encoded value is a `json.RawMessage` from a successful decode or a value quarry built (strings, string slice), with that as the stated reason; any `any`/`float64` value forbids the mark.
 - **BR-D18 SameFile stat failure.** If stat of either path fails, treat as not the same file → write `os.Executable()`. W1 fires only when the stat of the PATH quarry succeeded.
+- **BR-D20 install writes only what it recognises.** Install never writes an entry BR-D4 would not call ours: when the BR-D5 chosen path's last element is not exactly `quarry`, install refuses with D9b before reading the config (mid-feature ruling, SCENARIO-13 checkpoint). Uninstall is unaffected.
 - **BR-D19 uninstall failure flow.** BR-D13 continue-on-failure, interrupt-stops and D13 apply to uninstall identically under the uninstall verb.
 - **BR-D15 test safety.** Once the real Desktop writer is wired, `cmd/quarry` `testEnv` gives `Home` a `t.TempDir()`-based value (or a fake Desktop locator) and a fake `Executable`, so no `cmd/quarry` test can rewrite the developer's real Desktop config. Lands in the same scenario that wires `defaultEnv`.
 
@@ -223,6 +224,7 @@ Skipped Claude Desktop: "~/Library/Application Support/Claude" does not exist.
 | D7 | backup write fails | `quarry: claude install: cannot save <B> (<os reason>), so <P> is unchanged; check the permissions of <D>, then run quarry claude install again` | 1 |
 | D8 | temp create/write/fsync/rename fails | `quarry: claude install: cannot write <P> (<os reason>), so it is unchanged; check the permissions of <D>, then run quarry claude install again` | 1 |
 | D9 | install: temporary binary | `quarry: claude install: this quarry runs from a temporary build ("<exe>"), which will be gone when Claude Desktop starts it; run quarry claude install from an installed quarry, not go run` | 1 |
+| D9b | install: chosen path's last element is not exactly `quarry` (checked after D9, before the config is read; D9 wins when both apply) | `quarry: claude install: this quarry binary is named "<base>", and quarry recognises its Claude Desktop entry only when the binary is named quarry; rename it to quarry, or put a link named quarry to it on your PATH, then run quarry claude install again` — `<base>` = chosen path's last element via `%q`; no `<E>` offered | 1 |
 | D10 | install: `os.Executable` fails | `quarry: claude install: cannot tell where this quarry binary is (<os reason>), so quarry cannot add it to Claude Desktop; add "quarry": {"command": "<the path command -v quarry prints>", "args": ["mcp"]} under mcpServers in <P> yourself` — expected unreachable on darwin; `// unreachable:` only with a reason | 1 |
 | D11 | `$HOME` unset | `quarry: claude install: cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; set HOME, then run quarry claude install again` (reuses `errNoHome` wording, `cmd/quarry/run.go:177`) | 1 |
 | D12 | Desktop folder stat error other than not-exist | `quarry: claude install: cannot check for Claude Desktop at <D> (<os reason>); check its permissions, then run quarry claude install again` | 1 |
@@ -257,6 +259,7 @@ Every Desktop refusal leaves config and backup untouched. Each failing target pr
 | backup cannot be written | — | D7 | 1 | untouched |
 | temp/rename fails | — | D8 | 1 | untouched, temp removed |
 | `go run` / `$TMPDIR` binary | — | D9 | 1 | untouched (checked before reading config) |
+| binary not named quarry (no SameFile `quarry` on PATH) | — | D9b | 1 | untouched (checked before reading config) |
 | another key already runs quarry mcp | per `quarry` key | — | — | no row: only key `quarry` judged |
 
 **Desktop, uninstall:**
