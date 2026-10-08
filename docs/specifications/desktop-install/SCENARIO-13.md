@@ -52,3 +52,12 @@ User contract: `quarry claude uninstall` — Code lines and hints unchanged, the
 - `encodeConfig` (`:402-411`) always inserts the entry today. Removal must not reuse it unchanged.
 - An empty config is "present" for install (backup) but DN for uninstall (no write, no backup).
 - `/home/ada` homes on Code-success uninstall tests now stat a real path. Use `t.TempDir()`.
+
+## Phase report
+
+Run A (steps 1-2) done; start commit bd145daf.
+
+- `internal/cli/claude_uninstall_desktop_test.go` (new): acceptance `Test_claude_uninstall_removes_quarry_from_claude_desktop_after_claude_code`, two rows (beside other servers, the only server); consts `desktopRemovedLine`, `desktopQuitUnloadLine`, `quarryEntry`. Uses `runClaudeAt` (no `Env.Executable`), `writeDesktopConfig`, `decodeConfig`.
+- `internal/claudedesktop/claudedesktop.go` (before `choosePath`): `UninstallResult` and signature-only `Uninstall` stub (zero value, nil error).
+- Red: both subtests fail at the stdout assertion (`:62`, Desktop DR/DQu lines missing), then config-still-has-quarry (`:67`) and no backup (`:69`). cli does not call `Uninstall` yet (Step 5).
+- Next (B1, Step 3): real `Uninstall` plus `uninstall_test.go`; extract shared folder resolve+stat from `Install`; `encodeConfig` must take the final servers map. Do not touch cli until B2.
