@@ -17,6 +17,7 @@
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
 | 1 | arch, correctness, test, refactor | 0/1/17/7 | 0 / 20 (2 killed, 18 timed out), 2589s; reviewer export 1 / 29 survived | BLOCKED |
+| 2 | correctness, test, refactor (re-gate d24a598f..c4e46c58) | 0/0/0/4 | 0 / 13 (13 timed out), 1829s | PASS WITH FOLLOW-UPS |
 
 ## Tokens
 
