@@ -111,13 +111,7 @@ func Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code(t *test
 	tool := &toolCalls{}
 	var out, errOut bytes.Buffer
 
-	err := cli.Execute(t.Context(), []string{"claude", "install"}, cli.Env{
-		Stdout:     &out,
-		Stderr:     &errOut,
-		RunTool:    tool.run,
-		Home:       home,
-		Executable: func() (string, error) { return desktopQuarryBinary, nil },
-	})
+	err := installDesktop(t, tool, home, &out, &errOut)
 
 	require.NoError(t, err)
 	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine+desktopAddedLine+desktopQuitLine, out.String())
@@ -147,13 +141,7 @@ func Test_claude_install_prints_a_binary_under_home_as_tilde_and_writes_its_abso
 	binary := filepath.Join(home, "bin", "quarry")
 	var out, errOut bytes.Buffer
 
-	err := cli.Execute(t.Context(), []string{"claude", "install"}, cli.Env{
-		Stdout:     &out,
-		Stderr:     &errOut,
-		RunTool:    (&toolCalls{}).run,
-		Home:       home,
-		Executable: func() (string, error) { return binary, nil },
-	})
+	err := installDesktopAs(t, &toolCalls{}, home, binary, &out, &errOut)
 
 	require.NoError(t, err)
 	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine+

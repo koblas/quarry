@@ -33,6 +33,7 @@ func Write(path string, data []byte, perm fs.FileMode) error {
 	})
 }
 
+// write is Write with the temporary file created by create, so tests can fault it.
 func write(path string, data []byte, perm fs.FileMode, create createTemp) (err error) {
 	dir := filepath.Dir(path)
 	tmp, err := create(dir)

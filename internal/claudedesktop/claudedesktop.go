@@ -26,11 +26,14 @@ const (
 	backupMode   = fs.FileMode(0o600)
 )
 
-// ErrNoHome is returned by Install when the Server has no home directory to look in.
+// ErrNoHome is returned by Install and Uninstall when the Server has no home directory to look in.
 var ErrNoHome = errors.New("home directory is not set")
 
 // ErrInterrupted is returned, wrapping the context's error, when the context ended before a write.
 var ErrInterrupted = errors.New("interrupted before the config was changed")
+
+// errNoExecutable is why a Server built without WithExecutable cannot find the running binary.
+var errNoExecutable = errors.New("no way to find the running binary is configured")
 
 // stopped returns ErrInterrupted wrapping ctx's error once ctx has ended, else nil.
 func stopped(ctx context.Context) error {
@@ -46,7 +49,7 @@ type notObjectError struct{ kind string }
 // unreachable: merge turns it into *TopLevelError or *ServersError and parseOurs drops it, so nothing formats it
 func (e *notObjectError) Error() string { return "a JSON " + e.kind + ", not an object" }
 
-// ForeignEntryError is returned by Install when mcpServers.quarry is not an entry that starts
+// ForeignEntryError is returned by Install and Uninstall when mcpServers.quarry is not an entry that starts
 // `quarry mcp`; the config is untouched.
 type ForeignEntryError struct {
 	Path string // the config file
@@ -56,7 +59,7 @@ func (e *ForeignEntryError) Error() string {
 	return e.Path + ": mcpServers.quarry is not an entry that starts quarry mcp"
 }
 
-// InvalidJSONError is returned by Install when the config is not valid JSON; the config is untouched.
+// InvalidJSONError is returned by Install and Uninstall when the config is not valid JSON; the config is untouched.
 type InvalidJSONError struct {
 	Path string // the config file
 	Err  error  // the encoding/json error, as decoded
@@ -87,7 +90,7 @@ func (e *ServersError) Error() string {
 	return fmt.Sprintf("%s: mcpServers is a JSON %s, not an object", e.Path, e.Kind)
 }
 
-// BackupError is returned by Install when the backup of the existing config cannot be saved;
+// BackupError is returned by Install and Uninstall when the backup of the existing config cannot be saved;
 // the config is untouched.
 type BackupError struct {
 	Path   string // the backup file
@@ -98,8 +101,8 @@ type BackupError struct {
 func (e *BackupError) Error() string { return fmt.Sprintf("save %s: %v", e.Path, e.Err) }
 func (e *BackupError) Unwrap() error { return e.Err }
 
-// WriteError is returned by Install when the config cannot be written; the backup written just
-// before stays.
+// WriteError is returned by Install and Uninstall when the config cannot be written; the backup
+// written just before stays.
 type WriteError struct {
 	Path string // the config file
 	Err  error
@@ -108,10 +111,11 @@ type WriteError struct {
 func (e *WriteError) Error() string { return fmt.Sprintf("write %s: %v", e.Path, e.Err) }
 func (e *WriteError) Unwrap() error { return e.Err }
 
-// SymlinkError is returned by Install when the config path is a symbolic link; nothing is written.
+// SymlinkError is returned by Install and Uninstall when the config path is a symbolic link;
+// nothing is written.
 type SymlinkError struct {
 	Path    string // the config path
-	Command string // the quarry path Install would have written
+	Command string // the quarry path Install would have written; empty from Uninstall
 }
 
 func (e *SymlinkError) Error() string { return e.Path + " is a symbolic link" }
@@ -124,7 +128,7 @@ type NotAFileError struct {
 
 func (e *NotAFileError) Error() string { return e.Path + " is not a regular file" }
 
-// ReadError is returned by Install when the config path cannot be checked or read; nothing is written.
+// ReadError is returned by Install and Uninstall when the config path cannot be checked or read; nothing is written.
 type ReadError struct {
 	Path string // the config path
 	Err  error
@@ -255,6 +259,9 @@ func (s *Server) Install(ctx context.Context) (Result, error) {
 		res.Skipped, res.NotAFolder = true, loc.notAFolder
 		return res, nil
 	}
+	if s.executable == nil {
+		return res, &ExecutableError{Config: res.Config, Err: errNoExecutable}
+	}
 	exe, err := s.executable()
 	if err != nil {
 		return res, &ExecutableError{Config: res.Config, Err: err}
@@ -268,10 +275,7 @@ func (s *Server) Install(ctx context.Context) (Result, error) {
 	if base := lastElement(command); base != quarryName {
 		return res, &BinaryNameError{Base: base}
 	}
-	current, err := readConfig(res.Config)
-	if symlink, ok := errors.AsType[*SymlinkError](err); ok {
-		symlink.Command = command
-	}
+	current, err := readConfig(res.Config, command)
 	if err != nil {
 		return res, err
 	}
@@ -283,18 +287,8 @@ func (s *Server) Install(ctx context.Context) (Result, error) {
 		res.Outcome, res.Command, res.PathQuarry = Unchanged, command, pathQuarry
 		return res, nil
 	}
-	if err := stopped(ctx); err != nil {
+	if err := saveReplacing(ctx, res.Config, current, plan.doc); err != nil {
 		return res, err
-	}
-	// The backup goes first: a config that could not be saved must not be replaced.
-	if current.present {
-		backup := res.Config + backupSuffix
-		if err := replacefile.Write(backup, current.data, backupMode); err != nil {
-			return res, &BackupError{Path: backup, Config: res.Config, Err: err}
-		}
-	}
-	if err := replacefile.Write(res.Config, plan.doc, current.mode); err != nil {
-		return res, &WriteError{Path: res.Config, Err: err}
 	}
 	res.Outcome, res.Command, res.Previous, res.PathQuarry = plan.outcome, command, plan.previous, pathQuarry
 	return res, nil
@@ -351,7 +345,7 @@ func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 		res.Skipped, res.NotAFolder = true, loc.notAFolder
 		return res, nil
 	}
-	current, err := readConfig(config)
+	current, err := readConfig(config, "")
 	if _, notAFile := errors.AsType[*NotAFileError](err); notAFile {
 		return res, nil
 	}
@@ -365,8 +359,8 @@ func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 	if err != nil {
 		return res, &InvalidJSONError{Path: config, Err: err}
 	}
-	// A failure here is only the wrong kind or null (top decoded): nothing of ours in it.
-	servers, _ := decodeObject(top[serversKey])
+	// An error here is only mcpServers of the wrong kind (servers nil): nothing of ours in it.
+	servers, _ := decodeServers(config, top)
 	raw, ok := servers[entryKey]
 	if !ok {
 		return res, nil
@@ -378,19 +372,30 @@ func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 	if err != nil {
 		return res, err // unreachable: encodeConfig only fails on a value json cannot encode, and every value is a RawMessage from a successful decode
 	}
-	if err := stopped(ctx); err != nil {
+	if err := saveReplacing(ctx, config, current, doc); err != nil {
 		return res, err
-	}
-	// The backup goes first: a config that could not be saved must not be replaced.
-	backup := config + backupSuffix
-	if err := replacefile.Write(backup, current.data, backupMode); err != nil {
-		return res, &BackupError{Path: backup, Config: config, Err: err}
-	}
-	if err := replacefile.Write(config, doc, current.mode); err != nil {
-		return res, &WriteError{Path: config, Err: err}
 	}
 	res.Removed = true
 	return res, nil
+}
+
+// saveReplacing replaces the config with doc, first backing up an existing one. It returns
+// ErrInterrupted once ctx has ended, *BackupError or *WriteError; the config changes only on success.
+func saveReplacing(ctx context.Context, config string, current existing, doc []byte) error {
+	if err := stopped(ctx); err != nil {
+		return err
+	}
+	// The backup goes first: a config that could not be saved must not be replaced.
+	if current.present {
+		backup := config + backupSuffix
+		if err := replacefile.Write(backup, current.data, backupMode); err != nil {
+			return &BackupError{Path: backup, Config: config, Err: err}
+		}
+	}
+	if err := replacefile.Write(config, doc, current.mode); err != nil {
+		return &WriteError{Path: config, Err: err}
+	}
+	return nil
 }
 
 // choosePath returns the path to write — the PATH quarry when it is the running binary, else the
@@ -441,8 +446,9 @@ type existing struct {
 }
 
 // readConfig reads the config at path; a missing one yields no data and configMode. A path it
-// cannot take as a regular file is refused with *SymlinkError, *NotAFileError or *ReadError.
-func readConfig(path string) (existing, error) {
+// cannot take as a regular file is refused with *SymlinkError (carrying command), *NotAFileError
+// or *ReadError.
+func readConfig(path, command string) (existing, error) {
 	// Lstat, not Stat: a dangling symlink looks missing to Stat, and the rename would replace it.
 	info, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -452,7 +458,7 @@ func readConfig(path string) (existing, error) {
 		return existing{}, &ReadError{Path: path, Err: err}
 	}
 	if info.Mode()&fs.ModeSymlink != 0 {
-		return existing{}, &SymlinkError{Path: path}
+		return existing{}, &SymlinkError{Path: path, Command: command}
 	}
 	if !info.Mode().IsRegular() {
 		return existing{}, &NotAFileError{Path: path}
@@ -497,12 +503,9 @@ func merge(path string, original []byte, command string) (merged, error) {
 	if err != nil {
 		return merged{}, &InvalidJSONError{Path: path, Err: err}
 	}
-	var servers map[string]json.RawMessage
-	if raw, ok := top[serversKey]; ok && string(raw) != "null" {
-		// top decoded, so raw is valid JSON and a failure here can only be the wrong kind.
-		if servers, err = decodeObject(raw); err != nil {
-			return merged{}, &ServersError{Path: path, Kind: kindOf(raw)}
-		}
+	servers, err := decodeServers(path, top)
+	if err != nil {
+		return merged{}, err
 	}
 	var value any = entry{Command: command, Args: []string{"mcp"}}
 	out := merged{outcome: Added}
@@ -525,6 +528,21 @@ func merge(path string, original []byte, command string) (merged, error) {
 	all[entryKey] = value
 	out.doc, err = encodeConfig(top, all)
 	return out, err
+}
+
+// decodeServers returns top's mcpServers object; absent or null is empty. Any other kind is
+// *ServersError.
+func decodeServers(path string, top map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+	raw, ok := top[serversKey]
+	if !ok || string(raw) == "null" {
+		return map[string]json.RawMessage{}, nil
+	}
+	// top decoded, so raw is valid JSON and a failure here can only be the wrong kind.
+	servers, err := decodeObject(raw)
+	if err != nil {
+		return nil, &ServersError{Path: path, Kind: kindOf(raw)}
+	}
+	return servers, nil
 }
 
 // serverValues copies servers without its quarry entry, as values encodeConfig can render.

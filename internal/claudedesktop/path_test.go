@@ -273,6 +273,7 @@ func Test_install_accepts_a_binary_outside_the_temporary_directory(t *testing.T)
 	cases := []struct{ name, temp, exe string }{
 		{name: "a sibling directory shares the root's prefix", temp: root, exe: root + "x/quarry"},
 		{name: "the binary is the root itself", temp: "/var/quarry", exe: "/var/quarry"},
+		{name: "the binary is the root's parent", temp: "/var/quarry/x", exe: "/var/quarry"},
 		{name: "an element ends with go-build", temp: root, exe: "/opt/ago-build/quarry"},
 		{name: "the root is empty", temp: "", exe: root + "/work/quarry"},
 	}
@@ -302,6 +303,22 @@ func Test_install_refuses_a_path_quarry_under_the_temporary_directory(t *testing
 	tempErr, ok := errors.AsType[*claudedesktop.TempBuildError](err)
 	require.True(t, ok, "got %v", err)
 	assert.Equal(t, pathLink, tempErr.Path)
+	assert.Empty(t, snapshot(t, folder))
+}
+
+func Test_install_refuses_a_temporary_build_that_a_path_link_outside_the_temporary_directory_points_to(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	temp := t.TempDir()
+	built := writeQuarry(t, temp)
+	pathLink := filepath.Join(t.TempDir(), "quarry")
+	require.NoError(t, os.Symlink(built, pathLink))
+
+	_, err := installWithPath(t, home, built, temp, lookPathReturning(pathLink))
+
+	tempErr, ok := errors.AsType[*claudedesktop.TempBuildError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, built, tempErr.Path)
 	assert.Empty(t, snapshot(t, folder))
 }
 

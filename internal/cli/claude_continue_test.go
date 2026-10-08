@@ -91,7 +91,7 @@ func runCancellable(t *testing.T, tool *toolCalls, home, verb string) (string, s
 	return out.String(), errOut.String(), err
 }
 
-func Test_claude_install_reports_d13_when_interrupted_after_claude_code_finished(t *testing.T) {
+func Test_claude_install_reports_the_interruption_when_stopped_after_claude_code_finished(t *testing.T) {
 	home, folder := desktopHome(t)
 	tool := (&toolCalls{}).lists(ourMarketplace, "[]").reply(installPluginArgv, toolReply{cancel: true})
 
@@ -105,7 +105,7 @@ func Test_claude_install_reports_d13_when_interrupted_after_claude_code_finished
 	assert.Empty(t, listing)
 }
 
-func Test_claude_uninstall_reports_d13_when_interrupted_after_claude_code_finished(t *testing.T) {
+func Test_claude_uninstall_reports_the_interruption_when_stopped_after_claude_code_finished(t *testing.T) {
 	home, folder := desktopHome(t)
 	config := filepath.Join(folder, desktopConfigName)
 	require.NoError(t, os.WriteFile(config, []byte(desktopOurEntryConfig), 0o600))

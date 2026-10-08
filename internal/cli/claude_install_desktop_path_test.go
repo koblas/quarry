@@ -71,7 +71,7 @@ func Test_claude_install_warns_when_the_quarry_on_path_is_not_the_one_desktop_wi
 		config     string
 		wantStdout string
 	}{
-		{name: "a new entry", config: "", wantStdout: codeLines + desktopAddedLine + desktopQuitLine},
+		{name: "a new entry", config: "{}", wantStdout: codeLines + desktopAddedLine + desktopQuitLine},
 		{
 			name: "an entry started from elsewhere", config: `{"mcpServers":{"quarry":{"command":"/usr/local/bin/quarry","args":["mcp"]}}}`,
 			wantStdout: codeLines + desktopUpdatedLine("/usr/local/bin/quarry") + desktopQuitLine,
@@ -87,9 +87,7 @@ func Test_claude_install_warns_when_the_quarry_on_path_is_not_the_one_desktop_wi
 			home, folder := desktopHome(t)
 			outsideTemp(t)
 			onPath := pathQuarryFile(t, home)
-			if c.config != "" {
-				writeDesktopConfig(t, filepath.Join(folder, desktopConfigName), c.config)
-			}
+			writeDesktopConfig(t, filepath.Join(folder, desktopConfigName), c.config)
 			var out, errOut bytes.Buffer
 
 			err := installDesktopFinding(t, home, desktopQuarryBinary, findsQuarryAt(onPath), &out, &errOut)

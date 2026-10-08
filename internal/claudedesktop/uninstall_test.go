@@ -210,15 +210,17 @@ func Test_uninstall_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name  string
-		setup func(config string) error
+		setup func(t *testing.T, config string)
 	}{
-		{name: "a dangling symlink", setup: func(config string) error { return os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config) }},
-		{name: "a symlink to a config holding our entry", setup: func(config string) error {
+		{name: "a dangling symlink", setup: func(t *testing.T, config string) {
+			t.Helper()
+			require.NoError(t, os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config))
+		}},
+		{name: "a symlink to a config holding our entry", setup: func(t *testing.T, config string) {
+			t.Helper()
 			target := filepath.Join(filepath.Dir(config), "linked.json")
-			if err := os.WriteFile(target, []byte(quarryEntryConfig(`{"command":"quarry","args":["mcp"]}`)), 0o600); err != nil {
-				return err
-			}
-			return os.Symlink(target, config)
+			require.NoError(t, os.WriteFile(target, []byte(quarryEntryConfig(`{"command":"quarry","args":["mcp"]}`)), 0o600))
+			require.NoError(t, os.Symlink(target, config))
 		}},
 	}
 
@@ -227,7 +229,7 @@ func Test_uninstall_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
 			t.Parallel()
 			home, folder := desktopFolder(t)
 			config := filepath.Join(folder, configName)
-			require.NoError(t, c.setup(config))
+			c.setup(t, config)
 			before := snapshot(t, folder)
 
 			_, err := uninstall(t, home)

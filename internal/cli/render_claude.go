@@ -349,10 +349,10 @@ func desktopConfigFailureLine(verb, home string, err error) (string, bool) {
 		return fmt.Sprintf(desktopInvalidJSONRefusal, claudePath(home, bad.Path), bad.Err, invalidJSONDetail(bad.Err), verb), true
 	}
 	if top, ok := errors.AsType[*claudedesktop.TopLevelError](err); ok {
-		return fmt.Sprintf(desktopTopLevelRefusal, claudePath(home, top.Path), top.Kind, installCommand), true
+		return fmt.Sprintf(desktopTopLevelRefusal, claudePath(home, top.Path), top.Kind, verb), true
 	}
 	if servers, ok := errors.AsType[*claudedesktop.ServersError](err); ok {
-		return fmt.Sprintf(desktopServersRefusal, claudePath(home, servers.Path), servers.Kind, installCommand), true
+		return fmt.Sprintf(desktopServersRefusal, claudePath(home, servers.Path), servers.Kind, verb), true
 	}
 	return "", false
 }

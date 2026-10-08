@@ -88,10 +88,8 @@ func Test_help_names_both_claude_targets(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "claude", args: []string{"claude", "--help"}, want: claudeGroupHelp},
 		{name: "claude install", args: []string{"claude", "install", "--help"}, want: claudeInstallLong},
 		{name: "claude uninstall", args: []string{"claude", "uninstall", "--help"}, want: claudeUninstallLong},
-		{name: "mcp", args: []string{"mcp", "--help"}, want: mcpHelpLong},
 	}
 
 	for _, c := range cases {

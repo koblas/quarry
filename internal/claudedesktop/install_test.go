@@ -286,15 +286,17 @@ func Test_install_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name  string
-		setup func(config string) error
+		setup func(t *testing.T, config string)
 	}{
-		{name: "a dangling symlink", setup: func(config string) error { return os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config) }},
-		{name: "a symlink to a regular file", setup: func(config string) error {
+		{name: "a dangling symlink", setup: func(t *testing.T, config string) {
+			t.Helper()
+			require.NoError(t, os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config))
+		}},
+		{name: "a symlink to a regular file", setup: func(t *testing.T, config string) {
+			t.Helper()
 			target := filepath.Join(filepath.Dir(config), "linked.json")
-			if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
-				return err
-			}
-			return os.Symlink(target, config)
+			require.NoError(t, os.WriteFile(target, []byte(`{}`), 0o600))
+			require.NoError(t, os.Symlink(target, config))
 		}},
 	}
 
@@ -303,7 +305,7 @@ func Test_install_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
 			t.Parallel()
 			home, folder := desktopFolder(t)
 			config := filepath.Join(folder, configName)
-			require.NoError(t, c.setup(config))
+			c.setup(t, config)
 			before := snapshot(t, folder)
 			exe := &fakeExecutable{path: quarryBinary}
 
@@ -761,6 +763,20 @@ func Test_install_fails_without_writing_when_the_executable_path_is_unknown(t *t
 	require.True(t, ok, "got %v", err)
 	assert.Equal(t, filepath.Join(folder, configName), execErr.Config)
 	assert.Equal(t, "find the quarry binary: "+errNoExecutable.Error(), err.Error())
+	assert.Empty(t, snapshot(t, folder))
+}
+
+func Test_install_fails_without_writing_when_no_way_to_find_the_executable_is_configured(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	srv := claudedesktop.NewServer(claudedesktop.WithHome(home))
+
+	_, err := srv.Install(t.Context())
+
+	execErr, ok := errors.AsType[*claudedesktop.ExecutableError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, filepath.Join(folder, configName), execErr.Config)
+	require.Error(t, execErr.Err)
 	assert.Empty(t, snapshot(t, folder))
 }
 
