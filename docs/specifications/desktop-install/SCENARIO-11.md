@@ -17,7 +17,7 @@ User contract (copy verbatim from spec §D, D13; BR-D13/D16/D19, both verbs): a 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/claude_continue_test.go` (new) `Test_claude_install_installs_claude_desktop_after_a_claude_code_failure` — `cli.Execute` over `desktopHome` (`claude_install_desktop_test.go:101`) with `Env.Executable`; Code scripted per row via `toolCalls` (`claude_install_test.go:61`); compiles against today's API, fails at the empty-stdout/absent-config assertion (early return). No stubs.
+- [x] Step 1: `internal/cli/claude_continue_test.go` (new) `Test_claude_install_installs_claude_desktop_after_a_claude_code_failure` — `cli.Execute` over `desktopHome` (`claude_install_desktop_test.go:101`) with `Env.Executable`; Code scripted per row via `toolCalls` (`claude_install_test.go:61`); compiles against today's API, fails at the empty-stdout/absent-config assertion (early return). No stubs.
 
 ### Build
 - [ ] Step 2: D13 — `claudedesktop.go:29-30` `ErrInterrupted` (wraps `ctx.Err()`; `errors.Is` both), `:237` and `:329` take `ctx` and return it after `Unchanged`/the `parseOurs` guard and before the backup block (`:263`, `:360`); `render_claude.go:316-327` `desktopWriteFailureLine` arm + const beside `:41` (`stopped before quarry changed Claude Desktop; run quarry claude %s again`, verb-parameterised, mind the complexity lint). Package tests (`install_test.go`, `uninstall_test.go`): `Test_install_stops_before_writing_when_the_context_is_cancelled` / `Test_uninstall_stops_before_removing_when_the_context_is_cancelled` — real cancelled ctx (not a nil-default value), rows: config absent (create, no backup), config present (bytes + folder listing unchanged, no backup, no temp), live-ctx control; plus rows pinning the check's place: cancelled ctx with entry already ours / not in config returns no error, and with a foreign entry still returns `*ForeignEntryError`. cli tests in `claude_continue_test.go`, both verbs: `Test_claude_install_reports_d13_when_interrupted_after_claude_code_finished` and the uninstall twin — cancel via a `toolCalls` reply `cancel: true` on the last list/step so `cmd.Context()` reaches `Server` (uninstall twin with an ours entry on disk, asserts it survives); stdout keeps the Code lines, stderr D13 only.
@@ -43,3 +43,12 @@ User contract (copy verbatim from spec §D, D13; BR-D13/D16/D19, both verbs): a 
 - A Desktop-absent test home makes every Code-failure stdout gain S2: `Empty(stdout)` rows must change, interrupt rows must not (their emptiness proves Desktop was not attempted).
 - A `/home/ada` home in a Code-failure test now stats a real path; use `t.TempDir()`.
 - `ctx.Err()` read from a `Server` built in a test with a default context never fires D13; cancel the context the command runs under (`toolCalls.cancel`).
+
+## Phase report
+
+Run A (Acceptance) done. Step 1 ticked.
+
+- Added `internal/cli/claude_continue_test.go` (new): `Test_claude_install_installs_claude_desktop_after_a_claude_code_failure`, 3 rows (foreign marketplace, step exits non-zero, plugin list not json). Uses `desktopHome` + `installDesktop`; asserts `ReportedError`, stdout `desktopAddedLine+desktopQuitLine`, stderr the unchanged Code line, config JSON written. No production code or stubs touched (compiles against today's API).
+- Red now, at its assertion (`claude_continue_test.go:49`, stdout): expected `Added the quarry MCP server to Claude Desktop; it starts "/opt/homebrew/bin/quarry".\nQuit and reopen Claude Desktop to load it.\n`, actual `""`; and `:52` config `no such file or directory`. All 3 rows fail identically; the `ReportedError` and stderr assertions already pass (Code line is unchanged today), which is the expected control.
+- `golangci-lint run ./internal/cli/...`: 0 issues.
+- Next run (B1, steps 2-3) must not redo the test; extend `claude_continue_test.go` with the D13 and interrupt tests from steps 2-3. The file imports only bytes/json/os/filepath/testing/cli/assert/require.
