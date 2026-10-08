@@ -17,8 +17,8 @@ User-visible contract: `quarry claude install` with Code present and Code succee
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/claude_install_desktop_test.go` (new) `Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code` — `cli.Execute`, `Home` = `t.TempDir()` holding `Library/Application Support/Claude`, `Executable` returns `/opt/homebrew/bin/quarry`, success `toolCalls`. Assert stdout is the 3 Code lines + DA + DQ, stderr empty, no error, config mode 0600, decoded content equals `{"mcpServers":{"quarry":{"command":…,"args":["mcp"]}}}`, and the folder listing is exactly `[claude_desktop_config.json]`
-- [ ] Step 2: signature-only stubs. New `internal/claudedesktop/doc.go`, `claudedesktop.go`: `Executable` func type, `Server`, `Option`, `WithHome`, `WithExecutable`, `NewServer`, `Result`, `(*Server).Install(ctx)`. Add `Executable claudedesktop.Executable` to `cli.Env` at `internal/cli/run.go:56-58`. Thread an `executable` param through `newClaudeCommand` at `claude.go:31,40` and `newClaudeInstallCommand` at `claude_install.go:13`, and update the call site at `root.go:45`
+- [x] Step 1: `internal/cli/claude_install_desktop_test.go` (new) `Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code` — `cli.Execute`, `Home` = `t.TempDir()` holding `Library/Application Support/Claude`, `Executable` returns `/opt/homebrew/bin/quarry`, success `toolCalls`. Assert stdout is the 3 Code lines + DA + DQ, stderr empty, no error, config mode 0600, decoded content equals `{"mcpServers":{"quarry":{"command":…,"args":["mcp"]}}}`, and the folder listing is exactly `[claude_desktop_config.json]`
+- [x] Step 2: signature-only stubs. New `internal/claudedesktop/doc.go`, `claudedesktop.go`: `Executable` func type, `Server`, `Option`, `WithHome`, `WithExecutable`, `NewServer`, `Result`, `(*Server).Install(ctx)`. Add `Executable claudedesktop.Executable` to `cli.Env` at `internal/cli/run.go:56-58`. Thread an `executable` param through `newClaudeCommand` at `claude.go:31,40` and `newClaudeInstallCommand` at `claude_install.go:13`, and update the call site at `root.go:45`
 
 ### Build
 - [ ] Step 3: `internal/platform/replacefile/{doc.go,replacefile.go,replacefile_test.go}` (new) `Write(path, data, perm)` — temp in the same folder → chmod perm → write → fsync → close → rename → `atomicfile.SyncDir` (`atomicfile.go:34`); remove the temp on any failure before rename. Test-first rows:
@@ -75,3 +75,10 @@ User-visible contract: `quarry claude install` with Code present and Code succee
 - A cli test home like `/home/ada` reaching Code success would stat a real path. Use `t.TempDir()` homes for success paths.
 
 ## Phase report
+
+Run A (done): Acceptance red.
+- Files: `internal/cli/claude_install_desktop_test.go` (new; helper `desktopHome`, consts `desktopConfigName`, `desktopQuarryBinary`, `desktopAddedLine`, `desktopQuitLine`, test at :29); `internal/claudedesktop/{doc.go,claudedesktop.go}` (signature-only stubs; `Result{Folder, Config string; Skipped bool; Command string}`, `Install` returns zero Result, nil); `internal/cli/run.go` `Env.Executable claudedesktop.Executable`; `claude.go` `newClaudeCommand(..., home, executable, jsonOut)`; `claude_install.go` `newClaudeInstallCommand(..., home, _ executable, jsonOut)` (param still unused: name it and use it in Step 5); `root.go` call site.
+- Red: `go test ./internal/cli/ -run Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code` fails at `claude_install_desktop_test.go:46` (stdout has only the 3 Code lines, missing DA + DQ) and at `:50` (config file not created). Not a compile error.
+- Next (B1, Steps 3-4): `replacefile` and `claudedesktop.Install`. `Result` fields are mine to change; Step 5 renders from them. Test helper `desktopHome` is in the cli test file only.
+- Not done: Steps 3-9; existing install Code-success pins untouched (still green, nothing wired yet).
+

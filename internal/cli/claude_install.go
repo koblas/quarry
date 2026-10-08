@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/spf13/cobra"
 )
@@ -10,7 +11,7 @@ const installCommand = "install"
 
 // newClaudeInstallCommand builds claude install: it refuses arguments, then --json, then has the
 // plugin Server add quarry's marketplace and install its plugin, reporting each step on stdout.
-func newClaudeInstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, jsonOut *bool) *cobra.Command {
+func newClaudeInstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, _ claudedesktop.Executable, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   installCommand,
 		Short: "Install quarry's plugin (skill and MCP server) in Claude Code",
