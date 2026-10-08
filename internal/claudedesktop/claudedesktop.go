@@ -215,17 +215,14 @@ type Result struct {
 // config it cannot safely edit (*ExecutableError, *SymlinkError, *NotAFileError, *ForeignEntryError,
 // *ReadError, *BackupError, *WriteError); Result.PathQuarry names a different quarry on PATH.
 func (s *Server) Install(_ context.Context) (Result, error) {
-	if s.home == "" {
-		return Result{}, ErrNoHome
+	folder, config, found, err := s.locate()
+	res := Result{Folder: folder, Config: config}
+	if err != nil {
+		return res, err
 	}
-	folder := filepath.Join(s.home, "Library", "Application Support", "Claude")
-	res := Result{Folder: folder, Config: filepath.Join(folder, configName)}
-	if _, err := os.Stat(folder); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			res.Skipped = true
-			return res, nil
-		}
-		return res, fmt.Errorf("check %s: %w", folder, err)
+	if !found {
+		res.Skipped = true
+		return res, nil
 	}
 	exe, err := s.executable()
 	if err != nil {
@@ -266,6 +263,24 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	return res, nil
 }
 
+// locate resolves Claude Desktop's folder and config path from the home directory and reports
+// whether the folder exists. It returns ErrNoHome for an empty home, and a wrapped error when the
+// folder cannot be checked.
+func (s *Server) locate() (string, string, bool, error) {
+	if s.home == "" {
+		return "", "", false, ErrNoHome
+	}
+	folder := filepath.Join(s.home, "Library", "Application Support", "Claude")
+	config := filepath.Join(folder, configName)
+	if _, err := os.Stat(folder); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return folder, config, false, nil
+		}
+		return folder, config, false, fmt.Errorf("check %s: %w", folder, err)
+	}
+	return folder, config, true, nil
+}
+
 // UninstallResult reports what an Uninstall did.
 type UninstallResult struct {
 	Folder  string // the Claude Desktop folder
@@ -274,9 +289,57 @@ type UninstallResult struct {
 	Removed bool   // the quarry entry was removed
 }
 
-// Uninstall removes the quarry entry from Claude Desktop's config, backing up the file first.
+// Uninstall removes the quarry entry from Claude Desktop's config, backing up the file first, but
+// only an entry that starts `quarry mcp` (*ForeignEntryError otherwise). A config that cannot hold
+// our entry is left alone. It refuses ErrNoHome, *SymlinkError, *ReadError, *InvalidJSONError,
+// *BackupError and *WriteError.
 func (s *Server) Uninstall(_ context.Context) (UninstallResult, error) {
-	return UninstallResult{}, nil
+	folder, config, found, err := s.locate()
+	res := UninstallResult{Folder: folder, Config: config}
+	if err != nil {
+		return res, err
+	}
+	if !found {
+		res.Skipped = true
+		return res, nil
+	}
+	current, err := readConfig(config)
+	if _, notAFile := errors.AsType[*NotAFileError](err); notAFile {
+		return res, nil
+	}
+	if err != nil {
+		return res, err
+	}
+	top, err := decodeObject(current.data)
+	if _, wrongKind := errors.AsType[*notObjectError](err); wrongKind {
+		return res, nil
+	}
+	if err != nil {
+		return res, &InvalidJSONError{Path: config, Err: err}
+	}
+	// A failure here is only the wrong kind or null (top decoded): nothing of ours in it.
+	servers, _ := decodeObject(top[serversKey])
+	raw, ok := servers[entryKey]
+	if !ok {
+		return res, nil
+	}
+	if _, _, ours := parseOurs(raw); !ours {
+		return res, &ForeignEntryError{Path: config}
+	}
+	doc, err := encodeConfig(top, serverValues(servers))
+	if err != nil {
+		return res, err // unreachable: encodeConfig only fails on a value json cannot encode, and every value is a RawMessage from a successful decode
+	}
+	// The backup goes first: a config that could not be saved must not be replaced.
+	backup := config + backupSuffix
+	if err := replacefile.Write(backup, current.data, backupMode); err != nil {
+		return res, &BackupError{Path: backup, Config: config, Err: err}
+	}
+	if err := replacefile.Write(config, doc, current.mode); err != nil {
+		return res, &WriteError{Path: config, Err: err}
+	}
+	res.Removed = true
+	return res, nil
 }
 
 // choosePath returns the path to write — the PATH quarry when it is the running binary, else the
@@ -407,22 +470,30 @@ func merge(path string, original []byte, command string) (merged, error) {
 		repointed["command"] = command
 		value, out = repointed, merged{outcome: Updated, previous: started}
 	}
-	out.doc, err = encodeConfig(top, servers, value)
+	all := serverValues(servers)
+	all[entryKey] = value
+	out.doc, err = encodeConfig(top, all)
 	return out, err
 }
 
-// encodeConfig renders top with value as mcpServers.quarry beside the other servers.
-func encodeConfig(top, servers map[string]json.RawMessage, value any) ([]byte, error) {
+// serverValues copies servers without its quarry entry, as values encodeConfig can render.
+func serverValues(servers map[string]json.RawMessage) map[string]any {
+	all := make(map[string]any, len(servers)+1)
+	for k, v := range servers {
+		if k != entryKey {
+			all[k] = v
+		}
+	}
+	return all
+}
+
+// encodeConfig renders top with servers as its mcpServers object.
+func encodeConfig(top map[string]json.RawMessage, servers map[string]any) ([]byte, error) {
 	doc := make(map[string]any, len(top)+1)
 	for k, v := range top {
 		doc[k] = v
 	}
-	all := make(map[string]any, len(servers)+1)
-	for k, v := range servers {
-		all[k] = v
-	}
-	all[entryKey] = value
-	doc[serversKey] = all
+	doc[serversKey] = servers
 
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
