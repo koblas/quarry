@@ -17,8 +17,8 @@ Surface surveyed (nothing to port): production calls on the old path are `s.exec
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/claudedesktop/path_test.go` (new) `Test_install_writes_the_quarry_path_that_claude_desktop_will_start` — four Gherkin rows over REAL files: Cellar file + symlink in PATH dir (`Result.Command` is the symlink, no `PathQuarry`); two distinct files (exe written, `PathQuarry` = PATH file); LookPath error (exe, no `PathQuarry`); exe under the `WithTempDir` root (`*TempBuildError`, folder empty). Non-temp rows use `WithTempDir(t.TempDir())` of a sibling dir; executables live in another `t.TempDir()`
-- [ ] Step 2: `claudedesktop.go:125-175` `LookPath` type, `WithLookPath`, `WithTempDir`, `TempBuildError{Path}`, `Result.PathQuarry` — signature-only stubs; test must fail at its assertion
+- [x] Step 1: `internal/claudedesktop/path_test.go` (new) `Test_install_writes_the_quarry_path_that_claude_desktop_will_start` — four Gherkin rows over REAL files: Cellar file + symlink in PATH dir (`Result.Command` is the symlink, no `PathQuarry`); two distinct files (exe written, `PathQuarry` = PATH file); LookPath error (exe, no `PathQuarry`); exe under the `WithTempDir` root (`*TempBuildError`, folder empty). Non-temp rows use `WithTempDir(t.TempDir())` of a sibling dir; executables live in another `t.TempDir()`
+- [x] Step 2: `claudedesktop.go:125-175` `LookPath` type, `WithLookPath`, `WithTempDir`, `TempBuildError{Path}`, `Result.PathQuarry` — signature-only stubs; test must fail at its assertion
 
 ### Build
 - [ ] Step 3: `claudedesktop.go:182-226` `Install` path choice, then `install_test.go`-style unit rows in `path_test.go`. Flow: `LookPath("quarry")` err/nil-func/non-absolute → exe, no W1; else `os.Stat` PATH file (fails → exe, no W1, BR-D18), `os.Stat` exe (fails → not same), `os.SameFile` → PATH path verbatim, else exe + `PathQuarry`. Chosen path feeds `merge`, `Unchanged`, `SymlinkError.Command` (`:200-202`). Rows: hard link (same file, no symlink); dangling PATH link; exe stat fails + PATH ok (W1, exe written); both fail (none); relative LookPath result; nil LookPath; Unchanged/Updated/Added each carry `PathQuarry`; Skipped folder never calls LookPath or Executable (extend `install_test.go:157-169`); symlinked config's `Command` is the chosen PATH path
@@ -49,3 +49,13 @@ Surface surveyed (nothing to port): production calls on the old path are `s.exec
 **Left unbuilt:** W1 under uninstall (none: install-only); S1/S2 skips — 09; continue-on-Code-failure — 11; D4u/DR/DN — 13.
 
 **Traps:** `desktopHome` before `t.Setenv("TMPDIR", ...)` or `t.TempDir` fails; a test that sets TMPDIR for a D9 row must also use a home that is not under it; D9 judged on the chosen path as well as `Executable()` is a deliberate widening of the spec's `<exe>` wording (BR-D5 says "chosen path"); orchestrator may veto.
+
+## Phase report
+
+Run A (steps 1-2) done; acceptance red, Build not started.
+
+- `internal/claudedesktop/path_test.go` (new): `Test_install_writes_the_quarry_path_that_claude_desktop_will_start`, four `t.Run` rows over real files (helpers `writeQuarry`, `installWithPath`, `lookPathReturning`, `errNoQuarryOnPath`; reuse them in B1/B2 unit rows).
+- `internal/claudedesktop/claudedesktop.go:125-175`: signature-only stubs `LookPath`, `TempBuildError{Path}` (Error returns ""), `WithLookPath`, `WithTempDir` (no-op options), `Result.PathQuarry`. Real behaviour still to build: `Install` path choice (B1), `NewServer` temp default, `underTemp`, `ExecutableError` (B2), cli (B2/step 5).
+- Red: three rows fail at assertions: link row `Command` is `.../002/quarry` (Cellar), want `.../003/quarry` (PATH link); differing-files row `PathQuarry` is "" want the PATH file; temp row `require.True(ok)` "got <nil>". The LookPath-error row passes on arrival (stub already writes the executable): control arm, no W1 either way.
+- Lint: only the two `revive` unused-parameter hits on the stub options; they vanish when the options store their value. Do not rename params to `_`.
+- Not run: `verify.sh`, cli packages (untouched; `go vet ./internal/cli/` clean).

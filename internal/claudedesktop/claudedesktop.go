@@ -125,6 +125,17 @@ func (e *ReadError) Unwrap() error { return e.Err }
 // Executable reports the absolute path of the running quarry binary, as os.Executable does.
 type Executable func() (string, error)
 
+// LookPath reports the absolute path a shell would run for the named command, as exec.LookPath does.
+type LookPath func(file string) (string, error)
+
+// TempBuildError is returned by Install when the quarry binary lives under the temporary
+// directory, where it will not outlast the session; nothing is written.
+type TempBuildError struct {
+	Path string // the path under the temporary directory
+}
+
+func (e *TempBuildError) Error() string { return "" }
+
 // Server installs quarry's MCP server into Claude Desktop's config file.
 type Server struct {
 	home       string
@@ -143,6 +154,16 @@ func WithHome(home string) Option {
 // A Server needs one before Install finds a Desktop folder.
 func WithExecutable(e Executable) Option {
 	return func(s *Server) { s.executable = e }
+}
+
+// WithLookPath sets how Install finds the quarry a shell would run.
+func WithLookPath(l LookPath) Option {
+	return func(*Server) {}
+}
+
+// WithTempDir sets the temporary directory root a quarry binary must not live under.
+func WithTempDir(root string) Option {
+	return func(*Server) {}
 }
 
 // NewServer returns a Server configured by opts.
@@ -172,6 +193,8 @@ type Result struct {
 	Outcome  Outcome // what happened to the entry
 	Command  string  // the quarry path the entry starts
 	Previous string  // the command an Updated entry started before
+
+	PathQuarry string // the quarry a shell runs, when it is not the file Command names
 }
 
 // Install adds the quarry entry to Claude Desktop's config, creating the file or merging into
