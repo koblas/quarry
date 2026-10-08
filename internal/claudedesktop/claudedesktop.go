@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/koblas/quarry/internal/platform/replacefile"
 )
@@ -31,8 +32,18 @@ var ErrNoHome = errors.New("home directory is not set")
 // errNotObject is why a value cannot be merged into: it decoded, but not to a JSON object.
 var errNotObject = errors.New("not a JSON object")
 
-// ErrEntryPresent is returned by Install when the config already holds a quarry entry.
-var ErrEntryPresent = errors.New("the config already has a quarry entry")
+// errForeignEntry is why merge refused mcpServers.quarry: it is not an entry that starts `quarry mcp`.
+var errForeignEntry = errors.New("mcpServers.quarry does not start quarry mcp")
+
+// ForeignEntryError is returned by Install when mcpServers.quarry is not an entry that starts
+// `quarry mcp`; the config is untouched.
+type ForeignEntryError struct {
+	Path string // the config file
+}
+
+func (e *ForeignEntryError) Error() string {
+	return e.Path + ": mcpServers.quarry is not an entry that starts quarry mcp"
+}
 
 // BackupError is returned by Install when the backup of the existing config cannot be saved;
 // the config is untouched.
@@ -87,17 +98,30 @@ func NewServer(opts ...Option) *Server {
 	return s
 }
 
+// Outcome is what an Install did to a Desktop config that exists.
+type Outcome int
+
+// The outcomes of an Install; Added is the zero value.
+const (
+	Added     Outcome = iota // no quarry entry was there; one was added
+	Updated                  // an entry of ours started another path; its command was replaced
+	Unchanged                // an entry of ours already started this path; nothing was written
+)
+
 // Result reports what an Install did.
 type Result struct {
-	Folder  string // the Claude Desktop folder
-	Config  string // the config file inside it
-	Skipped bool   // the folder does not exist, so nothing was done
-	Command string // the quarry path the entry starts
+	Folder   string  // the Claude Desktop folder
+	Config   string  // the config file inside it
+	Skipped  bool    // the folder does not exist, so nothing was done
+	Outcome  Outcome // what happened to the entry
+	Command  string  // the quarry path the entry starts
+	Previous string  // the command an Updated entry started before
 }
 
 // Install adds the quarry entry to Claude Desktop's config, creating the file or merging into
-// it after saving a backup beside it. It refuses a non-regular path (fs.ErrExist) and a present
-// quarry key (ErrEntryPresent), and names a failed backup or write as *BackupError or *WriteError.
+// it after saving a backup beside it; an entry of ours is repointed, or left alone when it
+// already starts this binary. It refuses a non-regular path (fs.ErrExist) and a quarry key that
+// is not ours (*ForeignEntryError), and names a failed backup or write as *BackupError or *WriteError.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	if s.home == "" {
 		return Result{}, ErrNoHome
@@ -119,9 +143,16 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	if err != nil {
 		return res, err
 	}
-	doc, err := merge(current.data, command)
+	plan, err := merge(current.data, command)
+	if errors.Is(err, errForeignEntry) {
+		return res, &ForeignEntryError{Path: res.Config}
+	}
 	if err != nil {
 		return res, fmt.Errorf("merge into %s: %w", res.Config, err)
+	}
+	if plan.outcome == Unchanged {
+		res.Outcome, res.Command = Unchanged, command
+		return res, nil
 	}
 	// The backup goes first: a config that could not be saved must not be replaced.
 	if current.present {
@@ -130,10 +161,10 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 			return res, &BackupError{Path: backup, Config: res.Config, Err: err}
 		}
 	}
-	if err := replacefile.Write(res.Config, doc, current.mode); err != nil {
+	if err := replacefile.Write(res.Config, plan.doc, current.mode); err != nil {
 		return res, &WriteError{Path: res.Config, Err: err}
 	}
-	res.Command = command
+	res.Outcome, res.Command, res.Previous = plan.outcome, command, plan.previous
 	return res, nil
 }
 
@@ -172,38 +203,70 @@ const (
 	entryKey   = "quarry"
 )
 
+// quarryName is the final path element of a command that runs quarry.
+const quarryName = "quarry"
+
 // entry is the value of mcpServers.quarry: how Desktop starts the quarry MCP server.
 type entry struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
 }
 
-// merge returns original (empty meaning "{}") with the quarry entry added under mcpServers, other
-// values untouched; it refuses a non-object config or mcpServers, and a present quarry key.
-func merge(original []byte, command string) ([]byte, error) {
+// merged is what merge decided: the config to write (nil when Unchanged), the outcome, and for
+// Updated the command the entry started before.
+type merged struct {
+	doc      []byte
+	outcome  Outcome
+	previous string
+}
+
+// merge returns original (empty meaning "{}") with the quarry entry set under mcpServers, other
+// values untouched. It refuses a non-object config or mcpServers, and a quarry key that is not
+// ours (errForeignEntry); an entry that is ours keeps everything but its command.
+func merge(original []byte, command string) (merged, error) {
 	top, err := decodeObject(original)
 	if err != nil {
-		return nil, fmt.Errorf("config: %w", err)
+		return merged{}, fmt.Errorf("config: %w", err)
 	}
 	var servers map[string]json.RawMessage
 	if raw, ok := top[serversKey]; ok && string(raw) != "null" {
 		if servers, err = decodeObject(raw); err != nil {
-			return nil, fmt.Errorf("%s: %w", serversKey, err)
+			return merged{}, fmt.Errorf("%s: %w", serversKey, err)
 		}
 	}
-	if _, ok := servers[entryKey]; ok {
-		return nil, ErrEntryPresent
+	var value any = entry{Command: command, Args: []string{"mcp"}}
+	out := merged{outcome: Added}
+	if raw, ok := servers[entryKey]; ok {
+		fields, started, ours := parseOurs(raw)
+		if !ours {
+			return merged{}, errForeignEntry
+		}
+		if started == command {
+			return merged{outcome: Unchanged}, nil
+		}
+		repointed := make(map[string]any, len(fields))
+		for k, v := range fields {
+			repointed[k] = v
+		}
+		repointed["command"] = command
+		value, out = repointed, merged{outcome: Updated, previous: started}
 	}
+	out.doc, err = encodeConfig(top, servers, value)
+	return out, err
+}
+
+// encodeConfig renders top with value as mcpServers.quarry beside the other servers.
+func encodeConfig(top, servers map[string]json.RawMessage, value any) ([]byte, error) {
 	doc := make(map[string]any, len(top)+1)
 	for k, v := range top {
 		doc[k] = v
 	}
-	merged := make(map[string]any, len(servers)+1)
+	all := make(map[string]any, len(servers)+1)
 	for k, v := range servers {
-		merged[k] = v
+		all[k] = v
 	}
-	merged[entryKey] = entry{Command: command, Args: []string{"mcp"}}
-	doc[serversKey] = merged
+	all[entryKey] = value
+	doc[serversKey] = all
 
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -229,4 +292,23 @@ func decodeObject(data []byte) (map[string]json.RawMessage, error) {
 		return nil, errNotObject
 	}
 	return obj, nil
+}
+
+// parseOurs reports whether raw is an entry that starts `quarry mcp`: a JSON object whose command
+// is a string with a final path element exactly "quarry" and whose args are exactly ["mcp"]. It
+// returns the entry's fields and command. Names are compared as text, never resolved on disk.
+func parseOurs(raw json.RawMessage) (map[string]json.RawMessage, string, bool) {
+	fields, err := decodeObject(raw)
+	if err != nil {
+		return nil, "", false
+	}
+	var command string
+	if json.Unmarshal(fields["command"], &command) != nil || command[strings.LastIndex(command, "/")+1:] != quarryName {
+		return nil, "", false
+	}
+	var args []string
+	if json.Unmarshal(fields["args"], &args) != nil || len(args) != 1 || args[0] != "mcp" {
+		return nil, "", false
+	}
+	return fields, command, true
 }

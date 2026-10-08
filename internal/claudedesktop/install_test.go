@@ -285,25 +285,138 @@ func Test_install_merges_into_a_config_whose_mcpservers_is_null_or_absent(t *tes
 	}
 }
 
-func Test_install_never_overwrites_a_present_quarry_entry(t *testing.T) {
+// quarryEntryConfig is a config holding entry as its mcpServers.quarry value.
+func quarryEntryConfig(entry string) string {
+	return `{"mcpServers":{"quarry":` + entry + `}}`
+}
+
+func Test_install_refuses_a_quarry_entry_that_does_not_start_quarry_mcp(t *testing.T) {
 	t.Parallel()
-	cases := []struct{ name, body string }{
-		{name: "our own entry", body: `{"mcpServers":{"quarry":{"command":"/opt/homebrew/bin/quarry","args":["mcp"]}}}`},
-		{name: "a foreign entry", body: `{"mcpServers":{"quarry":{"command":"/usr/bin/other","args":[]}}}`},
-		{name: "a null entry", body: `{"mcpServers":{"quarry":null}}`},
+	cases := []struct{ name, entry string }{
+		{name: "entry null", entry: `null`},
+		{name: "entry an array", entry: `["/usr/local/bin/quarry","mcp"]`},
+		{name: "entry a string", entry: `"/usr/local/bin/quarry"`},
+		{name: "entry a number", entry: `7`},
+		{name: "entry a bool", entry: `true`},
+		{name: "entry an empty object", entry: `{}`},
+		{name: "args missing", entry: `{"command":"/usr/local/bin/quarry"}`},
+		{name: "args null", entry: `{"command":"/usr/local/bin/quarry","args":null}`},
+		{name: "args empty", entry: `{"command":"/usr/local/bin/quarry","args":[]}`},
+		{name: "args with an extra argument", entry: `{"command":"/usr/local/bin/quarry","args":["mcp","x"]}`},
+		{name: "args another word", entry: `{"command":"/usr/local/bin/quarry","args":["x"]}`},
+		{name: "args in upper case", entry: `{"command":"/usr/local/bin/quarry","args":["MCP"]}`},
+		{name: "args holding a number", entry: `{"command":"/usr/local/bin/quarry","args":["mcp",1]}`},
+		{name: "args a string", entry: `{"command":"/usr/local/bin/quarry","args":"mcp"}`},
+		{name: "command missing", entry: `{"args":["mcp"]}`},
+		{name: "command null", entry: `{"command":null,"args":["mcp"]}`},
+		{name: "command a number", entry: `{"command":7,"args":["mcp"]}`},
+		{name: "command an array", entry: `{"command":["/usr/local/bin/quarry"],"args":["mcp"]}`},
+		{name: "command an object", entry: `{"command":{},"args":["mcp"]}`},
+		{name: "command empty", entry: `{"command":"","args":["mcp"]}`},
+		{name: "command named quarry.sh", entry: `{"command":"/usr/local/bin/quarry.sh","args":["mcp"]}`},
+		{name: "command named Quarry", entry: `{"command":"/usr/local/bin/Quarry","args":["mcp"]}`},
+		{name: "command named QUARRY", entry: `{"command":"/usr/local/bin/QUARRY","args":["mcp"]}`},
+		{name: "command named xquarry", entry: `{"command":"/usr/local/bin/xquarry","args":["mcp"]}`},
+		{name: "command with a trailing slash", entry: `{"command":"/opt/x/quarry/","args":["mcp"]}`},
+		{name: "command another program", entry: `{"command":"/usr/bin/other","args":[]}`},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			home, folder := desktopFolder(t)
-			writeConfig(t, folder, c.body, 0o644)
+			config := writeConfig(t, folder, quarryEntryConfig(c.entry), 0o644)
 			before := snapshot(t, folder)
 
 			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
 
-			require.ErrorIs(t, err, claudedesktop.ErrEntryPresent)
+			var foreign *claudedesktop.ForeignEntryError
+			require.ErrorAs(t, err, &foreign)
+			assert.Equal(t, config, foreign.Path)
 			assert.Equal(t, before, snapshot(t, folder))
+		})
+	}
+}
+
+func Test_install_accepts_an_entry_whose_command_ends_in_a_quarry_element(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, command string }{
+		{name: "another absolute path", command: "/usr/local/bin/quarry"},
+		{name: "a bare name", command: "quarry"},
+		{name: "a relative path", command: "./quarry"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			writeConfig(t, folder, quarryEntryConfig(`{"command":"`+c.command+`","args":["mcp"]}`), 0o644)
+
+			_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			require.NoError(t, err)
+			assert.JSONEq(t, quarryEntryConfig(`{"command":"`+quarryBinary+`","args":["mcp"]}`), readConfig(t, folder))
+		})
+	}
+}
+
+func Test_install_changes_nothing_when_the_entry_already_starts_this_quarry(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	writeConfig(t, folder, `{ "theme":"dark",`+"\n"+`"mcpServers":{"quarry":{"args":["mcp"], "command":"`+quarryBinary+`"}} }`, 0o644)
+	before := snapshot(t, folder)
+
+	res, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	require.NoError(t, err)
+	config := filepath.Join(folder, configName)
+	assert.Equal(t, claudedesktop.Result{Folder: folder, Config: config, Outcome: claudedesktop.Unchanged, Command: quarryBinary}, res)
+	assert.Equal(t, before, snapshot(t, folder))
+}
+
+func Test_install_repoints_only_the_command_of_an_entry_that_starts_quarry_mcp(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, previous string }{
+		{name: "another absolute path", previous: "/usr/local/bin/quarry"},
+		{name: "a bare name", previous: "quarry"},
+		{name: "this path differing in one character", previous: "/opt/homebrew/Bin/quarry"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := desktopFolder(t)
+			original := `{"theme":"dark","mcpServers":{"other":{"command":"x"},` +
+				`"quarry":{"command":"` + c.previous + `","args":["mcp"],"env":{"K":"<>&"},"disabled":false,"big":12345678901234567890}}}`
+			config := writeConfig(t, folder, original, 0o644)
+
+			res, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+			require.NoError(t, err)
+			assert.Equal(t, claudedesktop.Result{Folder: folder, Config: config, Outcome: claudedesktop.Updated, Command: quarryBinary, Previous: c.previous}, res)
+			want := "{\n" +
+				"  \"mcpServers\": {\n" +
+				"    \"other\": {\n" +
+				"      \"command\": \"x\"\n" +
+				"    },\n" +
+				"    \"quarry\": {\n" +
+				"      \"args\": [\n" +
+				"        \"mcp\"\n" +
+				"      ],\n" +
+				"      \"big\": 12345678901234567890,\n" +
+				"      \"command\": \"/opt/homebrew/bin/quarry\",\n" +
+				"      \"disabled\": false,\n" +
+				"      \"env\": {\n" +
+				"        \"K\": \"<>&\"\n" +
+				"      }\n" +
+				"    }\n" +
+				"  },\n" +
+				"  \"theme\": \"dark\"\n" +
+				"}\n"
+			assert.Equal(t, want, readConfig(t, folder))
+			backup, readErr := os.ReadFile(config + backupSuffix)
+			require.NoError(t, readErr)
+			assert.Equal(t, original, string(backup))
 		})
 	}
 }
@@ -330,7 +443,8 @@ func Test_install_writes_nothing_when_the_config_is_not_a_json_object_it_can_mer
 
 			require.Error(t, err)
 			require.NotErrorIs(t, err, fs.ErrExist)
-			require.NotErrorIs(t, err, claudedesktop.ErrEntryPresent)
+			var foreign *claudedesktop.ForeignEntryError
+			require.NotErrorAs(t, err, &foreign)
 			assert.Equal(t, before, snapshot(t, folder))
 		})
 	}
