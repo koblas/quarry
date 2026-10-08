@@ -333,6 +333,17 @@ func Test_claude_install_reports_a_failed_backup_or_write_and_leaves_the_config_
 			wantFold: []string{desktopConfigName, desktopBackupName},
 		},
 		{
+			name: "the backup cannot be created in a read-only folder",
+			fault: func(t *testing.T, folder string) {
+				t.Helper()
+				require.NoError(t, os.Chmod(folder, 0o555))
+				t.Cleanup(func() { _ = os.Chmod(folder, 0o755) })
+			},
+			wantLine: "quarry: claude install: cannot save " + desktopBackupShown + " (permission denied), so " + desktopConfigShown +
+				" is unchanged; check the permissions of " + desktopFolderShown + ", then run quarry claude install again\n",
+			wantFold: []string{desktopConfigName},
+		},
+		{
 			name: "the temp write or rename fails",
 			fault: func(t *testing.T, folder string) {
 				t.Helper()

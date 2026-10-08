@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: Install merges into an existing Desktop config and keeps a backup (folds SCENARIO-07)
@@ -30,10 +30,10 @@ Survey of what `Install` calls (no new port; `replacefile.Write` is the only wri
 - [x] Step 6: `internal/cli/render_claude.go:168-176` `reportDesktopFailure(cmd, verb, home, err)` — add `home` (caller `claude_install.go:58`); two arms before the default: `*claudedesktop.BackupError` -> D7, `*claudedesktop.WriteError` -> D8, each `writeClaudeLine` + `ReportedError{}`; paths through `claudePath(home, p)` then `%q`, `<D>` = `filepath.Dir(Path)`, `<os reason>` = `osreason.Reason(err.Err)`, verb in the "run quarry claude <verb> again" clause. Copy as consts beside `desktopNoHome` (`:33-35`), verbatim from Surface & Copy D7/D8. Re-point `claude_install_desktop_test.go:153-165` (`…when_a_config_is_already_present`) to a non-regular config (symlink) — a regular config now merges. Confirm Step 1-2 go green
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/claudedesktop` — `Install` doc says: merges and backs up, refuses non-regular files and a present `quarry` key, names `BackupError`/`WriteError`; no spec ids
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/claudedesktop` — `Install` doc says: merges and backs up, refuses non-regular files and a present `quarry` key, names `BackupError`/`WriteError`; no spec ids
 
 ### Verify
-- [ ] Step 8: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...`; `spec-check.py desktop-install`; tick SCENARIO-02 with its acceptance test and SCENARIO-07 with a line naming SCENARIO-02's folded test (`Test_claude_install_reports_a_failed_backup_or_write_and_leaves_the_config_as_it_was`); STATE.md rewrite
+- [x] Step 8: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...`; `spec-check.py desktop-install`; tick SCENARIO-02 with its acceptance test and SCENARIO-07 with a line naming SCENARIO-02's folded test (`Test_claude_install_reports_a_failed_backup_or_write_and_leaves_the_config_as_it_was`); STATE.md rewrite
 
 ## Handoff
 
@@ -58,12 +58,4 @@ Survey of what `Install` calls (no new port; `replacefile.Write` is the only wri
 
 ## Phase report
 
-Run B2 done (steps 5-6; start `5f54fa31`). Both acceptance tests green; `go test` green on `internal/claudedesktop`, `internal/cli`, `internal/platform/osreason`; `golangci-lint run ./...` = 0 issues. `verify.sh` (run before the lint fixes) rc=0 for build/test/race, uncovered-diff 0 added lines; its only lint rc=1 was the 7 findings since fixed. V must still run it once for the final counts.
-
-Files: `internal/platform/osreason/osreason.go` (+`*os.LinkError` arm) and test; `internal/claudedesktop/claudedesktop.go` (`BackupError{Path, Config, Err}` and `WriteError{Path, Err}` with `Unwrap`; `backupSuffix`, `backupMode`; `existing.present`; backup `replacefile.Write` strictly before the config write); `internal/claudedesktop/install_test.go` (5 step-5 tests plus `entryNames` helper, `userImmutableFlag`); `internal/cli/render_claude.go` (`reportDesktopFailure(cmd, verb, home, err)` with D7/D8 arms, consts `desktopBackupRefusal`, `desktopWriteRefusal`, `desktopFixFolder`); `internal/cli/claude_install.go:58` (passes `home`); `internal/cli/claude_install_desktop_test.go` (config-present test re-pointed to a dangling symlink and renamed `..._when_the_config_is_not_a_regular_file`).
-
-Deviation from plan: `BackupError` also carries `Config` (D7 prints the config path; deriving it by trimming the suffix is brittle).
-
-Mutations (all red, restored byte-identical): config written before backup -> `Test_install_leaves_the_config_unchanged_when_the_backup_cannot_be_saved` (config rewritten to the merged document) and `Test_install_reports_a_failed_config_write_and_leaves_no_temp`; `backupMode` 0o644 -> `Test_install_writes_a_backup_of_an_empty_config`, `Test_install_replaces_a_symlink_at_the_backup_name_without_following_it` and cli acceptance rows (`expected 0x180 actual 0x1a4`).
-
-V must: sweep/verify (`.claude/scripts/verify.sh 5f54fa31d1847f126b0c686142e1a7413377dce2 ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...`), tick SCENARIO-02 and SCENARIO-07 in `specification.md`, `spec-check.py desktop-install`, rewrite STATE.md, set `status: done`. Step 7 doc check: `Install` doc already names `BackupError`/`WriteError` and the narrowed refusals. STATE.md has not been touched in B1/B2.
+Run V done (start `5f54fa31`). Added `Test_install_reports_a_backup_that_cannot_be_created_and_leaves_the_config_and_folder_as_they_were` (claudedesktop, 0o555 folder) and a cli D7 row "the backup cannot be created in a read-only folder" ending `(permission denied)`; mutation (backup failure classified as `*WriteError`) reddened both plus `Test_install_leaves_the_config_unchanged_when_the_backup_cannot_be_saved` and the cli `the backup cannot be saved` row. `Install` and `merge` docs shortened. `verify.sh` rc=0 for build/test/race/lint (0 issues), uncovered-diff 0 added lines, 1 declared unreachable (`merge` encode). `spec-check.py desktop-install` OK. STATE.md rewritten; SCENARIO-02 ticked naming the folded SCENARIO-07 test.

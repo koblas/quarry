@@ -95,12 +95,9 @@ type Result struct {
 	Command string // the quarry path the entry starts
 }
 
-// Install adds the quarry entry to Claude Desktop's config file, creating the file when
-// there is none and otherwise merging into it after saving a backup beside it. It returns a
-// Skipped Result when Desktop's folder does not exist, ErrNoHome when the Server has no home,
-// an error wrapping fs.ErrExist when the config path is not a regular file, ErrEntryPresent
-// when the config already has a quarry entry, and *BackupError or *WriteError when a write
-// fails. A config it cannot read or merge into is left as it was, and a replaced config keeps its mode.
+// Install adds the quarry entry to Claude Desktop's config, creating the file or merging into
+// it after saving a backup beside it. It refuses a non-regular path (fs.ErrExist) and a present
+// quarry key (ErrEntryPresent), and names a failed backup or write as *BackupError or *WriteError.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	if s.home == "" {
 		return Result{}, ErrNoHome
@@ -181,11 +178,8 @@ type entry struct {
 	Args    []string `json:"args"`
 }
 
-// merge returns original, empty or whitespace-only meaning "{}", with the quarry entry added
-// under mcpServers, indented by two spaces with a trailing newline and no HTML escaping.
-// Every other value is carried through as the raw JSON it was read as. It returns
-// ErrEntryPresent when mcpServers already has a quarry key, and an error when original
-// or mcpServers is not a JSON object.
+// merge returns original (empty meaning "{}") with the quarry entry added under mcpServers, other
+// values untouched; it refuses a non-object config or mcpServers, and a present quarry key.
 func merge(original []byte, command string) ([]byte, error) {
 	top, err := decodeObject(original)
 	if err != nil {

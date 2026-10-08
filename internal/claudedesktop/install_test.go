@@ -466,6 +466,24 @@ func Test_install_leaves_the_config_unchanged_when_the_backup_cannot_be_saved(t 
 	assert.Equal(t, before, snapshot(t, folder))
 }
 
+func Test_install_reports_a_backup_that_cannot_be_created_and_leaves_the_config_and_folder_as_they_were(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	config := writeConfig(t, folder, `{"globalShortcut": "Cmd+Shift+Space"}`, 0o644)
+	require.NoError(t, os.Chmod(folder, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(folder, 0o755) })
+	before := snapshot(t, folder)
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	var backupErr *claudedesktop.BackupError
+	require.ErrorAs(t, err, &backupErr)
+	assert.Equal(t, config+backupSuffix, backupErr.Path)
+	require.ErrorIs(t, err, fs.ErrPermission)
+	assert.Equal(t, before, snapshot(t, folder))
+	assert.Equal(t, []string{configName}, entryNames(t, folder))
+}
+
 func Test_install_reports_a_failed_config_write_and_leaves_no_temp(t *testing.T) {
 	t.Parallel()
 	home, folder := desktopFolder(t)
