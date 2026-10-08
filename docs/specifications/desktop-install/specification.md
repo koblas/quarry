@@ -511,7 +511,7 @@ Binding for every plan: test-fixture `Executable` values are fixed absolute stri
 | SCENARIO-16 | OWNS A RUN — 2 batches (sonnet): help Short/Long ×3, `mcp.go` Long, root help row, README, PRD, drift/readme pins. |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-01: Install reaches both Claude Code and Claude Desktop
+- [x] SCENARIO-01: Install reaches both Claude Code and Claude Desktop — `internal/cli/claude_install_desktop_test.go` `Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code`
 - [ ] SCENARIO-02: Install merges into an existing Desktop config and keeps a backup (folds 07)
 - [ ] SCENARIO-04: Install repoints a stale quarry entry (folds 03, 05)
 - [ ] SCENARIO-06: Install refuses a config it cannot safely change

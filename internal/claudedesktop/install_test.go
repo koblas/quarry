@@ -211,6 +211,7 @@ func Test_install_fails_without_writing_when_the_config_cannot_be_checked(t *tes
 func Test_install_fails_without_writing_when_the_executable_path_is_unknown(t *testing.T) {
 	t.Parallel()
 	home, folder := desktopFolder(t)
+
 	_, err := install(t, home, &fakeExecutable{err: errNoExecutable})
 
 	require.ErrorIs(t, err, errNoExecutable)

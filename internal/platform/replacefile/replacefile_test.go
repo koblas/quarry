@@ -66,6 +66,8 @@ func Test_write_leaves_the_old_file_and_no_temp_when_the_rename_fails(t *testing
 
 	err := replacefile.Write(path, []byte("new"), 0o600)
 
+	var linkErr *os.LinkError
+	require.ErrorAs(t, err, &linkErr)
 	require.ErrorContains(t, err, path)
 	assert.Equal(t, []string{"target"}, names(t, dir))
 	assert.Equal(t, []string{"inside"}, names(t, path))

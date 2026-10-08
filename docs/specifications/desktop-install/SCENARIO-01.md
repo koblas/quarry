@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: Install reaches both Claude Code and Claude Desktop
@@ -46,10 +46,10 @@ User-visible contract: `quarry claude install` with Code present and Code succee
   - `Test_test_env_points_claude_at_no_real_desktop`: `Home` ≠ `os.UserHomeDir()`, its Desktop folder does not exist, and `Executable` returns the fixture
 
 ### Sweep
-- [ ] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc` comments on every new exported symbol in `claudedesktop` and `replacefile`; the `newClaudeInstallCommand` doc names the Desktop step
+- [x] Step 8: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc` comments on every new exported symbol in `claudedesktop` and `replacefile`; the `newClaudeInstallCommand` doc names the Desktop step
 
 ### Verify
-- [ ] Step 9: `.claude/scripts/verify.sh <start> ./internal/platform/replacefile/... ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...`, then `spec-check.py desktop-install`, then tick SCENARIO-01 with its acceptance test, then write STATE.md
+- [x] Step 9: `.claude/scripts/verify.sh <start> ./internal/platform/replacefile/... ./internal/claudedesktop/... ./internal/cli/... ./cmd/quarry/...`, then `spec-check.py desktop-install`, then tick SCENARIO-01 with its acceptance test, then write STATE.md
 
 ## Handoff
 
@@ -76,11 +76,8 @@ User-visible contract: `quarry claude install` with Code present and Code succee
 
 ## Phase report
 
-Run B2 (done): Steps 5-7 green, ticked. `golangci-lint run ./...` `0 issues`; narrow loops green on replacefile, claudedesktop, cli, cmd/quarry. The acceptance test `Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code` is green.
-- `internal/cli/claude_install.go`: Desktop step after the Code hints on the success path only (`installDesktop`); `render_claude.go`: `renderDesktopInstalled` (S2 / DA+DQ, paths through `claudePath` + `%q`), `reportDesktopFailure` (`ErrNoHome` -> D11 + `ReportedError`; default -> `&runtimeError{}`), `desktopQuitLine`, `desktopNoHome` consts.
-- `internal/cli/claude_install_desktop_test.go`: S2, D11, default arm (config present), single-buffer order, fails-after-first-write rows (`failsAfterFirstWrite`, `installDesktop` helper).
-- `internal/cli/claude_install_test.go`: `runClaudeFinding` now passes `t.TempDir()` home; `desktopSkippedLine` const; 10 Code-success pins gained the S2 suffix (the plan listed 11 lines; the narrow loop showed exactly these 10 failing); the `runs_both_steps` Execute test got `Home: t.TempDir()`.
-- `cmd/quarry/run.go`: `defaultEnv` gains `Executable: os.Executable`. `main_test.go`: `testEnv` sets `Home = testHome` (absent absolute path) and `Executable` fixture; both are consts. Two tests appended to `run_claude_wiring_test.go`.
-- Mutations (all red, restored): delete `Executable: os.Executable` -> `Test_default_env_reports_this_binary_as_quarrys_path` (`Expected value not to be nil`); drop the `Home` override -> `Test_test_env_points_claude_at_no_real_desktop` (home equals real `/Users/koblas`, and the real Desktop folder exists so the not-exist assertion also fails); `ErrNoHome` arm off -> `Test_claude_install_reports_a_missing_home_after_the_claude_code_lines`; `installDesktop` call removed -> the acceptance test.
-- Not done (V): Step 8 doc comments check, Step 9 `verify.sh`, spec tick, `spec-check.py`, STATE.md, `status: done`.
-- Must not redo: the interim present-config refusal stays; `NewServer` has no defaults (nil `Executable` panics once the folder exists).
+Run V (done): checkpoint pin-only findings applied, Sweep + Verify green, spec ticked, `spec-check.py desktop-install` OK, STATE.md written, `status: done`.
+- `replacefile_test.go:70` rename-fail row asserts `*os.LinkError` (mutation `%w`->`%v` at `replacefile.go:61` reddened it: "Should be in error chain"). `claude_install_desktop_test.go` gained `Test_claude_install_prints_a_binary_under_home_as_tilde_and_writes_its_absolute_path` (mutation `claudePath(home, res.Command)`->`res.Command` at `render_claude.go:163` reddened it: stdout had the absolute path).
+- Doc/comment trims: `replacefile.go` Write doc, `claude_install.go` command doc, `replacefile_internal_test.go` header; blank line in `install_test.go`.
+- `verify.sh` rc=0 throughout; `0 issues`; 0 uncovered added lines (2 declared unreachable, the encode error path); test-stats TOTAL 1721 (+26).
+- Nothing left for later runs; open debts are in STATE.md.

@@ -24,11 +24,9 @@ type tempFile interface {
 // createTemp makes a new temporary file in dir.
 type createTemp func(dir string) (tempFile, error)
 
-// Write replaces the file at path with data and mode perm. It writes a
-// temporary file in the same folder, syncs it and renames it over path, so a
-// reader sees the old contents or the new, never a mix. On any failure it
-// removes the temporary file and leaves path as it was; a folder-sync error
-// after the rename is not a failure.
+// Write replaces the file at path with data and mode perm; a reader sees the old
+// file or the new, never a mix. On failure the temporary file is removed and path
+// is as it was. A folder-sync error after the rename is not a failure.
 func Write(path string, data []byte, perm fs.FileMode) error {
 	return write(path, data, perm, func(dir string) (tempFile, error) {
 		return os.CreateTemp(dir, tempPattern)

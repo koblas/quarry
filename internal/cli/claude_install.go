@@ -9,9 +9,8 @@ import (
 // installCommand is the install command's name, for its own usage line and messages.
 const installCommand = "install"
 
-// newClaudeInstallCommand builds claude install: it refuses arguments, then --json, then has the
-// plugin Server add quarry's marketplace and install its plugin, reporting each step on stdout, then
-// has the Claude Desktop Server add quarry's MCP server to Desktop's config when Desktop is on this Mac.
+// newClaudeInstallCommand builds claude install: it refuses arguments, then --json, installs the
+// plugin in Claude Code, then adds quarry's MCP server to Claude Desktop when Desktop is on this Mac.
 func newClaudeInstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, executable claudedesktop.Executable, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   installCommand,

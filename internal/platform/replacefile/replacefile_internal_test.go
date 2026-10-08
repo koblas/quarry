@@ -1,6 +1,4 @@
-// White-box: the temp-file faults (chmod, write, sync, close) cannot be
-// provoked through Write's public surface, so these rows drive the unexported
-// write with a temp-file seam that fails one call.
+// White-box: the temp-file seam is unexported, so chmod/write/sync/close faults are driven through `write`.
 package replacefile
 
 import (

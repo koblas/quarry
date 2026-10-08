@@ -99,6 +99,33 @@ func Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code(t *test
 	assert.Equal(t, desktopConfigName, listing[0].Name())
 }
 
+func Test_claude_install_prints_a_binary_under_home_as_tilde_and_writes_its_absolute_path(t *testing.T) {
+	home, folder := desktopHome(t)
+	binary := filepath.Join(home, "bin", "quarry")
+	var out, errOut bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"claude", "install"}, cli.Env{
+		Stdout:     &out,
+		Stderr:     &errOut,
+		RunTool:    (&toolCalls{}).run,
+		Home:       home,
+		Executable: func() (string, error) { return binary, nil },
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine+
+		"Added the quarry MCP server to Claude Desktop; it starts \"~/bin/quarry\".\n"+desktopQuitLine, out.String())
+	written, err := os.ReadFile(filepath.Join(folder, desktopConfigName))
+	require.NoError(t, err)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(written, &decoded))
+	assert.Equal(t, map[string]any{
+		"mcpServers": map[string]any{
+			"quarry": map[string]any{"command": binary, "args": []any{"mcp"}},
+		},
+	}, decoded)
+}
+
 func Test_claude_install_skips_claude_desktop_when_its_folder_does_not_exist(t *testing.T) {
 	home := t.TempDir()
 	var out, errOut bytes.Buffer
