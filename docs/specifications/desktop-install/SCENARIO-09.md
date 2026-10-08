@@ -24,8 +24,8 @@ Survey (step 5): no new port. Callers of `ErrClaudeNotFound` in production: `ren
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/claude_absent_target_test.go` (new) — three table tests over `cli.Execute` + `Env.Home`/`Executable` fakes (`runClaudeAt`, `desktopHome`). 09: S1 install, S1 uninstall (Desktop folder present, entry DA/DN), S2b install (Claude is a file, Code present), S2 install/uninstall as green-on-arrival control rows. 10: N1, N1u, N1b, N1bu (stdout empty, exact stderr, no tool calls, `ReportedError`). 12: D11 install (green on arrival) and D12 uninstall, plus Code-absent rows (S1 then D11, S1 then D12) and D12 install; D12 fixture is `Library/Application Support` chmod `0o000` with `t.Cleanup` restoring (non-root runner, existing debt)
-- [ ] Step 2: run the three; they must fail at their assertions (old refusal text, D6 for a file, `runtimeError` for D12). No stubs needed: tests use existing `cli.Execute` API
+- [x] Step 1: `internal/cli/claude_absent_target_test.go` (new) — three table tests over `cli.Execute` + `Env.Home`/`Executable` fakes (`runClaudeAt`, `desktopHome`). 09: S1 install, S1 uninstall (Desktop folder present, entry DA/DN), S2b install (Claude is a file, Code present), S2 install/uninstall as green-on-arrival control rows. 10: N1, N1u, N1b, N1bu (stdout empty, exact stderr, no tool calls, `ReportedError`). 12: D11 install (green on arrival) and D12 uninstall, plus Code-absent rows (S1 then D11, S1 then D12) and D12 install; D12 fixture is `Library/Application Support` chmod `0o000` with `t.Cleanup` restoring (non-root runner, existing debt)
+- [x] Step 2: run the three; they must fail at their assertions (old refusal text, D6 for a file, `runtimeError` for D12). No stubs needed: tests use existing `cli.Execute` API
 
 ### Build
 - [ ] Step 3 (B1, batch 1): `internal/claudedesktop/claudedesktop.go:277-292` `locate` + `:203-214` `Result` + `:294-300` `UninstallResult` + new `FolderError{Path, Err}` beside `:100-125` — `locate` stats the folder, a non-directory returns not-found-with-reason (`Skipped` true, new `NotAFolder` true on both results, `Install`/`Uninstall` early-return as for a missing folder, no `Executable()` call), any other stat error returns `*FolderError` (Unwrap; replaces the `fmt.Errorf("check %s")` wrap; `ErrorIs fs.ErrPermission` pins at `install_test.go:635`, `uninstall_test.go:439` must stay green). Tests in `install_test.go` + `uninstall_test.go` for BOTH verbs: `Test_install_skips_a_claude_that_is_a_file` (+ uninstall twin), symlink to a folder is a folder, symlink to a file is `NotAFolder`, dangling symlink is missing (`NotAFolder` false), `Library` a file -> `*FolderError` (ENOTDIR is not not-exist), `*FolderError.Path` is the folder; `fakeExecutable.calls == 0` on the file row
@@ -51,3 +51,14 @@ Survey (step 5): no new port. Callers of `ErrClaudeNotFound` in production: `ren
 - `os.Stat` on `Claude` succeeds for a regular file, so without `IsDir` the file reaches `readConfig` and prints D6 (ENOTDIR) — the S2b gap.
 - D12 fixture must chmod the PARENT (`Application Support`), not `Claude` (`0o000` on `Claude` only fails the config Lstat, D6, `claude_install_desktop_test.go:798`).
 - The mcp-install spec (`mcp-install/specification.md:135-136`) still quotes the deleted not-found copy; it is history, do not edit.
+
+## Phase report
+
+Run A done (steps 1-2 ticked). Only file touched: `internal/cli/claude_absent_target_test.go` (new, no production change, no stubs needed). Helpers there: `runWithDesktop` (cli.Execute with `Env.Executable`, LookPath, Home), `homeWithClaudeAsFile`, `homeWithUnsearchableSupport` (chmod `Application Support` 0o000, Cleanup restores), `homeWithQuarryEntry`.
+
+Red now (narrow loop `go test ./internal/cli/ -run 'Test_claude_skips_the_absent|Test_claude_refuses_when_neither|Test_claude_refuses_a_claude_desktop_it_cannot'`), all at their assertions:
+- `Test_claude_skips_the_absent_target_and_handles_the_present_one`: 3 red rows (install/uninstall without claude: `require.NoError` gets "already reported" because the old not-found refusal fires and S1 is never printed; install with `Claude` a file: same error, D6 printed instead of S2b). Green on arrival: the two "folder does not exist" S2 control rows.
+- `Test_claude_refuses_when_neither_claude_code_nor_claude_desktop_is_present`: all 4 rows red (actual stderr is the old `cannot find the claude command on your PATH; ...` copy; expected N1/N1u/N1b/N1bu).
+- `Test_claude_refuses_a_claude_desktop_it_cannot_look_for`: red rows: install/uninstall with unsearchable folder (`ErrorIs ReportedError` fails; the chain is a `runtimeError` wrapping the stat error), and the three Code-absent rows (old refusal early return, no S1). Green on arrival: `install without a home` (D11, Code present).
+
+Do not redo: tests need no change when B1/B2 land; B2 re-points `claude_install_test.go:224-250` and `claude_uninstall_test.go:278-290` (old refusal copy). `desktopSkippedFmt`/`desktopNotAFolderLine` expected S2b text is `Skipped Claude Desktop: "~/Library/Application Support/Claude" is not a folder.`
