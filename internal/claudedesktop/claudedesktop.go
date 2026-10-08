@@ -122,6 +122,16 @@ type ReadError struct {
 func (e *ReadError) Error() string { return fmt.Sprintf("read %s: %v", e.Path, e.Err) }
 func (e *ReadError) Unwrap() error { return e.Err }
 
+// FolderError is returned by Install and Uninstall when Claude Desktop's folder cannot be checked
+// for any reason other than being absent; nothing is read or written.
+type FolderError struct {
+	Path string // the Claude Desktop folder
+	Err  error
+}
+
+func (e *FolderError) Error() string { return fmt.Sprintf("check %s: %v", e.Path, e.Err) }
+func (e *FolderError) Unwrap() error { return e.Err }
+
 // Executable reports the absolute path of the running quarry binary, as os.Executable does.
 type Executable func() (string, error)
 
@@ -210,26 +220,30 @@ const (
 type Result struct {
 	Folder   string  // the Claude Desktop folder
 	Config   string  // the config file inside it
-	Skipped  bool    // the folder does not exist, so nothing was done
+	Skipped  bool    // there is no Claude Desktop folder, so nothing was done
 	Outcome  Outcome // what happened to the entry
 	Command  string  // the quarry path the entry starts
 	Previous string  // the command an Updated entry started before
+
+	NotAFolder bool // Skipped because the path exists but is not a folder; false when it is missing
 
 	PathQuarry string // the quarry a shell runs, when it is not the file Command names
 }
 
 // Install adds the quarry entry to Claude Desktop's config, backing up an existing file first, or
-// repoints or leaves alone an entry of ours. It refuses a temporary build (*TempBuildError), a path
-// not named quarry (*BinaryNameError) and a config it cannot safely edit (*ExecutableError, *SymlinkError, *NotAFileError, *ForeignEntryError,
-// *ReadError, *BackupError, *WriteError); Result.PathQuarry names a different quarry on PATH.
+// repoints or leaves alone an entry of ours. It skips (Result.Skipped) a Desktop folder that is
+// missing or not a folder, and refuses a folder it cannot check (ErrNoHome, *FolderError), a temporary
+// build (*TempBuildError), a path not named quarry (*BinaryNameError) and a config it cannot safely edit
+// (*ExecutableError, *SymlinkError, *NotAFileError, *ForeignEntryError, *ReadError, *BackupError,
+// *WriteError); Result.PathQuarry names a different quarry on PATH.
 func (s *Server) Install(_ context.Context) (Result, error) {
-	folder, config, found, err := s.locate()
-	res := Result{Folder: folder, Config: config}
+	loc, err := s.locate()
+	res := Result{Folder: loc.folder, Config: loc.config}
 	if err != nil {
 		return res, err
 	}
-	if !found {
-		res.Skipped = true
+	if !loc.found {
+		res.Skipped, res.NotAFolder = true, loc.notAFolder
 		return res, nil
 	}
 	exe, err := s.executable()
@@ -274,43 +288,57 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	return res, nil
 }
 
-// locate returns Claude Desktop's folder, its config path and whether the folder exists. It
-// returns ErrNoHome for an empty home and a wrapped error when the folder cannot be checked.
-func (s *Server) locate() (string, string, bool, error) {
+// location is where Claude Desktop keeps its config and what is at its folder.
+type location struct {
+	folder, config string
+	found          bool // the folder exists and is a folder
+	notAFolder     bool // something other than a folder is there, as opposed to nothing
+}
+
+// locate finds Claude Desktop's folder. A missing folder and one that is not a folder both report
+// found false, told apart by notAFolder; ErrNoHome for an empty home and *FolderError for any other
+// stat failure.
+func (s *Server) locate() (location, error) {
 	if s.home == "" {
-		return "", "", false, ErrNoHome
+		return location{}, ErrNoHome
 	}
 	folder := filepath.Join(s.home, "Library", "Application Support", "Claude")
-	config := filepath.Join(folder, configName)
-	if _, err := os.Stat(folder); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return folder, config, false, nil
-		}
-		return folder, config, false, fmt.Errorf("check %s: %w", folder, err)
+	loc := location{folder: folder, config: filepath.Join(folder, configName)}
+	info, err := os.Stat(folder)
+	if errors.Is(err, fs.ErrNotExist) {
+		return loc, nil
 	}
-	return folder, config, true, nil
+	if err != nil {
+		return loc, &FolderError{Path: folder, Err: err}
+	}
+	loc.found, loc.notAFolder = info.IsDir(), !info.IsDir()
+	return loc, nil
 }
 
 // UninstallResult reports what an Uninstall did.
 type UninstallResult struct {
 	Folder  string // the Claude Desktop folder
 	Config  string // the config file inside it
-	Skipped bool   // the folder does not exist, so nothing was done
+	Skipped bool   // there is no Claude Desktop folder, so nothing was done
 	Removed bool   // the quarry entry was removed
+
+	NotAFolder bool // Skipped because the path exists but is not a folder; false when it is missing
 }
 
 // Uninstall removes the quarry entry from Claude Desktop's config, backing up the file first, but
 // only an entry that starts `quarry mcp` (*ForeignEntryError otherwise). A config that cannot hold
-// our entry is left alone. It refuses ErrNoHome, *SymlinkError, *ReadError, *InvalidJSONError,
+// our entry is left alone. A Desktop folder that is missing or not a folder is skipped as in Install.
+// It refuses ErrNoHome, *FolderError, *SymlinkError, *ReadError, *InvalidJSONError, *ForeignEntryError,
 // *BackupError and *WriteError.
 func (s *Server) Uninstall(_ context.Context) (UninstallResult, error) {
-	folder, config, found, err := s.locate()
-	res := UninstallResult{Folder: folder, Config: config}
+	loc, err := s.locate()
+	config := loc.config
+	res := UninstallResult{Folder: loc.folder, Config: config}
 	if err != nil {
 		return res, err
 	}
-	if !found {
-		res.Skipped = true
+	if !loc.found {
+		res.Skipped, res.NotAFolder = true, loc.notAFolder
 		return res, nil
 	}
 	current, err := readConfig(config)

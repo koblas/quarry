@@ -297,3 +297,14 @@ func Test_claude_uninstall_refuses_a_desktop_config_it_cannot_judge(t *testing.T
 		})
 	}
 }
+
+func Test_claude_uninstall_skips_claude_desktop_when_its_path_is_a_file(t *testing.T) {
+	tool := (&toolCalls{}).lists(ourMarketplace, userPluginOn)
+	var stdout, stderr bytes.Buffer
+
+	err := uninstallDesktop(t, tool, homeWithClaudeAsFile(t), &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Equal(t, codeUninstalledLines+desktopNotAFolderLine, stdout.String())
+	assert.Empty(t, stderr.String())
+}

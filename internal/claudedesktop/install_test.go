@@ -168,6 +168,85 @@ func Test_install_skips_a_missing_desktop_folder_without_asking_for_the_executab
 	assert.Empty(t, snapshot(t, home))
 }
 
+// claudeNotAFolder is a way Claude Desktop's path can hold something that is not a folder.
+type claudeNotAFolder struct {
+	name       string
+	notAFolder bool // false when the path reads as missing
+	place      func(t *testing.T, folder string)
+}
+
+func claudeNotAFolderRows() []claudeNotAFolder {
+	return []claudeNotAFolder{
+		{name: "a regular file", notAFolder: true, place: func(t *testing.T, folder string) {
+			require.NoError(t, os.WriteFile(folder, []byte("not a folder"), 0o600))
+		}},
+		{name: "a symlink to a file", notAFolder: true, place: func(t *testing.T, folder string) {
+			target := filepath.Join(filepath.Dir(folder), "target")
+			require.NoError(t, os.WriteFile(target, []byte("not a folder"), 0o600))
+			require.NoError(t, os.Symlink(target, folder))
+		}},
+		{name: "a dangling symlink", notAFolder: false, place: func(t *testing.T, folder string) {
+			require.NoError(t, os.Symlink(filepath.Join(filepath.Dir(folder), "gone"), folder))
+		}},
+	}
+}
+
+// homeWithSupport returns a home whose Application Support folder exists, and the path Claude Desktop's folder would have.
+func homeWithSupport(t *testing.T) (string, string) {
+	t.Helper()
+	home := t.TempDir()
+	support := filepath.Join(home, "Library", "Application Support")
+	require.NoError(t, os.MkdirAll(support, 0o755))
+	return home, filepath.Join(support, "Claude")
+}
+
+func Test_install_skips_a_claude_that_is_not_a_folder(t *testing.T) {
+	t.Parallel()
+	for _, c := range claudeNotAFolderRows() {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := homeWithSupport(t)
+			c.place(t, folder)
+			exe := &fakeExecutable{path: quarryBinary}
+
+			res, err := install(t, home, exe)
+
+			require.NoError(t, err)
+			assert.Equal(t, claudedesktop.Result{Folder: folder, Config: filepath.Join(folder, configName), Skipped: true, NotAFolder: c.notAFolder}, res)
+			assert.Zero(t, exe.calls)
+		})
+	}
+}
+
+func Test_install_treats_a_symlink_to_a_folder_as_the_desktop_folder(t *testing.T) {
+	t.Parallel()
+	home, folder := homeWithSupport(t)
+	linked := filepath.Join(filepath.Dir(folder), "RealClaude")
+	require.NoError(t, os.Mkdir(linked, 0o755))
+	require.NoError(t, os.Symlink(linked, folder))
+
+	res, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	require.NoError(t, err)
+	assert.False(t, res.Skipped)
+	assert.JSONEq(t, quarryOnlyConfig, readConfig(t, linked))
+}
+
+func Test_install_refuses_a_folder_it_cannot_check_because_a_parent_is_a_file(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, "Library"), []byte("not a folder"), 0o600))
+	exe := &fakeExecutable{path: quarryBinary}
+
+	_, err := install(t, home, exe)
+
+	folderErr, ok := errors.AsType[*claudedesktop.FolderError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, filepath.Join(home, "Library", "Application Support", "Claude"), folderErr.Path)
+	require.ErrorIs(t, err, syscall.ENOTDIR)
+	assert.Zero(t, exe.calls)
+}
+
 func Test_install_refuses_a_config_path_that_is_not_a_regular_file(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -208,7 +287,7 @@ func Test_install_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
 	}{
 		{name: "a dangling symlink", setup: func(config string) error { return os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config) }},
 		{name: "a symlink to a regular file", setup: func(config string) error {
-			target := filepath.Join(filepath.Dir(config), "real.json")
+			target := filepath.Join(filepath.Dir(config), "linked.json")
 			if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
 				return err
 			}
@@ -642,6 +721,9 @@ func Test_install_fails_without_writing_when_the_folder_cannot_be_checked(t *tes
 	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
 
 	require.ErrorIs(t, err, fs.ErrPermission)
+	folderErr, ok := errors.AsType[*claudedesktop.FolderError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, folder, folderErr.Path)
 	require.NoError(t, os.Chmod(parent, 0o755))
 	assert.Empty(t, snapshot(t, folder))
 }

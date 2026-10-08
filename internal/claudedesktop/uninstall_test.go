@@ -214,7 +214,7 @@ func Test_uninstall_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
 	}{
 		{name: "a dangling symlink", setup: func(config string) error { return os.Symlink(filepath.Join(filepath.Dir(config), "nowhere"), config) }},
 		{name: "a symlink to a config holding our entry", setup: func(config string) error {
-			target := filepath.Join(filepath.Dir(config), "real.json")
+			target := filepath.Join(filepath.Dir(config), "linked.json")
 			if err := os.WriteFile(target, []byte(quarryEntryConfig(`{"command":"quarry","args":["mcp"]}`)), 0o600); err != nil {
 				return err
 			}
@@ -277,6 +277,50 @@ func Test_uninstall_skips_a_missing_desktop_folder(t *testing.T) {
 	folder := filepath.Join(home, "Library", "Application Support", "Claude")
 	assert.Equal(t, claudedesktop.UninstallResult{Folder: folder, Config: filepath.Join(folder, configName), Skipped: true}, res)
 	assert.Empty(t, snapshot(t, home))
+}
+
+func Test_uninstall_skips_a_claude_that_is_not_a_folder(t *testing.T) {
+	t.Parallel()
+	for _, c := range claudeNotAFolderRows() {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home, folder := homeWithSupport(t)
+			c.place(t, folder)
+
+			res, err := uninstall(t, home)
+
+			require.NoError(t, err)
+			assert.Equal(t, claudedesktop.UninstallResult{Folder: folder, Config: filepath.Join(folder, configName), Skipped: true, NotAFolder: c.notAFolder}, res)
+		})
+	}
+}
+
+func Test_uninstall_treats_a_symlink_to_a_folder_as_the_desktop_folder(t *testing.T) {
+	t.Parallel()
+	home, folder := homeWithSupport(t)
+	linked := filepath.Join(filepath.Dir(folder), "RealClaude")
+	require.NoError(t, os.Mkdir(linked, 0o755))
+	require.NoError(t, os.Symlink(linked, folder))
+	writeConfig(t, linked, quarryEntryConfig(`{"command":"quarry","args":["mcp"]}`), 0o644)
+
+	res, err := uninstall(t, home)
+
+	require.NoError(t, err)
+	assert.True(t, res.Removed)
+	assert.False(t, res.Skipped)
+}
+
+func Test_uninstall_refuses_a_folder_it_cannot_check_because_a_parent_is_a_file(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, "Library"), []byte("not a folder"), 0o600))
+
+	_, err := uninstall(t, home)
+
+	folderErr, ok := errors.AsType[*claudedesktop.FolderError](err)
+	require.True(t, ok, "got %v", err)
+	assert.Equal(t, filepath.Join(home, "Library", "Application Support", "Claude"), folderErr.Path)
+	require.ErrorIs(t, err, syscall.ENOTDIR)
 }
 
 func Test_uninstall_refuses_an_empty_home_without_touching_the_working_directory(t *testing.T) {

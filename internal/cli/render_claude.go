@@ -38,8 +38,10 @@ const (
 	desktopKeptFmt    = "The quarry MCP server is already in Claude Desktop; it starts %q.\n"
 	desktopUpdatedFmt = "Updated the quarry MCP server in Claude Desktop to start %q instead of %q.\n"
 	desktopSkippedFmt = "Skipped Claude Desktop: %q does not exist.\n"
+	desktopNotFolder  = "Skipped Claude Desktop: %q is not a folder.\n"
 	desktopNoHome     = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
 		"set HOME, then run quarry claude %s again"
+	desktopFolderRefusal = "cannot check for Claude Desktop at %q (%s); check its permissions, then run quarry claude %s again"
 
 	desktopRemovedLine      = "Removed the quarry MCP server from Claude Desktop.\n"
 	desktopAbsentLine       = "The quarry MCP server is not in Claude Desktop.\n"
@@ -202,7 +204,7 @@ func uninstallDoneLead(res claudeplugin.UninstallResult) string {
 // line for what happened to the entry plus the quit line when the config changed.
 func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 	if res.Skipped {
-		return fmt.Sprintf(desktopSkippedFmt, claudePath(home, res.Folder))
+		return desktopSkipLine(home, res.Folder, res.NotAFolder)
 	}
 	started := claudePath(home, res.Command)
 	switch res.Outcome {
@@ -220,11 +222,20 @@ func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 func renderDesktopUninstalled(home string, res claudedesktop.UninstallResult) string {
 	switch {
 	case res.Skipped:
-		return fmt.Sprintf(desktopSkippedFmt, claudePath(home, res.Folder))
+		return desktopSkipLine(home, res.Folder, res.NotAFolder)
 	case res.Removed:
 		return desktopRemovedLine + desktopQuitUnloadLine
 	}
 	return desktopAbsentLine
+}
+
+// desktopSkipLine returns the line for a Claude Desktop folder quarry skipped: absent, or present as a file.
+func desktopSkipLine(home, folder string, notAFolder bool) string {
+	format := desktopSkippedFmt
+	if notAFolder {
+		format = desktopNotFolder
+	}
+	return fmt.Sprintf(format, claudePath(home, folder))
 }
 
 // reportDesktopFailure writes err's report for a failed Claude Desktop step and returns
@@ -240,8 +251,8 @@ func reportDesktopFailure(cmd *cobra.Command, verb, home string, err error) erro
 
 // desktopFailureLine returns the stderr text for a classified Claude Desktop failure, else false.
 func desktopFailureLine(verb, home string, err error) (string, bool) {
-	if errors.Is(err, claudedesktop.ErrNoHome) {
-		return fmt.Sprintf(desktopNoHome, verb), true
+	if line, ok := desktopLocateFailureLine(verb, home, err); ok {
+		return line, true
 	}
 	if line, ok := desktopBinaryFailureLine(home, err); ok {
 		return line, true
@@ -250,6 +261,17 @@ func desktopFailureLine(verb, home string, err error) (string, bool) {
 		return line, true
 	}
 	return desktopConfigFailureLine(verb, home, err)
+}
+
+// desktopLocateFailureLine classifies the failures of looking for the Claude Desktop folder.
+func desktopLocateFailureLine(verb, home string, err error) (string, bool) {
+	if errors.Is(err, claudedesktop.ErrNoHome) {
+		return fmt.Sprintf(desktopNoHome, verb), true
+	}
+	if folder, ok := errors.AsType[*claudedesktop.FolderError](err); ok {
+		return fmt.Sprintf(desktopFolderRefusal, claudePath(home, folder.Path), osreason.Reason(folder.Err), verb), true
+	}
+	return "", false
 }
 
 // desktopBinaryFailureLine classifies the failures of learning which quarry binary Desktop would start.
