@@ -18,8 +18,8 @@ Existing state read: `claude.go:35-37`, `claude_install.go:20-31`, `claude_unins
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/claude_help_test.go` (new) `Test_help_names_both_claude_targets` — table over the four commands, each asserting its ruled Long (group row reuses `claudeGroupHelp`); new package-level consts `claudeInstallLong`, `claudeUninstallLong` (moved from the bodies of `claude_install_test.go:745-765`, `claude_uninstall_test.go:540-560`) and `mcpHelpLong` (hoisted from `mcp_test.go:29-53`) hold the NEW text, each defined once.
-- [ ] Step 2: pins to the new copy — delete `Test_claude_install_help_prints_the_ruled_text` and `Test_claude_uninstall_help_prints_the_ruled_text` (now table rows); `claude_test.go:11-21` `claudeGroupHelp` (group Long, child rows `install     Install quarry in Claude Code and Claude Desktop` and `uninstall   Uninstall quarry from Claude Code and Claude Desktop`); `mcp_test.go:28-58` `Test_mcp_help_prints_the_ruled_long_text` keeps its name and uses `mcpHelpLong`; `cmd/quarry/run_status_test.go:150` root row (`"  claude      Install quarry in Claude Code and Claude Desktop, or remove it\n"+`, name column stays 12 wide). Run narrow loop: acceptance fails at its Long assertion, pins red with it.
+- [x] Step 1: `internal/cli/claude_help_test.go` (new) `Test_help_names_both_claude_targets` — table over the four commands, each asserting its ruled Long (group row reuses `claudeGroupHelp`); new package-level consts `claudeInstallLong`, `claudeUninstallLong` (moved from the bodies of `claude_install_test.go:745-765`, `claude_uninstall_test.go:540-560`) and `mcpHelpLong` (hoisted from `mcp_test.go:29-53`) hold the NEW text, each defined once.
+- [x] Step 2: pins to the new copy — delete `Test_claude_install_help_prints_the_ruled_text` and `Test_claude_uninstall_help_prints_the_ruled_text` (now table rows); `claude_test.go:11-21` `claudeGroupHelp` (group Long, child rows `install     Install quarry in Claude Code and Claude Desktop` and `uninstall   Uninstall quarry from Claude Code and Claude Desktop`); `mcp_test.go:28-58` `Test_mcp_help_prints_the_ruled_long_text` keeps its name and uses `mcpHelpLong`; `cmd/quarry/run_status_test.go:150` root row (`"  claude      Install quarry in Claude Code and Claude Desktop, or remove it\n"+`, name column stays 12 wide). Run narrow loop: acceptance fails at its Long assertion, pins red with it.
 
 ### Build
 - [ ] Step 3: `claude.go:35-37`, `claude_install.go:20-31`, `claude_uninstall.go:20-29`, `mcp.go:28-32` `Short`/`Long`/paragraph — spec §A and change 3, line breaks exactly as ruled, raw-string Longs with no trailing newline (as today). Acceptance, group-help, mcp and root-help pins green; `Test_claude_commands_agree_with_the_manifests_and_readme` still finds the two `  claude plugin ...` lines per child (check: the new Longs keep them two-space indented, one per line).
@@ -47,3 +47,15 @@ Existing state read: `claude.go:35-37`, `claude_install.go:20-31`, `claude_unins
 - Spec change 6 says "after `:266`"; today `:266` is `Encrypted at rest`, `:268` is `MCP boundary`. Insert literally after `:266`; the spec's line is the order of record. If the orchestrator meant beside the MCP bullet, rule it before B2.
 - Two tests deleted at Step 2 (install/uninstall help) were asked to be "re-asserted": they are, as table rows. `Test_mcp_help_prints_the_ruled_long_text` and `Test_claude_prints_its_group_help_on_stdout` keep their names (ticked acceptance tests of mcp-install SCENARIO-17).
 - Cobra prints `Long` then a blank line then `Usage:`; Long pins use `HasPrefix` with a trailing newline, the group pin uses `Contains` of `claudeGroupHelp`.
+
+## Phase report
+
+Run A done (steps 1-2). Start commit 7efc8c5c. Tests only; no production code touched.
+
+Files: `internal/cli/claude_help_test.go` (new: consts `claudeInstallLong`, `claudeUninstallLong`, `mcpHelpLong` at the NEW text; `Test_help_names_both_claude_targets`, 4 subtests via `runClaude` + `HasPrefix`); `claude_test.go:11-21` `claudeGroupHelp` new text; `mcp_test.go` const removed, uses `mcpHelpLong`; `claude_install_test.go` / `claude_uninstall_test.go` help tests deleted (and the unused `strings` import in uninstall); `cmd/quarry/run_status_test.go:150` root row.
+
+Red now (all at their Long/row assertions, old text printed): `Test_help_names_both_claude_targets` (4 subtests), `Test_claude_prints_its_group_help_on_stdout` (2), `Test_mcp_help_prints_the_ruled_long_text`, `Test_run_help_prints_quarrys_description`. `go vet` of both packages clean.
+
+Next (B1, step 3): edit `claude.go` (Short/Long), `claude_install.go`, `claude_uninstall.go` (Short/Long), `mcp.go:28-32` to the consts' text exactly; no trailing newline in raw-string Longs. Keep the child `Short` equal to the group-help child rows (`Install quarry in Claude Code and Claude Desktop`, `Uninstall quarry from Claude Code and Claude Desktop`).
+
+Orchestrator rulings for B2 (step 5): the PRD Security bullet (spec change 6) goes after the `MCP boundary` bullet (not literally after `:266`); no D9b copy in the install Long.

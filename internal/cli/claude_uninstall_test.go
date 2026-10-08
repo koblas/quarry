@@ -4,7 +4,6 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -534,25 +533,5 @@ func Test_claude_uninstall_refuses_arguments(t *testing.T) {
 	var usage cli.UsageError
 	require.ErrorAs(t, err, &usage)
 	assert.Equal(t, "uninstall takes no arguments; Run 'quarry claude uninstall --help' for usage.", usage.Error())
-	assert.Empty(t, tool.argv)
-}
-
-func Test_claude_uninstall_help_prints_the_ruled_text(t *testing.T) {
-	const long = `Uninstall quarry's Claude Code plugin from your user scope and remove the
-quarry marketplace. uninstall runs:
-
-  claude plugin uninstall --scope user quarry@quarry
-  claude plugin marketplace remove --scope user quarry
-
-skipping each step with nothing to remove. A copy of the plugin installed
-for a single project stays, and uninstall names each one. Your quarry
-store and snapshots are not touched.
-`
-	tool := &toolCalls{}
-
-	stdout, _, err := runClaude(t, tool, "claude", "uninstall", "--help")
-
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(stdout, long), stdout)
 	assert.Empty(t, tool.argv)
 }

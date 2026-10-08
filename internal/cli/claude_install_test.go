@@ -741,25 +741,3 @@ func Test_claude_install_refuses_arguments(t *testing.T) {
 	assert.Equal(t, "install takes no arguments; Run 'quarry claude install --help' for usage.", usage.Error())
 	assert.Empty(t, tool.argv)
 }
-
-func Test_claude_install_help_prints_the_ruled_text(t *testing.T) {
-	const long = `Install quarry's Claude Code plugin for all your projects. The plugin adds
-the quarry skill, which teaches Claude to answer from quarry, and quarry's
-MCP server. install runs:
-
-  claude plugin marketplace add --scope user koblas/quarry
-  claude plugin install --scope user quarry@quarry
-
-skipping each step that is already done, so running it again is safe.
-Claude Code downloads the plugin from github.com/koblas/quarry; quarry
-itself sends nothing and opens none of Claude Code's files. The plugin
-starts "quarry" from your PATH. Restart Claude Code to load it.
-`
-	tool := &toolCalls{}
-
-	stdout, _, err := runClaude(t, tool, "claude", "install", "--help")
-
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(stdout, long), stdout)
-	assert.Empty(t, tool.argv)
-}
