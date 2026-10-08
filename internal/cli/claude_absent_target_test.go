@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,6 +37,19 @@ func runWithDesktop(t *testing.T, tool *toolCalls, lookPath claudeplugin.LookPat
 		Executable: func() (string, error) { return desktopQuarryBinary, nil },
 	})
 	return out.String(), errOut.String(), err
+}
+
+// homeWithEmptyDesktopFolder returns a home holding an empty Claude Desktop folder.
+func homeWithEmptyDesktopFolder(t *testing.T) string {
+	t.Helper()
+	home, _ := desktopHome(t)
+	return home
+}
+
+// homeWithoutDesktop returns a home with no Claude Desktop folder.
+func homeWithoutDesktop(t *testing.T) string {
+	t.Helper()
+	return t.TempDir()
 }
 
 // homeWithClaudeAsFile returns a home whose Claude Desktop path is a regular file.
@@ -78,7 +92,7 @@ func Test_claude_skips_the_absent_target_and_handles_the_present_one(t *testing.
 	}{
 		{
 			name: "install without claude adds Claude Desktop", verb: "install", tool: &toolCalls{},
-			lookPath: findsAllBut("claude"), home: func(t *testing.T) string { h, _ := desktopHome(t); return h },
+			lookPath: findsAllBut("claude"), home: homeWithEmptyDesktopFolder,
 			want: codeSkippedLine + desktopAddedLine + desktopQuitLine,
 		},
 		{
@@ -93,13 +107,13 @@ func Test_claude_skips_the_absent_target_and_handles_the_present_one(t *testing.
 		},
 		{
 			name: "install skips a Claude Desktop folder that does not exist", verb: "install", tool: &toolCalls{},
-			home: func(t *testing.T) string { return t.TempDir() },
+			home: homeWithoutDesktop,
 			want: marketplaceAddedLine + pluginInstalledLine + installRestartLine + desktopSkippedLine,
 		},
 		{
 			name: "uninstall skips a Claude Desktop folder that does not exist", verb: "uninstall",
 			tool: (&toolCalls{}).lists(ourMarketplace, userPluginOn),
-			home: func(t *testing.T) string { return t.TempDir() },
+			home: homeWithoutDesktop,
 			want: codeUninstalledLines + desktopSkippedLine,
 		},
 	}
@@ -124,12 +138,12 @@ func Test_claude_refuses_when_neither_claude_code_nor_claude_desktop_is_present(
 	}{
 		{
 			name: "install, Claude Desktop folder missing", verb: "install",
-			home: func(t *testing.T) string { return t.TempDir() },
+			home: homeWithoutDesktop,
 			want: "quarry: claude install: " + neitherPresentHead + desktopFolderShown + " does not exist" + neitherInstallTail,
 		},
 		{
 			name: "uninstall, Claude Desktop folder missing", verb: "uninstall",
-			home: func(t *testing.T) string { return t.TempDir() },
+			home: homeWithoutDesktop,
 			want: "quarry: claude uninstall: " + neitherPresentHead + desktopFolderShown + " does not exist" + neitherUninstallTail,
 		},
 		{
@@ -210,6 +224,77 @@ func Test_claude_refuses_a_claude_desktop_it_cannot_look_for(t *testing.T) {
 			require.ErrorIs(t, err, cli.ReportedError{})
 			assert.Equal(t, c.wantStdout, stdout)
 			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
+}
+
+func Test_claude_without_claude_code_leads_with_the_skip_line_when_claude_desktop_has_nothing_to_change(t *testing.T) {
+	cases := []struct {
+		name string
+		verb string
+		home func(t *testing.T) string
+		want string
+	}{
+		{name: "install finds the entry already in place", verb: "install", home: homeWithQuarryEntry, want: codeSkippedLine + desktopKeptLine},
+		{name: "uninstall finds no entry", verb: "uninstall", home: homeWithEmptyDesktopFolder, want: codeSkippedLine + desktopAbsentLine},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runWithDesktop(t, &toolCalls{}, findsAllBut("claude"), c.home(t), c.verb)
+
+			require.NoError(t, err)
+			assert.Equal(t, c.want, stdout)
+			assert.Empty(t, stderr)
+		})
+	}
+}
+
+func Test_claude_without_claude_code_leads_with_the_skip_line_before_refusing_a_foreign_entry(t *testing.T) {
+	const configShown = `"~/Library/Application Support/Claude/` + desktopConfigName + `"`
+	cases := []struct {
+		name string
+		verb string
+		want string
+	}{
+		{name: "install", verb: "install", want: desktopForeignLine},
+		{
+			name: "uninstall", verb: "uninstall",
+			want: `quarry: claude uninstall: Claude Desktop has an MCP server named "quarry" that does not run quarry mcp, ` +
+				"so quarry leaves it alone; to remove it, delete it from " + configShown + " yourself\n",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, folder := desktopHome(t)
+			writeDesktopConfig(t, filepath.Join(folder, desktopConfigName), `{"mcpServers": {"quarry": {"command": "npx", "args": ["quarry"]}}}`)
+
+			stdout, stderr, err := runWithDesktop(t, &toolCalls{}, findsAllBut("claude"), home, c.verb)
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, codeSkippedLine, stdout)
+			assert.Equal(t, c.want, stderr)
+		})
+	}
+}
+
+func Test_claude_without_claude_code_returns_the_error_of_a_failed_skip_line_write(t *testing.T) {
+	for _, verb := range []string{"install", "uninstall"} {
+		t.Run(verb, func(t *testing.T) {
+			home, _ := desktopHome(t)
+
+			err := cli.Execute(t.Context(), []string{"claude", verb}, cli.Env{
+				Stdout:     failingWriter{err: errPipeClosed},
+				Stderr:     io.Discard,
+				RunTool:    (&toolCalls{}).run,
+				LookPath:   findsAllBut("claude"),
+				Home:       home,
+				Executable: func() (string, error) { return desktopQuarryBinary, nil },
+			})
+
+			require.ErrorIs(t, err, errPipeClosed)
+			require.NotErrorIs(t, err, cli.ReportedError{})
 		})
 	}
 }

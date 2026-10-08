@@ -178,14 +178,17 @@ type claudeNotAFolder struct {
 func claudeNotAFolderRows() []claudeNotAFolder {
 	return []claudeNotAFolder{
 		{name: "a regular file", notAFolder: true, place: func(t *testing.T, folder string) {
+			t.Helper()
 			require.NoError(t, os.WriteFile(folder, []byte("not a folder"), 0o600))
 		}},
 		{name: "a symlink to a file", notAFolder: true, place: func(t *testing.T, folder string) {
+			t.Helper()
 			target := filepath.Join(filepath.Dir(folder), "target")
 			require.NoError(t, os.WriteFile(target, []byte("not a folder"), 0o600))
 			require.NoError(t, os.Symlink(target, folder))
 		}},
 		{name: "a dangling symlink", notAFolder: false, place: func(t *testing.T, folder string) {
+			t.Helper()
 			require.NoError(t, os.Symlink(filepath.Join(filepath.Dir(folder), "gone"), folder))
 		}},
 	}

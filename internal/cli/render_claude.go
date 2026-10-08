@@ -29,7 +29,6 @@ const (
 		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again"
 	installQuarryNotOnPathWarning = `warning: the plugin starts "quarry" from your PATH, and your PATH has none; ` +
 		"add the directory holding quarry to your PATH"
-	installClaudeNotFoundRefusal = "cannot find the claude command on your PATH; install Claude Code, then run quarry claude install again"
 
 	installAddedLead = "added the quarry marketplace, but "
 
@@ -42,6 +41,14 @@ const (
 	desktopNoHome     = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
 		"set HOME, then run quarry claude %s again"
 	desktopFolderRefusal = "cannot check for Claude Desktop at %q (%s); check its permissions, then run quarry claude %s again"
+
+	codeSkippedLine = "Skipped Claude Code: no claude command on your PATH.\n"
+	// The four neither-present refusals share their head; the tail names the verb's way out.
+	neitherPresentRefusal = "found neither Claude Code (no claude command on your PATH) nor Claude Desktop (%q %s)"
+	neitherInstallTail    = "; install either one, open it once, then run quarry claude install again"
+	neitherUninstallTail  = ", so there is nothing to uninstall; if claude is installed, add it to your PATH, then run quarry claude uninstall again"
+	desktopFolderMissing  = "does not exist"
+	desktopFolderNotDir   = "is not a folder"
 
 	desktopRemovedLine      = "Removed the quarry MCP server from Claude Desktop.\n"
 	desktopAbsentLine       = "The quarry MCP server is not in Claude Desktop.\n"
@@ -88,21 +95,14 @@ const (
 	uninstallForeignRefusal = `Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub, ` +
 		"so quarry leaves it and its plugin alone; to remove them, run claude plugin uninstall quarry@quarry, " +
 		"then claude plugin marketplace remove quarry"
-	uninstallClaudeNotFoundRefusal = "cannot find the claude command on your PATH; add it to your PATH, then run quarry claude uninstall again"
 
 	uninstallRemovedLead = "uninstalled the quarry plugin, but "
 )
 
-// claudeRefusals is the copy of the two refusals whose wording depends on the verb.
-type claudeRefusals struct {
-	foreign  string // a marketplace named quarry that is not quarry's
-	notFound string // no claude command on PATH
-}
-
-// claudeRefusalCopy holds each verb's refusal copy, keyed by verb.
-var claudeRefusalCopy = map[string]claudeRefusals{
-	installCommand:   {foreign: installForeignRefusal, notFound: installClaudeNotFoundRefusal},
-	uninstallCommand: {foreign: uninstallForeignRefusal, notFound: uninstallClaudeNotFoundRefusal},
+// foreignMarketplaceRefusal holds each verb's refusal for a marketplace named quarry that is not quarry's.
+var foreignMarketplaceRefusal = map[string]string{
+	installCommand:   installForeignRefusal,
+	uninstallCommand: uninstallForeignRefusal,
 }
 
 // renderInstalled returns the stdout of a successful install: one line per step, then the
@@ -236,6 +236,30 @@ func desktopSkipLine(home, folder string, notAFolder bool) string {
 		format = desktopNotFolder
 	}
 	return fmt.Sprintf(format, claudePath(home, folder))
+}
+
+// neitherPresentLine returns the refusal for a run with no claude command on PATH and a Claude Desktop
+// folder quarry skipped: absent, or present as a file.
+func neitherPresentLine(verb, home, folder string, notAFolder bool) string {
+	reason, tail := desktopFolderMissing, neitherInstallTail
+	if notAFolder {
+		reason = desktopFolderNotDir
+	}
+	if verb == uninstallCommand {
+		tail = neitherUninstallTail
+	}
+	return fmt.Sprintf(neitherPresentRefusal, claudePath(home, folder), reason) + tail
+}
+
+// skipClaudeCode reports on stdout that there is no claude command, ahead of what Claude Desktop does.
+func skipClaudeCode(cmd *cobra.Command) error {
+	return writeResult(cmd, []byte(codeSkippedLine))
+}
+
+// refuseNeitherPresent writes the refusal for a run that found neither Claude Code nor Claude Desktop.
+func refuseNeitherPresent(cmd *cobra.Command, verb, home, folder string, notAFolder bool) error {
+	writeClaudeLine(cmd, verb, neitherPresentLine(verb, home, folder, notAFolder))
+	return ReportedError{}
 }
 
 // reportDesktopFailure writes err's report for a failed Claude Desktop step and returns
@@ -410,11 +434,7 @@ func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err 
 		return ReportedError{}
 	}
 	if errors.Is(err, claudeplugin.ErrForeignMarketplace) {
-		writeClaudeLine(cmd, verb, claudeRefusalCopy[verb].foreign)
-		return ReportedError{}
-	}
-	if errors.Is(err, claudeplugin.ErrClaudeNotFound) {
-		writeClaudeLine(cmd, verb, claudeRefusalCopy[verb].notFound)
+		writeClaudeLine(cmd, verb, foreignMarketplaceRefusal[verb])
 		return ReportedError{}
 	}
 	if start, ok := errors.AsType[*toolrun.StartError](err); ok {

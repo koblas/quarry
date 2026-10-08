@@ -242,8 +242,7 @@ func Test_claude_install_refuses_when_claude_is_not_on_the_path(t *testing.T) {
 			require.ErrorIs(t, err, cli.ReportedError{})
 			assert.Empty(t, tool.argv)
 			assert.Empty(t, stdout)
-			assert.Equal(t, "quarry: claude install: cannot find the claude command on your PATH; "+
-				"install Claude Code, then run quarry claude install again\n", stderr)
+			assert.Equal(t, "quarry: claude install: "+neitherPresentHead+desktopFolderShown+" does not exist"+neitherInstallTail, stderr)
 		})
 	}
 }

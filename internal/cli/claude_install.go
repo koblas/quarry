@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/koblas/quarry/internal/claudedesktop"
@@ -35,6 +36,9 @@ starts "quarry" from your PATH. Restart Claude Code to load it.`,
 			}
 			srv := claudeplugin.NewServer(claudeplugin.WithRunner(runTool), claudeplugin.WithLookPath(lookPath))
 			res, err := srv.Install(cmd.Context())
+			if errors.Is(err, claudeplugin.ErrClaudeNotFound) {
+				return installDesktop(cmd, home, executable, lookPath, true)
+			}
 			if err != nil {
 				return reportClaudeFailure(cmd, installCommand, home, installDoneLead(res), renderInstallDone(res), err)
 			}
@@ -47,17 +51,26 @@ starts "quarry" from your PATH. Restart Claude Code to load it.`,
 			if res.QuarryNotOnPath {
 				writeClaudeLine(cmd, installCommand, installQuarryNotOnPathWarning)
 			}
-			return installDesktop(cmd, home, executable, lookPath)
+			return installDesktop(cmd, home, executable, lookPath, false)
 		},
 	}
 }
 
 // installDesktop adds quarry's MCP server to Claude Desktop and reports the outcome on stdout, then
-// warns on stderr when the quarry on PATH is not the one Desktop will start.
-func installDesktop(cmd *cobra.Command, home string, executable claudedesktop.Executable, lookPath claudeplugin.LookPath) error {
+// warns on stderr when the quarry on PATH is not the one Desktop will start. With codeAbsent it
+// leads with the Claude Code skip line, and refuses when Desktop is skipped too.
+func installDesktop(cmd *cobra.Command, home string, executable claudedesktop.Executable, lookPath claudeplugin.LookPath, codeAbsent bool) error {
 	srv := claudedesktop.NewServer(claudedesktop.WithHome(home), claudedesktop.WithExecutable(executable),
 		claudedesktop.WithLookPath(claudedesktop.LookPath(lookPath)))
 	res, err := srv.Install(cmd.Context())
+	if err == nil && res.Skipped && codeAbsent {
+		return refuseNeitherPresent(cmd, installCommand, home, res.Folder, res.NotAFolder)
+	}
+	if codeAbsent {
+		if werr := skipClaudeCode(cmd); werr != nil {
+			return werr
+		}
+	}
 	if err != nil {
 		return reportDesktopFailure(cmd, installCommand, home, err)
 	}

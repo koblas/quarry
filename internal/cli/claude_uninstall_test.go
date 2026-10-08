@@ -283,8 +283,7 @@ func Test_claude_uninstall_refuses_when_claude_is_not_on_the_path(t *testing.T) 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Empty(t, tool.argv)
 	assert.Empty(t, stdout)
-	assert.Equal(t, "quarry: claude uninstall: cannot find the claude command on your PATH; "+
-		"add it to your PATH, then run quarry claude uninstall again\n", stderr)
+	assert.Equal(t, "quarry: claude uninstall: "+neitherPresentHead+desktopFolderShown+" does not exist"+neitherUninstallTail, stderr)
 }
 
 func Test_claude_uninstall_refuses_json(t *testing.T) {

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"errors"
+
 	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/spf13/cobra"
@@ -32,6 +34,9 @@ store and snapshots are not touched.`,
 			}
 			srv := claudeplugin.NewServer(claudeplugin.WithRunner(runTool), claudeplugin.WithLookPath(lookPath))
 			res, err := srv.Uninstall(cmd.Context())
+			if errors.Is(err, claudeplugin.ErrClaudeNotFound) {
+				return uninstallDesktop(cmd, home, true)
+			}
 			if err != nil {
 				return reportClaudeFailure(cmd, uninstallCommand, home, uninstallDoneLead(res), renderUninstallDone(res), err)
 			}
@@ -41,14 +46,23 @@ store and snapshots are not touched.`,
 			for _, hint := range uninstallRemainingHints(home, res) {
 				writeClaudeLine(cmd, uninstallCommand, hint)
 			}
-			return uninstallDesktop(cmd, home)
+			return uninstallDesktop(cmd, home, false)
 		},
 	}
 }
 
 // uninstallDesktop removes quarry's MCP server from Claude Desktop and reports the outcome on stdout.
-func uninstallDesktop(cmd *cobra.Command, home string) error {
+// With codeAbsent it leads with the Claude Code skip line, and refuses when Desktop is skipped too.
+func uninstallDesktop(cmd *cobra.Command, home string, codeAbsent bool) error {
 	res, err := claudedesktop.NewServer(claudedesktop.WithHome(home)).Uninstall(cmd.Context())
+	if err == nil && res.Skipped && codeAbsent {
+		return refuseNeitherPresent(cmd, uninstallCommand, home, res.Folder, res.NotAFolder)
+	}
+	if codeAbsent {
+		if werr := skipClaudeCode(cmd); werr != nil {
+			return werr
+		}
+	}
 	if err != nil {
 		return reportDesktopFailure(cmd, uninstallCommand, home, err)
 	}
