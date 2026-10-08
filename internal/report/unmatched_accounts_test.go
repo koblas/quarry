@@ -27,22 +27,6 @@ func Test_findings_keeps_a_repeated_unmatched_id_once_per_listing(t *testing.T) 
 	assert.Equal(t, []string{"acct-99", "acct-99"}, got.UnmatchedAccounts.Registered)
 }
 
-func Test_findings_does_not_name_a_listed_id_whose_account_is_not_an_investment_account(t *testing.T) {
-	c := report.Classification{Registered: []string{"acct-1"}}
-
-	got := accountsFindings(t, report.FindingsRequest{Classification: c}, []store.Account{{ID: "acct-1", Type: "checking"}})
-
-	assert.Empty(t, got.UnmatchedAccounts.Registered)
-}
-
-func Test_findings_does_not_name_a_listed_id_whose_account_is_closed(t *testing.T) {
-	c := report.Classification{NonRegistered: []string{"acct-1"}}
-
-	got := accountsFindings(t, report.FindingsRequest{Classification: c}, []store.Account{{ID: "acct-1", Type: store.AccountTypeBrokerage, Closed: true}})
-
-	assert.Empty(t, got.UnmatchedAccounts.NonRegistered)
-}
-
 func Test_findings_names_an_unmatched_id_whatever_type_it_selects(t *testing.T) {
 	c := report.Classification{Registered: []string{"acct-99"}}
 
@@ -86,4 +70,32 @@ func Test_accounts_names_an_unmatched_id_with_closed_accounts_included(t *testin
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"acct-99"}, got.UnmatchedAccounts.Registered)
+}
+
+func Test_findings_does_not_name_a_listed_id_that_needs_no_classification(t *testing.T) {
+	cases := []struct {
+		name           string
+		classification report.Classification
+		account        store.Account
+	}{
+		{
+			name:           "whose account is not an investment account",
+			classification: report.Classification{Registered: []string{"acct-1"}},
+			account:        store.Account{ID: "acct-1", Type: "checking"},
+		},
+		{
+			name:           "whose account is closed",
+			classification: report.Classification{NonRegistered: []string{"acct-1"}},
+			account:        store.Account{ID: "acct-1", Type: store.AccountTypeBrokerage, Closed: true},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := accountsFindings(t, report.FindingsRequest{Classification: c.classification}, []store.Account{c.account})
+
+			assert.Empty(t, got.UnmatchedAccounts.Registered)
+			assert.Empty(t, got.UnmatchedAccounts.NonRegistered)
+		})
+	}
 }

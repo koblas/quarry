@@ -1,7 +1,6 @@
 package mcp_test
 
 import (
-	"encoding/json"
 	"strconv"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,28 +21,13 @@ const (
 	anomaliesFutureSince = "since 2099 is after today; anomalies lists charges up to today only, so pass an earlier since"
 )
 
-// anomaliesToday is the instant the window tests fix, so the default since is 2026-01-01.
-var anomaliesToday = time.Date(2026, time.September, 30, 12, 0, 0, 0, time.UTC)
-
-// decodeAnomalies is result's one text block decoded as the anomalies document.
-func decodeAnomalies(t *testing.T, result *sdk.CallToolResult) document.Anomalies {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.Anomalies
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
-}
-
 func Test_anomalies_reads_today_once_at_the_start_of_every_call(t *testing.T) {
 	fake := &fakeStore{}
-	clock := &steppingClock{times: []time.Time{
-		time.Date(2026, time.September, 29, 23, 59, 0, 0, time.UTC),
-		time.Date(2026, time.September, 30, 0, 1, 0, 0, time.UTC),
-	}}
+	clock := newMidnightClock()
 	h := newHarness(t, fake, nil, mcp.WithClock(clock.now))
 
-	first := decodeAnomalies(t, h.anomalies(t, map[string]any{}))
-	second := decodeAnomalies(t, h.anomalies(t, map[string]any{}))
+	first := decodeDoc[document.Anomalies](t, h.anomalies(t, map[string]any{}))
+	second := decodeDoc[document.Anomalies](t, h.anomalies(t, map[string]any{}))
 
 	assert.Equal(t, "2026-09-29", first.Until)
 	assert.Equal(t, "2026-09-30", second.Until)
@@ -57,9 +40,9 @@ func Test_anomalies_reads_today_once_at_the_start_of_every_call(t *testing.T) {
 
 func Test_anomalies_does_not_refuse_a_future_until_and_still_reads_charges_through_today(t *testing.T) {
 	fake := &fakeStore{}
-	h := newHarness(t, fake, nil, mcp.WithClock(func() time.Time { return anomaliesToday }))
+	h := newHarness(t, fake, nil, atInstant(windowToday))
 
-	doc := decodeAnomalies(t, h.anomalies(t, map[string]any{"until": "2099"}))
+	doc := decodeDoc[document.Anomalies](t, h.anomalies(t, map[string]any{"until": "2099"}))
 
 	assert.Equal(t, "2099-12-31", doc.Until)
 	assert.Equal(t, []time.Time{time.Date(2026, time.September, 30, 0, 0, 0, 0, time.UTC)}, fake.through)
@@ -93,7 +76,7 @@ func Test_anomalies_refuses_a_window_it_cannot_read_with_the_class_line_before_t
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			stub := &configStub{}
-			h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), mcp.WithClock(func() time.Time { return anomaliesToday }))
+			h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load), atInstant(windowToday))
 
 			result := h.anomalies(t, c.arguments)
 
@@ -104,67 +87,6 @@ func Test_anomalies_refuses_a_window_it_cannot_read_with_the_class_line_before_t
 			assert.Equal(t, anomaliesLogPrefix+windowRefusedLine+"\n", h.stderr.String())
 		})
 	}
-}
-
-func Test_anomalies_refuses_an_unreadable_config_before_building_the_report(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, errFactoryBroke, mcp.WithConfig(stub.load))
-
-	result := h.anomalies(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errBadConfig.Error(), textOf(t, result))
-	assert.Zero(t, h.built)
-	assert.Equal(t, anomaliesLogPrefix+anomaliesConfigLog+"\n", h.stderr.String())
-}
-
-func Test_anomalies_does_not_read_the_config_when_the_call_names_a_currency(t *testing.T) {
-	stub := &configStub{err: errBadConfig}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
-
-	doc := decodeAnomalies(t, h.anomalies(t, map[string]any{"currency": "USD"}))
-
-	assert.Equal(t, "USD", doc.Currency)
-	assert.Empty(t, stub.commands)
-}
-
-func Test_anomalies_reads_the_config_as_the_mcp_command_when_the_call_names_no_currency(t *testing.T) {
-	stub := &configStub{}
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig(stub.load))
-
-	decodeAnomalies(t, h.anomalies(t, map[string]any{}))
-
-	assert.Equal(t, []string{"mcp"}, stub.commands)
-}
-
-func Test_anomalies_answers_a_report_factory_failure_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, errFactoryBroke)
-
-	result := h.anomalies(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errFactoryBroke.Error(), textOf(t, result))
-	assert.Equal(t, anomaliesLogPrefix+failedLogLine+"\n", h.stderr.String())
-}
-
-func Test_anomalies_sends_a_store_refusal_verbatim_to_the_client_and_stderr(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: &store.OpenError{Fault: store.OpenFaultMissing, Path: testStorePath}}, nil)
-
-	result := h.anomalies(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, missingStoreLine, textOf(t, result))
-	assert.Equal(t, anomaliesLogPrefix+missingStoreLine+"\n", h.stderr.String())
-}
-
-func Test_anomalies_answers_a_plain_store_fault_with_the_generic_log_line(t *testing.T) {
-	h := newHarness(t, &fakeStore{err: errDiskOnFire}, nil)
-
-	result := h.anomalies(t, map[string]any{})
-
-	assert.True(t, result.IsError)
-	assert.Equal(t, errDiskOnFire.Error(), textOf(t, result))
-	assert.Equal(t, anomaliesLogPrefix+failedLogLine+"\n", h.stderr.String())
 }
 
 func Test_anomalies_refuses_arguments_the_schema_rejects_without_reading_the_config_or_the_store(t *testing.T) {
@@ -197,9 +119,9 @@ func Test_anomalies_cuts_charges_to_the_cap_and_ends_the_warnings_with_the_line(
 	charges := unusualCharges(payees)
 	charges.FirstRate = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	inUSD(charges.Rows, payeeNamed(payees-1))
-	h := newHarness(t, &fakeStore{charges: charges}, nil, mcp.WithConfig(stub.load), mcp.WithClock(func() time.Time { return anomaliesToday }))
+	h := newHarness(t, &fakeStore{charges: charges}, nil, mcp.WithConfig(stub.load), atInstant(windowToday))
 
-	doc := decodeAnomalies(t, h.anomalies(t, map[string]any{}))
+	doc := decodeDoc[document.Anomalies](t, h.anomalies(t, map[string]any{}))
 
 	assert.Len(t, doc.Anomalies, 500)
 	assert.Equal(t, payees*(report.AnomalyPayeeMinHistory+1), doc.Checked)

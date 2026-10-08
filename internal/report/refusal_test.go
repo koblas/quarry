@@ -14,11 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	refusalHome = "/Users/dave"
-	storePath   = "/Users/dave/Library/Application Support/quarry/quarry.duckdb"
-)
-
 func Test_status_refuses_with_the_store_refusal_copy(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -28,7 +23,7 @@ func Test_status_refuses_with_the_store_refusal_copy(t *testing.T) {
 		{
 			name:    "no store",
 			openErr: &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath, Err: fs.ErrNotExist},
-			want:    "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it",
+			want:    missingStoreRefusal,
 		},
 		{
 			name: "another format, naming its snapshot",
@@ -174,7 +169,7 @@ func Test_query_refuses_with_the_store_refusal_copy(t *testing.T) {
 
 	_, err := srv.Query(t.Context(), "SELECT 1", 500)
 
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
+	assert.EqualError(t, err, missingStoreRefusal)
 }
 
 func Test_a_store_refusal_unwraps_to_the_store_error(t *testing.T) {

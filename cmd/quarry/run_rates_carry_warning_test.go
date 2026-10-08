@@ -42,8 +42,7 @@ func ratesWarningFor(reason string) string {
 func Test_run_sync_from_warns_and_fetches_every_rate_again_when_the_previous_fx_rates_table_is_unreadable(t *testing.T) {
 	for _, c := range unreadableRatesTables {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			id, _ := syncThenWrite(t, home)
 			editStore(t, home, c.ddl)
 
@@ -59,8 +58,7 @@ func Test_run_sync_from_warns_and_fetches_every_rate_again_when_the_previous_fx_
 func Test_run_sync_from_json_lists_the_rates_warning_and_counts_every_rate_as_added_when_the_previous_fx_rates_table_is_unreadable(t *testing.T) {
 	for _, c := range unreadableRatesTables {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			id, _ := syncThenWrite(t, home)
 			editStore(t, home, c.ddl)
 
@@ -82,8 +80,7 @@ func Test_run_sync_from_json_lists_the_rates_warning_and_counts_every_rate_as_ad
 }
 
 func Test_run_sync_from_is_silent_when_the_previous_store_has_no_fx_rates_table(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, _ := syncThenWrite(t, home)
 	editStore(t, home, noRatesTable)
 
@@ -95,8 +92,7 @@ func Test_run_sync_from_is_silent_when_the_previous_store_has_no_fx_rates_table(
 }
 
 func Test_run_sync_from_json_lists_no_warning_when_the_previous_store_has_no_fx_rates_table(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	id, _ := syncThenWrite(t, home)
 	editStore(t, home, noRatesTable)
 
@@ -108,8 +104,7 @@ func Test_run_sync_from_json_lists_no_warning_when_the_previous_store_has_no_fx_
 }
 
 func Test_run_sync_prints_the_history_findings_and_rates_warnings_in_that_order(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, _, stderr := syncWithFaultedFindings(t, home, func(id string) string {
 		return findingsTableRepeating(id) + ";" + importRunsIDTooLarge + ";" + repeatedRatesTable
@@ -120,8 +115,7 @@ func Test_run_sync_prints_the_history_findings_and_rates_warnings_in_that_order(
 }
 
 func Test_run_sync_json_lists_the_history_findings_and_rates_warnings_in_that_order(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	exitCode, stdout, stderr := syncWithFaultedFindings(t, home, func(id string) string {
 		return findingsTableRepeating(id) + ";" + importRunsIDTooLarge + ";" + repeatedRatesTable

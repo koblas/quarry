@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var netWorthDay = time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+var netWorthDay = utcDay(2026, time.March, 12)
 
 // netWorthIn is a snapshot of rows in currency with the totals given.
 func netWorthIn(currency money.Currency, totals []report.NetWorthTotal, rows ...store.NetWorthRow) report.NetWorth {
@@ -124,7 +124,7 @@ func Test_renderNetWorth_has_a_caption_and_header_only_when_there_are_no_rows_an
 	}
 }
 
-var netWorthWindow = store.Window{Since: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), Until: netWorthDay}
+var netWorthWindow = store.Window{Since: utcDay(2026, time.January, 1), Until: netWorthDay}
 
 // netWorthHistoryOf is a history in currency over the days given.
 func netWorthHistoryOf(currency money.Currency, dates ...report.NetWorthDate) report.NetWorth {
@@ -132,7 +132,7 @@ func netWorthHistoryOf(currency money.Currency, dates ...report.NetWorthDate) re
 }
 
 func monthEndOf(year int, month time.Month, day int, totals []report.NetWorthTotal, rows ...store.NetWorthRow) report.NetWorthDate {
-	return report.NetWorthDate{Date: time.Date(year, month, day, 0, 0, 0, 0, time.UTC), Rows: rows, Totals: totals}
+	return report.NetWorthDate{Date: utcDay(year, month, day), Rows: rows, Totals: totals}
 }
 
 func cadTotal(cents int64) []report.NetWorthTotal {

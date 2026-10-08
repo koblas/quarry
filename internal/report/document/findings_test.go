@@ -127,9 +127,63 @@ func Test_NewFindingEntry_gives_a_stored_finding_its_first_found_time(t *testing
 	assert.Equal(t, "2026-09-01T08:30:00Z", *got.FirstFoundAt)
 }
 
-func mustJSON(t *testing.T, v any) []byte {
-	t.Helper()
-	data, err := json.Marshal(v)
+func Test_NewFindingEntry_encodes_shares_without_cost_with_its_date_account_and_investment_keys(t *testing.T) {
+	listed := report.ListedFinding{
+		Status: finding.StatusOpen,
+		ID:     "shares-without-cost:itxn-7", Type: finding.SharesWithoutCost,
+		Items: []store.FindingItem{{
+			Date: time.Date(2016, time.March, 1, 0, 0, 0, 0, time.UTC), AccountID: "acct-3", Account: "Questrade Margin", Currency: "CAD",
+			InvestmentTransactionID: new("itxn-7"), SecurityID: new("sec-4"), Security: "XEQT", Shares: 100_000_000,
+		}},
+	}
+
+	data, err := json.Marshal(document.NewFindingEntry(listed))
+
 	require.NoError(t, err)
-	return data
+	assert.JSONEq(t, `{
+		"id": "shares-without-cost:itxn-7", "type": "shares-without-cost", "status": "open",
+		"first_found_at": null, "fixed_at": null, "fix": `+string(mustJSON(t, finding.SharesWithoutCost.Fix().Sentence))+`,
+		"items": [{
+			"transaction_id": null, "split_id": null, "payee_id": null, "category_id": null, "date": "2016-03-01",
+			"account_id": "acct-3", "account": "Questrade Margin", "currency": "CAD", "payee": null, "category": null,
+			"amount": null, "other_account": null, "other_account_id": null, "transactions": null, "splits": null,
+			"investment_transaction_id": "itxn-7", "security_id": "sec-4", "security": "XEQT", "shares": "100.000000"
+		}]
+	}`, string(data))
+}
+
+func Test_UnmatchedAccountWarnings_names_the_config_and_the_list_of_each_id_registered_first(t *testing.T) {
+	got := document.UnmatchedAccountWarnings(configShown, report.UnmatchedAccounts{
+		Registered: []string{"acct-99"}, NonRegistered: []string{"acct-98"},
+	})
+
+	assert.Equal(t, []string{
+		`~/config.toml: accounts.registered lists "acct-99", which is not an account in quarry's store; quarry skips it`,
+		`~/config.toml: accounts.non-registered lists "acct-98", which is not an account in quarry's store; quarry skips it`,
+	}, got)
+}
+
+func Test_UnmatchedAccountWarnings_masks_an_account_number_before_quoting_it(t *testing.T) {
+	got := document.UnmatchedAccountWarnings(configShown, report.UnmatchedAccounts{NonRegistered: []string{"12345678"}})
+
+	assert.Equal(t, []string{`~/config.toml: accounts.non-registered lists "****5678", which is not an account in quarry's store; quarry skips it`}, got)
+}
+
+func Test_UnmatchedAccountWarnings_escapes_an_id_holding_a_quote(t *testing.T) {
+	got := document.UnmatchedAccountWarnings(configShown, report.UnmatchedAccounts{Registered: []string{`a"b`}})
+
+	assert.Equal(t, []string{`~/config.toml: accounts.registered lists "a\"b", which is not an account in quarry's store; quarry skips it`}, got)
+}
+
+func Test_UnmatchedAccountWarnings_repeats_a_repeated_id(t *testing.T) {
+	got := document.UnmatchedAccountWarnings(configShown, report.UnmatchedAccounts{Registered: []string{"acct-99", "acct-99"}})
+
+	assert.Len(t, got, 2)
+}
+
+func Test_UnmatchedAccountWarnings_is_an_empty_list_not_nil_when_nothing_is_unmatched(t *testing.T) {
+	got := document.UnmatchedAccountWarnings(configShown, report.UnmatchedAccounts{})
+
+	assert.NotNil(t, got)
+	assert.Empty(t, got)
 }

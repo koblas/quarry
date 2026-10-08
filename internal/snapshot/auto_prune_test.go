@@ -2,9 +2,11 @@ package snapshot_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
@@ -15,41 +17,6 @@ import (
 )
 
 const interruptedPruneLine = "sync interrupted while deleting old snapshots; the store was rebuilt; run quarry snapshots prune to finish"
-
-// oldIDs returns n snapshot IDs from the year 2000, oldest first: older than any ID SyncAndImport mints.
-func oldIDs(n int) []string {
-	ids := make([]string, n)
-	for i := range ids {
-		ids[i] = fmt.Sprintf("2000%02d01T000000Z", i+1)
-	}
-	return ids
-}
-
-// futureIDs returns two snapshot IDs newer than any ID SyncAndImport mints, oldest first.
-func futureIDs() []string { return []string{"20990101T000000Z", "20990201T000000Z"} }
-
-// builtStore is the Importer result of a store that was built.
-func builtStore() *fakeImporter { return &fakeImporter{result: store.Result{Built: true}} }
-
-// syncBundle runs SyncAndImport over a fresh fixture bundle.
-func syncBundle(t *testing.T, srv *snapshot.Server) (snapshot.Outcome, error) {
-	t.Helper()
-	return srv.SyncAndImport(t.Context(), v9fixture.OpenBundle(t, t.TempDir()).Dir)
-}
-
-// assertSnapshotPairs asserts each id's .sqlite and .json in dir exist (want) or are gone (!want).
-func assertSnapshotPairs(t *testing.T, dir string, want bool, ids ...string) {
-	t.Helper()
-	for _, id := range ids {
-		for _, ext := range []string{".sqlite", ".json"} {
-			if want {
-				assert.FileExists(t, filepath.Join(dir, id+ext))
-			} else {
-				assert.NoFileExists(t, filepath.Join(dir, id+ext))
-			}
-		}
-	}
-}
 
 // presenceImporter records, during Import, whether each of paths still exists.
 type presenceImporter struct {
@@ -482,4 +449,248 @@ func Test_sync_and_import_completes_normally_when_the_signal_lands_on_the_last_s
 	assert.Equal(t, []string{ids[0]}, doomedIDs(outcome.Pruned.Deleted))
 	assert.Zero(t, outcome.Pruned.NotDeleted)
 	assert.FileExists(t, filepath.Join(dir, ids[1]+".json"))
+}
+
+func Test_sync_and_import_warns_about_each_snapshot_it_could_not_delete_and_succeeds(t *testing.T) {
+	t.Parallel()
+	ids := oldIDs(3)
+	cases := []struct {
+		name        string
+		failing     []string
+		wantDeleted []string
+		wantFailed  []string
+	}{
+		{"one of two fails", []string{ids[1] + ".sqlite"}, []string{ids[0]}, []string{ids[1]}},
+		{"both fail, newest first", []string{ids[0] + ".sqlite", ids[1] + ".sqlite"}, []string{}, []string{ids[1], ids[0]}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			dir := prunable(t, home, ids...)
+			srv := newImportServer(t, home, builtStore(),
+				snapshot.WithAutoPrune(2), snapshot.WithRemove(failingRemover(syscall.EACCES, c.failing...).remove))
+
+			outcome, err := syncBundle(t, srv)
+
+			require.NoError(t, err)
+			require.NotNil(t, outcome.Pruned)
+			assert.Equal(t, c.wantDeleted, doomedIDs(outcome.Pruned.Deleted))
+			require.Len(t, outcome.Pruned.Failed, len(c.wantFailed))
+			var wantWarnings []string
+			for i, id := range c.wantFailed {
+				assert.Equal(t, id, outcome.Pruned.Failed[i].Entry.ID)
+				assert.Equal(t, "permission denied", outcome.Pruned.Failed[i].Reason)
+				wantWarnings = append(wantWarnings, deleteFailureLine(id, "permission denied"))
+			}
+			assert.Equal(t, wantWarnings, outcome.Warnings())
+			assertSnapshotPairs(t, dir, true, c.wantFailed...)
+		})
+	}
+}
+
+func Test_outcome_lists_prune_warnings_after_the_carry_warnings(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		result store.Result
+		carry  []string
+	}{
+		{
+			name:   "the history warning",
+			result: store.Result{Built: true, StoreUnreadable: true, HistoryFault: &store.OpenError{Fault: store.OpenFaultNotDuckDB}},
+			carry:  []string{combinedCarryLine("the file is not a DuckDB database")},
+		},
+		{
+			name: "the findings warning",
+			result: store.Result{Built: true, FindingsFault: &store.OpenError{
+				Fault: store.OpenFaultOther, Reason: "its findings table is incomplete",
+			}},
+			carry: []string{findingsRestartLine("its findings table is incomplete")},
+		},
+		{
+			name: "the history, findings and rates warnings",
+			result: store.Result{
+				Built:         true,
+				HistoryFault:  &store.OpenError{Fault: store.OpenFaultOther, Reason: "its import_runs table is incomplete"},
+				FindingsFault: &store.OpenError{Fault: store.OpenFaultOther, Reason: "its findings table repeats an id"},
+				RatesFault:    &store.OpenError{Fault: store.OpenFaultOther, Reason: "its fx_rates table repeats a date"},
+			},
+			carry: []string{
+				historyRestartLine("its import_runs table is incomplete"),
+				findingsRestartLine("its findings table repeats an id"),
+				ratesRestartLine("its fx_rates table repeats a date"),
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			ids := oldIDs(2)
+			prunable(t, home, ids...)
+			srv := newImportServer(t, home, &fakeImporter{result: c.result},
+				snapshot.WithAutoPrune(1), snapshot.WithRemove(failingRemover(syscall.EACCES, ids[0]+".sqlite").remove))
+
+			outcome, err := syncBundle(t, srv)
+
+			require.NoError(t, err)
+			want := append(slices.Clone(c.carry), deleteFailureLine(ids[0], "permission denied"))
+			assert.Equal(t, want, outcome.Warnings())
+			assert.Equal(t, want, outcome.WarningsAbsolute())
+		})
+	}
+}
+
+func Test_outcome_adds_no_prune_warning_for_a_store_that_was_not_built(t *testing.T) {
+	t.Parallel()
+	failed := []snapshot.PruneFailure{{Entry: snapshot.Entry{ID: idOldest}, Reason: "permission denied"}}
+	built := snapshot.Outcome{Store: &store.Result{Built: true}, Pruned: &snapshot.Pruned{Failed: failed}}
+	unbuilt := snapshot.Outcome{Store: &store.Result{}, Pruned: &snapshot.Pruned{Failed: failed}}
+
+	assert.Equal(t, []string{deleteFailureLine(idOldest, "permission denied")}, built.Warnings())
+	assert.Empty(t, unbuilt.Warnings())
+}
+
+// importFromUnlistableFolder rebuilds the store from a snapshot kept outside the snapshots folder,
+// which can be opened but not listed.
+func importFromUnlistableFolder(t *testing.T, home string) (snapshot.Outcome, string) {
+	t.Helper()
+	skipUnderRoot(t)
+	srv := newImportServer(t, home, builtStore(), snapshot.WithAutoPrune(2))
+	taken := takeSnapshot(t, srv)
+	dir := filepath.Join(home, "snapshots")
+	kept := filepath.Join(home, "kept", filepath.Base(taken.Snapshot.Path))
+	require.NoError(t, os.MkdirAll(filepath.Dir(kept), 0o700))
+	for _, pair := range [][2]string{{taken.Snapshot.Path, kept}, {taken.Snapshot.Manifest, strings.TrimSuffix(kept, ".sqlite") + ".json"}} {
+		require.NoError(t, os.Link(pair[0], pair[1]))
+	}
+	restrictMode(t, dir, 0o300)
+
+	outcome, err := srv.ImportFrom(t.Context(), kept)
+
+	require.NoError(t, err)
+	return outcome, dir
+}
+
+func Test_import_from_warns_when_the_snapshots_folder_cannot_be_listed(t *testing.T) {
+	t.Parallel()
+	outcome, dir := importFromUnlistableFolder(t, t.TempDir())
+
+	require.NotNil(t, outcome.Pruned)
+	assert.Equal(t, 2, outcome.Pruned.Keep)
+	assert.Equal(t, dir, outcome.Pruned.Dir)
+	assert.Empty(t, outcome.Pruned.Deleted)
+	assert.Empty(t, outcome.Pruned.Failed)
+	assert.Equal(t, []string{"cannot list ~/snapshots to delete old snapshots: permission denied; run quarry snapshots prune to try again"},
+		outcome.Warnings())
+}
+
+func Test_outcome_names_the_unlistable_folder_by_its_absolute_path_in_the_absolute_warnings(t *testing.T) {
+	t.Parallel()
+	outcome, dir := importFromUnlistableFolder(t, t.TempDir())
+
+	assert.Equal(t, []string{"cannot list " + dir + " to delete old snapshots: permission denied; run quarry snapshots prune to try again"},
+		outcome.WarningsAbsolute())
+}
+
+func Test_outcome_absolute_warnings_match_the_warnings_when_no_folder_could_not_be_listed(t *testing.T) {
+	t.Parallel()
+	failed := []snapshot.PruneFailure{{Entry: snapshot.Entry{ID: idOldest}, Reason: "permission denied"}}
+	outcome := snapshot.Outcome{Store: &store.Result{Built: true}, Pruned: &snapshot.Pruned{Failed: failed}}
+
+	assert.Equal(t, outcome.Warnings(), outcome.WarningsAbsolute())
+}
+
+func Test_sync_and_import_neither_counts_nor_warns_about_a_snapshot_already_gone(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	ids := oldIDs(2)
+	dir := prunable(t, home, ids...)
+	srv := newImportServer(t, home, builtStore(),
+		snapshot.WithAutoPrune(1), snapshot.WithRemove(failingRemover(syscall.ENOENT, ids[1]+".sqlite").remove))
+
+	outcome, err := syncBundle(t, srv)
+
+	require.NoError(t, err)
+	require.NotNil(t, outcome.Pruned)
+	assert.Equal(t, []string{ids[0]}, doomedIDs(outcome.Pruned.Deleted))
+	assert.Empty(t, outcome.Pruned.Failed)
+	assert.Empty(t, outcome.Warnings())
+	assert.NoFileExists(t, filepath.Join(dir, ids[1]+".json"))
+}
+
+func Test_sync_and_import_says_nothing_when_a_manifest_or_orphan_cannot_be_removed(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	ids := oldIDs(2)
+	dir := prunable(t, home, ids[0])
+	writeManifest(t, dir, ids[1], manifestTaken("2000-02-01T00:00:00Z"))
+	rm := failingRemover(syscall.EACCES, ids[0]+".json", ids[1]+".json")
+	srv := newImportServer(t, home, builtStore(), snapshot.WithAutoPrune(1), snapshot.WithRemove(rm.remove))
+
+	outcome, err := syncBundle(t, srv)
+
+	require.NoError(t, err)
+	require.NotNil(t, outcome.Pruned)
+	assert.Equal(t, []string{ids[0]}, doomedIDs(outcome.Pruned.Deleted))
+	assert.Empty(t, outcome.Pruned.Failed)
+	assert.Empty(t, outcome.Warnings())
+	assert.Contains(t, rm.calls, ids[1]+".json")
+	assert.NoFileExists(t, filepath.Join(dir, ids[0]+".sqlite"))
+}
+
+// reshapingImporter is an Importer fake that replaces the snapshot it was asked to import: reshape gets its
+// path and leaves whatever should stand there.
+type reshapingImporter struct {
+	reshape func(path string) error
+}
+
+func (r *reshapingImporter) Import(_ context.Context, snap store.SnapshotRef) (store.Result, error) {
+	return store.Result{Built: true}, r.reshape(snap.Path)
+}
+
+// replaceWithSelfLink makes path a symlink to itself: stat fails with ELOOP, and the folder scan skips it as a link.
+func replaceWithSelfLink(path string) error {
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	return os.Symlink(path, path)
+}
+
+func Test_sync_and_import_prunes_nothing_when_the_recorded_snapshot_cannot_be_read(t *testing.T) {
+	t.Parallel()
+	fake := &reshapingImporter{reshape: replaceWithSelfLink}
+
+	got := syncBesideOldSnapshots(t, fake, v9fixture.OpenBundle)
+
+	require.NoError(t, got.err)
+	require.NotNil(t, got.outcome.Pruned)
+	assert.Equal(t, 1, got.outcome.Pruned.Keep)
+	assert.Equal(t, 3, got.outcome.Pruned.Snapshots)
+	assert.Empty(t, got.outcome.Pruned.Deleted)
+	assert.Empty(t, got.outcome.Pruned.Failed)
+	assert.Empty(t, got.rm.calls)
+	assertSnapshotPairs(t, got.dir, true, got.ids...)
+	assert.FileExists(t, filepath.Join(got.dir, oldIDs(4)[3]+".json"))
+	assert.Empty(t, got.outcome.Warnings())
+	assert.Empty(t, got.outcome.WarningsAbsolute())
+}
+
+func Test_sync_and_import_prunes_beyond_the_newest_and_sweeps_orphans_when_the_recorded_snapshot_is_gone(t *testing.T) {
+	t.Parallel()
+	fake := &reshapingImporter{reshape: os.Remove}
+
+	got := syncBesideOldSnapshots(t, fake, v9fixture.OpenBundle)
+
+	require.NoError(t, got.err)
+	require.NotNil(t, got.outcome.Pruned)
+	assert.Equal(t, 1, got.outcome.Pruned.Snapshots)
+	assert.Equal(t, []string{got.ids[1], got.ids[0]}, doomedIDs(got.outcome.Pruned.Deleted))
+	assertSnapshotPairs(t, got.dir, false, got.ids[0], got.ids[1])
+	assertSnapshotPairs(t, got.dir, true, got.ids[2])
+	assert.NoFileExists(t, filepath.Join(got.dir, oldIDs(4)[3]+".json"))
+	assert.Empty(t, got.outcome.Warnings())
+	assert.Empty(t, got.outcome.WarningsAbsolute())
 }

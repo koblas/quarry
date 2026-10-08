@@ -1,55 +1,13 @@
 package duckstore_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/duckdb"
-	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// similarCat is a category with how many splits use it, in acct-1 unless account is set; an empty kind is expense.
-type similarCat struct {
-	path    string
-	kind    string
-	hidden  bool
-	splits  int
-	account string
-}
-
-// similarRows is rows whose categories are cat-1.. in argument order, each with its splits.
-func similarRows(cats ...similarCat) store.Rows {
-	rows := mixedRows()
-	rows.Categories = nil
-	source := int64(0)
-	for i, c := range cats {
-		id := fmt.Sprintf("cat-%d", i+1)
-		kind := c.kind
-		if kind == "" {
-			kind = "expense"
-		}
-		account := c.account
-		if account == "" {
-			account = "acct-1"
-		}
-		rows.Categories = append(rows.Categories, store.Category{ID: id, SourceID: int64(i + 1), Name: c.path, FullPath: c.path, Kind: kind, Hidden: c.hidden})
-		for range c.splits {
-			source++
-			txn := fmt.Sprintf("txn-%d", source)
-			rows.Transactions = append(rows.Transactions, store.Transaction{
-				ID: txn, SourceID: source, AccountID: account, Date: day(2026, 1, int(source)),
-				Amount: -1000 * source, Currency: "CAD", Status: "uncleared",
-			})
-			rows.Splits = append(rows.Splits, store.Split{
-				ID: fmt.Sprintf("split-%d", source), SourceID: source, TransactionID: txn, CategoryID: new(id), Amount: -1000 * source,
-			})
-		}
-	}
-	return rows
-}
 
 // similarStore builds a store from similarRows and returns its read connection.
 func similarStore(t *testing.T, cats ...similarCat) *duckdb.DB {

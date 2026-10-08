@@ -5,7 +5,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,9 +15,11 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/platform/duckdb"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/koblas/quarry/internal/store/duckstore"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -224,4 +228,236 @@ func cashFlowRows(accounts []store.Account, splits ...spendSplit) store.Rows {
 	rows.Categories = append(rows.Categories,
 		store.Category{ID: "cat-salary", SourceID: 3, Name: "Salary", FullPath: "Income:Salary", Kind: "income"})
 	return rows
+}
+
+const mcpTestDeadline = 30 * time.Second
+
+// mcpPeer is a quarry mcp running in-process with an MCP client connected to it over pipes.
+type mcpPeer struct {
+	session        *sdk.ClientSession
+	exit           <-chan int
+	stdout, stderr *bytes.Buffer
+}
+
+// startMCP runs quarry mcp over pipes, lets tweak adjust its Env, and connects a client.
+func startMCP(ctx context.Context, t *testing.T, tweak func(*cli.Env)) *mcpPeer {
+	t.Helper()
+	serverStdin, toServer := io.Pipe()
+	serverStdout, fromServer := io.Pipe()
+	peer := &mcpPeer{stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}
+	exit := make(chan int, 1)
+	peer.exit = exit
+	go func() {
+		env := testEnv(io.MultiWriter(fromServer, peer.stdout), peer.stderr)
+		env.Stdin = serverStdin
+		tweak(&env)
+		exit <- runWith(ctx, []string{"mcp"}, env)
+		_ = fromServer.Close()
+	}()
+
+	client := sdk.NewClient(&sdk.Implementation{Name: "test-client", Version: "v0.0.0"}, nil)
+	session, err := client.Connect(ctx, &sdk.IOTransport{Reader: serverStdout, Writer: toServer}, nil)
+	require.NoError(t, err)
+	peer.session = session
+	return peer
+}
+
+// waitForExit returns quarry mcp's exit code, failing the test if it has not exited by ctx's deadline.
+func (p *mcpPeer) waitForExit(ctx context.Context, t *testing.T) int {
+	t.Helper()
+	select {
+	case code := <-p.exit:
+		return code
+	case <-ctx.Done():
+		require.FailNow(t, "quarry mcp did not return after the client closed its session")
+		return 0
+	}
+}
+
+// textOf is the text of result's content, which must be a single TextContent.
+func textOf(result *sdk.CallToolResult) string {
+	if len(result.Content) != 1 {
+		return fmt.Sprintf("<%d content blocks>", len(result.Content))
+	}
+	text, ok := result.Content[0].(*sdk.TextContent)
+	if !ok {
+		return "<not text>"
+	}
+	return text.Text
+}
+
+// dataQualityDocument is the findings list document, with findings left as decoded maps for comparison.
+type dataQualityDocument struct {
+	Status   string           `json:"status"`
+	Type     *string          `json:"type"`
+	Counts   map[string]any   `json:"counts"`
+	Findings []map[string]any `json:"findings"`
+	Warnings []string         `json:"warnings"`
+}
+
+func callDataQuality(ctx context.Context, t *testing.T, peer *mcpPeer, arguments map[string]any) *sdk.CallToolResult {
+	t.Helper()
+	result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "data_quality", Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+// syncStatusDocument is the part of sync_status's result these tests read.
+type syncStatusDocument struct {
+	statusFindingsJSON
+
+	Store struct {
+		Rows struct {
+			Accounts int `json:"accounts"`
+		} `json:"rows"`
+	} `json:"store"`
+	Snapshot struct {
+		ID string `json:"id"`
+	} `json:"snapshot"`
+}
+
+// newStatusPeer sets a fresh HOME, lets seed build the store under it, and connects a client to quarry mcp.
+func newStatusPeer(t *testing.T, seed func(t *testing.T, home string)) (context.Context, *mcpPeer) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	seed(t, home)
+	return startStatusPeer(t)
+}
+
+// startStatusPeer connects a client to quarry mcp over the HOME the test already set.
+func startStatusPeer(t *testing.T) (context.Context, *mcpPeer) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
+	t.Cleanup(cancel)
+	return ctx, startMCP(ctx, t, func(*cli.Env) {})
+}
+
+func callSyncStatus(ctx context.Context, t *testing.T, peer *mcpPeer) *sdk.CallToolResult {
+	t.Helper()
+	result, err := peer.session.CallTool(ctx, &sdk.CallToolParams{Name: "sync_status", Arguments: map[string]any{}})
+	require.NoError(t, err)
+	return result
+}
+
+// readSyncStatus calls sync_status and decodes the document it returns.
+func readSyncStatus(ctx context.Context, t *testing.T, peer *mcpPeer) syncStatusDocument {
+	t.Helper()
+	result := callSyncStatus(ctx, t, peer)
+	require.False(t, result.IsError, textOf(result))
+	var doc syncStatusDocument
+	require.NoError(t, json.Unmarshal([]byte(textOf(result)), &doc))
+	return doc
+}
+
+// acbInToolWords is the CLI warnings with each command a no-cost line names replaced by the tool call that does the same.
+func acbInToolWords(cliWarnings []string) []string {
+	mapped := make([]string, len(cliWarnings))
+	for i, line := range cliWarnings {
+		line = strings.ReplaceAll(line, "quarry findings --type shares-without-cost", "data_quality with type shares-without-cost")
+		mapped[i] = strings.ReplaceAll(line, "quarry acb --security ", "acb with security ")
+	}
+	return mapped
+}
+
+// repoRoot is the repository root as seen from cmd/quarry, where go test runs.
+const repoRoot = "../../"
+
+// repoFile reads a file named relative to the repo root.
+func repoFile(t *testing.T, rel string) string {
+	t.Helper()
+	raw, err := os.ReadFile(repoRoot + rel)
+	require.NoError(t, err)
+	return string(raw)
+}
+
+// skillText is SKILL.md cut at the places the ruled copy is pinned: the
+// frontmatter, the intro under the title, and each numbered section's body.
+type skillText struct {
+	frontmatter string
+	title       string
+	intro       string
+	headings    []string
+	bodies      map[string]string
+}
+
+func splitSkill(t *testing.T, raw string) skillText {
+	t.Helper()
+	rest, ok := strings.CutPrefix(raw, "---\n")
+	require.True(t, ok, "SKILL.md must open with frontmatter")
+	fm, body, ok := strings.Cut(rest, "\n---\n")
+	require.True(t, ok, "SKILL.md frontmatter must be closed")
+
+	skill := skillText{frontmatter: "---\n" + fm + "\n---", bodies: map[string]string{}}
+	var current *[]string
+	var title, intro []string
+	sections := map[string]*[]string{}
+	for line := range strings.SplitSeq(body, "\n") {
+		switch {
+		case strings.HasPrefix(line, "## "):
+			skill.headings = append(skill.headings, line)
+			lines := []string{}
+			sections[line] = &lines
+			current = &lines
+		case strings.HasPrefix(line, "# ") && current == nil:
+			title = append(title, line)
+		case current == nil:
+			intro = append(intro, line)
+		default:
+			*current = append(*current, line)
+		}
+	}
+	require.Len(t, title, 1, "SKILL.md must have exactly one title line")
+	skill.title = title[0]
+	skill.intro = strings.Trim(strings.Join(intro, "\n"), "\n")
+	for heading, lines := range sections {
+		skill.bodies[heading] = strings.Trim(strings.Join(*lines, "\n"), "\n")
+	}
+	return skill
+}
+
+func (s skillText) description() string {
+	for line := range strings.SplitSeq(s.frontmatter, "\n") {
+		if value, ok := strings.CutPrefix(line, "description: "); ok {
+			return value
+		}
+	}
+	return ""
+}
+
+// newHome points HOME at a fresh temporary directory, as every test of a command that reads
+// quarry's store or config needs, and returns it.
+func newHome(tb testing.TB) string {
+	tb.Helper()
+	home := tb.TempDir()
+	tb.Setenv("HOME", home)
+	return home
+}
+
+// runCapture runs the command line over testEnv, returning its exit code and what it wrote to
+// stdout and stderr.
+func runCapture(ctx context.Context, args []string) (int, *bytes.Buffer, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	return run(ctx, args, &stdout, &stderr), &stdout, &stderr
+}
+
+// runSpendCapture is runCapture over spendEnv's clock.
+func runSpendCapture(ctx context.Context, args []string) (int, *bytes.Buffer, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	return runWith(ctx, args, spendEnv(&stdout, &stderr)), &stdout, &stderr
+}
+
+// runSpendCaptureAt is runCapture over spendEnvAt's clock set to now.
+func runSpendCaptureAt(ctx context.Context, args []string, now time.Time) (int, *bytes.Buffer, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	return runWith(ctx, args, spendEnvAt(&stdout, &stderr, now)), &stdout, &stderr
+}
+
+// openStoreReadOnly opens the store under home read-only until the test ends.
+func openStoreReadOnly(tb testing.TB, home string) *duckdb.DB {
+	tb.Helper()
+	db, err := duckdb.OpenReadOnly(tb.Context(), storePathUnder(home))
+	require.NoError(tb, err)
+	tb.Cleanup(func() { _ = db.Close() })
+	return db
 }

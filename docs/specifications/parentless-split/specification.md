@@ -121,8 +121,8 @@ Scenario: SCENARIO-05 — A real transaction missing a split still fails validat
 Dead after change: `existingAccounts`, `existingTransactions` and the `existing` maps building them — delete, don't leave unread params.
 
 ## BDD Acceptance Progress
-- [x] SCENARIO-01: A split with no parent transaction is skipped — `internal/importer/transactions_test.go` `Test_import_skips_a_split_with_no_parent_transaction`
-- [x] SCENARIO-02: A split whose parent points to no row is skipped — delivered by SCENARIO-01 — `internal/importer/dangling_references_test.go` `Test_import_skips_a_split_whose_parent_transaction_does_not_exist`
+- [x] SCENARIO-01: A split with no parent transaction is skipped — `internal/importer/splits_test.go` `Test_import_skips_a_split_with_no_parent_transaction`
+- [x] SCENARIO-02: A split whose parent points to no row is skipped — delivered by SCENARIO-01 — `internal/importer/splits_test.go` `Test_import_skips_a_split_whose_parent_transaction_does_not_exist`
 - [x] SCENARIO-03: A transaction with no account is skipped with its splits — delivered by SCENARIO-01 — `internal/importer/transactions_test.go` `Test_import_skips_a_transaction_with_no_account_and_its_split`
 - [x] SCENARIO-04: A transfer leg linked to a skipped split is one-sided — delivered by SCENARIO-01 — `internal/importer/transfers_test.go` `Test_import_keeps_a_link_to_a_skipped_split_as_one_sided`
-- [x] SCENARIO-05: A real transaction missing a split still fails validation — delivered by SCENARIO-01 — `internal/importer/validation_test.go` `Test_import_fails_validation_when_a_transaction_lost_its_only_split`
+- [x] SCENARIO-05: A real transaction missing a split still fails validation — delivered by SCENARIO-01 — `internal/importer/validate_test.go` `Test_import_fails_validation_when_a_transaction_lost_its_only_split`

@@ -13,12 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// readOp is one store read, called with no arguments beyond the store.
-type readOp struct {
-	name string
-	call func(context.Context, *duckstore.Store) error
-}
-
 // rowReads are the reads that scan rows: Status, Accounts, Schema, Charges, Summary, Holdings, NetWorth, Findings, InvestmentHistory and Search.
 func rowReads() []readOp {
 	return []readOp{

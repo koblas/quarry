@@ -1,0 +1,462 @@
+package cli_test
+
+import (
+	"bytes"
+	"regexp"
+	"testing"
+	"time"
+
+	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/store"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func Test_spend_help_says_what_spend_counts(t *testing.T) {
+	const long = `Show how much you spent, grouped by category, payee, tag or month.
+
+Amounts are in CAD unless --currency or reporting.currency in
+~/Library/Application Support/quarry/config.toml names another currency.
+Each split converts at the Bank of Canada rate for its date, or the latest
+earlier rate on weekends, holidays and dates after the last stored rate,
+and is rounded to the cent before it is added. With --currency native, CAD
+and USD are listed separately, never added together. Amounts dated before
+the first stored rate stay in their own currency, on rows of their own,
+with a warning.
+
+Spending is every split in an expense category, plus uncategorized splits
+that take money out. Refunds in an expense category are netted against it,
+so a category can come out negative. Transfers between your own accounts,
+splits in Quicken's system categories and transactions marked "exclude from
+reports" in Quicken are left out. So are accounts Quicken leaves out of
+reports (quarry accounts marks them "not in reports") and accounts that use
+Quicken's linked account tracking (marked "linked tracking"). Closed
+accounts are included.
+
+Margin interest and other investment expenses Quicken puts in an expense
+category count as spending.
+
+The period runs from --since to --until, both included; a bare year or month
+covers all of it (--since 2024 --until 2024 is the whole of 2024). Without
+them it is this year up to today, so future-dated transactions are left out
+unless --until is later than today.
+
+A split with more than one tag counts under each of them, so with --by tag
+the rows can add up to more than the total.
+`
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), long)
+}
+
+func Test_recurring_help_says_series_are_found_in_their_own_currency(t *testing.T) {
+	const converted = `Series are found in each account's own currency, so a change in the
+exchange rate is never a price change, and a payee that charges in both
+CAD and USD has two series. Amount and Per year are converted to the
+reporting currency (--currency, else reporting.currency in the config
+file, else CAD) at the rate on the latest charge's date; price changes
+stay in the series' own currency. With --currency native nothing is
+converted.
+`
+	const priceChange = `the next, in the series' own currency. Per year is the latest amount
+times the charges in a year, for active series only.
+`
+	var stdout, stderr bytes.Buffer
+
+	err := executeRecurring(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "out, even with a later --until.\n\n"+converted+"\nA charge that comes off schedule")
+	assert.Contains(t, stdout.String(), priceChange)
+}
+
+func Test_spend_help_shows_the_by_flag_and_its_default(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	err := executeSpend(t, fakeReportStore{}, spendNow, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Regexp(t, `--by group +group spending by group: category, payee, tag or month \(default "category"\)`, stdout.String())
+}
+
+func Test_cashflow_help_says_what_cashflow_counts(t *testing.T) {
+	const long = `Show income, spending and what was left over for each month or year.
+
+Amounts are in CAD unless --currency or reporting.currency in
+~/Library/Application Support/quarry/config.toml names another currency.
+Each split converts at the Bank of Canada rate for its date, or the latest
+earlier rate on weekends, holidays and dates after the last stored rate,
+and is rounded to the cent before it is added. With --currency native, CAD
+and USD are listed separately, never added together. Amounts dated before
+the first stored rate stay in their own currency, on rows of their own,
+with a warning.
+
+Income and spending follow the same rules as quarry spend: transfers between
+your own accounts, Quicken's system categories and transactions marked
+"exclude from reports" are left out, and refunds are netted. Accounts Quicken
+leaves out of reports ("not in reports" in quarry accounts) and accounts
+that use Quicken's linked account tracking ("linked tracking") are left out
+here too. In brokerage and retirement accounts, dividends, interest and
+capital-gain distributions count as income; buying, selling and moving
+shares count as neither. Uncategorized splits count as income when they
+bring money in and as spending when they take money out. The Spent column
+equals quarry spend's total for the same period, accounts and currency.
+
+Savings rate is net divided by income, and shows n/a when income is zero or
+less. A period that --since or --until cuts short is marked partial.
+`
+	var stdout, stderr bytes.Buffer
+
+	err := executeCashFlow(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), long)
+}
+
+func Test_cashflow_help_shows_each_flag(t *testing.T) {
+	cases := []struct {
+		flag string
+		want string
+	}{
+		{flag: "--by", want: `--by period +group by period: month or year \(default "month"\)`},
+		{
+			flag: "--since",
+			want: `--since date +count transactions dated on or after date \(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year\)`,
+		},
+		{
+			flag: "--until",
+			want: `--until date +count transactions dated on or before date \(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`,
+		},
+		{flag: "--account", want: `--account name +count only the account with this name or id; repeat for more`},
+		{flag: "--currency", want: `(?m)--currency code +` + regexp.QuoteMeta(reportCurrencyHelp) + `$`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.flag, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := executeCashFlow(t, fakeReportStore{}, &stdout, &stderr, "--help")
+
+			require.NoError(t, err)
+			assert.Regexp(t, c.want, stdout.String())
+		})
+	}
+}
+
+const (
+	reportCurrencyHelp   = "show amounts in currency code: CAD, USD, or native for each account's own (default reporting.currency in the config file, else CAD)"
+	accountsCurrencyHelp = "add a column with each balance in currency code: CAD or USD; native adds none (default reporting.currency in the config file, else CAD)"
+)
+
+func Test_each_report_shows_the_currency_flag_without_a_cobra_default(t *testing.T) {
+	cases := []struct {
+		command     string
+		placeholder string
+		help        string
+	}{
+		{command: "spend", placeholder: "code", help: reportCurrencyHelp},
+		{command: "cashflow", placeholder: "code", help: reportCurrencyHelp},
+		{command: "recurring", placeholder: "code", help: reportCurrencyHelp},
+		{command: "anomalies", placeholder: "code", help: reportCurrencyHelp},
+		{command: "summary", placeholder: "code", help: reportCurrencyHelp},
+		{command: "accounts", placeholder: "code", help: accountsCurrencyHelp},
+		{command: "holdings", placeholder: "code", help: holdingsCurrencyHelp},
+		{command: "networth", placeholder: "code", help: reportCurrencyHelp},
+		{command: "acb", placeholder: "currency", help: acbCurrencyHelp},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := cli.Env{Stdout: &stdout, Stderr: &stderr, Now: func() time.Time { return spendNow }}
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, env)
+
+			require.NoError(t, err)
+			assert.Regexp(t, `(?m)--currency `+c.placeholder+` +`+regexp.QuoteMeta(c.help)+`$`, stdout.String())
+		})
+	}
+}
+
+func Test_each_reports_window_flags_describe_what_it_does_with_them(t *testing.T) {
+	const (
+		countSince   = "count transactions dated on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)"
+		countUntil   = "count transactions dated on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default today)"
+		countAccount = "count only the account with this name or id; repeat for more"
+	)
+	cases := []struct {
+		command               string
+		since, until, account string
+	}{
+		{command: "spend", since: countSince, until: countUntil, account: countAccount},
+		{command: "cashflow", since: countSince, until: countUntil, account: countAccount},
+		{
+			command: "recurring",
+			since:   "list series running on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)",
+			until:   "list series that started on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default today)",
+			account: "list only series with a charge in the account with this name or id; repeat for more",
+		},
+		{
+			command: "anomalies",
+			since:   "list charges dated on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year)",
+			until:   "list charges dated on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default today)",
+			account: "list only charges in the account with this name or id; repeat for more",
+		},
+		{
+			command: "search",
+			since:   "list transactions dated on or after date (YYYY, YYYY-MM or YYYY-MM-DD; default the first transaction)",
+			until:   "list transactions dated on or before date (YYYY, YYYY-MM or YYYY-MM-DD; default no end, future-dated included)",
+			account: "search only the account with this name or id; repeat for more",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := cli.Env{Stdout: &stdout, Stderr: &stderr, Now: func() time.Time { return spendNow }}
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, env)
+
+			require.NoError(t, err)
+			assert.Regexp(t, `(?m)--since date +`+regexp.QuoteMeta(c.since)+`$`, stdout.String())
+			assert.Regexp(t, `(?m)--until date +`+regexp.QuoteMeta(c.until)+`$`, stdout.String())
+			assert.Regexp(t, `(?m)--account name +`+regexp.QuoteMeta(c.account)+`$`, stdout.String())
+		})
+	}
+}
+
+func Test_search_help_shows_its_long_text_and_examples(t *testing.T) {
+	const long = `Find transactions by text, date, account, category or amount, newest
+first. The text matches payee names, transaction memos and split memos,
+ignoring letter case; every character is literal, so % and _ match only
+themselves. Leave the text out to search by the flags alone, or pass
+nothing at all to list the newest transactions. Text that starts with -
+goes after --: quarry search -- "-50% off"
+
+Every transaction is searched, closed accounts included. Transfers
+between your own accounts and transactions Quicken's reports leave out
+are listed too, flagged transfer or excluded, because quarry spend and
+quarry cashflow do not count them. Excluded means the transaction is
+marked "exclude from reports" in Quicken, or its account is not used in
+reports or uses linked account tracking. Spend also leaves out Quicken's
+system categories; those are not flagged.
+
+Amounts are in each account's own currency and are never converted.
+--min and --max compare the amount without its sign, so --min 100 finds
+charges and deposits of 100.00 or more; give both the same value to find
+one amount. --category matches a split in that category or in any
+category under it, by full path in any letter case.
+
+Without --since and --until every date is searched, future-dated
+transactions included. At most --limit transactions are printed (500
+unless set); when more match, quarry says so on stderr.
+
+Usage:
+  quarry search [text] [flags]
+
+Examples:
+  quarry search costco
+  quarry search --min 42.17 --max 42.17
+  quarry search "e-transfer" --account Chequing --since 2026-01
+  quarry search --category Food --since 2026-09 --json
+`
+	var stdout, stderr bytes.Buffer
+	env := cli.Env{Stdout: &stdout, Stderr: &stderr}
+
+	err := cli.Execute(t.Context(), []string{"search", "--help"}, env)
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), long)
+}
+
+// Each read of the clock returns a day later than the one before, so a command that reads it twice
+// sees two different days.
+func advancingClock() func() time.Time {
+	reads := 0
+	return func() time.Time {
+		at := spendNow.Add(time.Duration(reads) * 24 * time.Hour)
+		reads++
+		return at
+	}
+}
+
+func executeAtAdvancingClock(t *testing.T, command string, fake fakeReportStore, stdout *bytes.Buffer) error {
+	t.Helper()
+	env := reportEnv(fake, stdout, &bytes.Buffer{}, withClock(advancingClock()))
+	return cli.Execute(t.Context(), []string{command}, env)
+}
+
+func Test_recurring_judges_a_series_by_the_same_day_its_window_ends_on(t *testing.T) {
+	var stdout bytes.Buffer
+	payee := "Netflix.com"
+	rows := make([]store.Charge, 0, 3)
+	for i, date := range []string{"2026-06-16", "2026-07-16", "2026-08-15"} {
+		day, err := time.Parse(time.DateOnly, date)
+		require.NoError(t, err)
+		rows = append(rows, store.Charge{
+			TransactionID: "txn", SourceID: int64(i + 1), Date: day,
+			Account: store.Account{ID: "acct-1", Name: "Chequing", Currency: "CAD"},
+			PayeeID: new("payee-1"), Payee: &payee, Currency: "CAD", Amount: 999, ExpenseSplits: 1,
+		})
+	}
+
+	err := executeAtAdvancingClock(t, "recurring", fakeReportStore{charges: store.Charges{Rows: rows}}, &stdout)
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Recurring charges 2026-01-01 to 2026-09-29 in all accounts, amounts in CAD")
+	assert.Contains(t, stdout.String(), "2026-08-15  active, new")
+}
+
+func Test_anomalies_reads_charges_through_the_same_day_its_window_ends_on(t *testing.T) {
+	var stdout bytes.Buffer
+	var got store.ChargeParams
+	fake := fakeReportStore{gotCharges: &got}
+
+	err := executeAtAdvancingClock(t, "anomalies", fake, &stdout)
+
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC), got.Through)
+	assert.Contains(t, stdout.String(), "Unusually large charges 2026-01-01 to 2026-09-29 in all accounts")
+}
+
+func Test_report_commands_return_the_report_factory_fault(t *testing.T) {
+	commands := []string{"accounts", "anomalies", "cashflow", "recurring", "spend", "holdings", "acb", "networth"}
+
+	for _, command := range commands {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{command}, refusedEnv(&stdout, &stderr))
+
+			require.ErrorIs(t, err, errStoreRead)
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+func Test_report_commands_return_the_store_read_fault_with_nothing_printed(t *testing.T) {
+	cases := []struct {
+		command string
+		args    []string
+	}{
+		{command: "accounts", args: []string{"--json"}},
+		{command: "anomalies"},
+		{command: "cashflow"},
+		{command: "recurring"},
+		{command: "spend"},
+		{command: "holdings"},
+		{command: "acb"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			env := reportEnv(fakeReportStore{err: errStoreRead}, &stdout, &stderr, atSpendNow)
+
+			err := cli.Execute(t.Context(), append([]string{c.command}, c.args...), env)
+
+			require.ErrorIs(t, err, errStoreRead)
+			assert.NotErrorAs(t, err, new(cli.UsageError))
+			assert.Empty(t, stdout.String())
+			assert.Empty(t, stderr.String())
+		})
+	}
+}
+
+func Test_help_shows_examples_for_each_report_command(t *testing.T) {
+	cases := []struct {
+		command  string
+		examples string
+	}{
+		{command: "acb", examples: `Examples:
+  quarry acb
+  quarry acb --year 2024
+  quarry acb --security XEQT --json
+`},
+		{command: "anomalies", examples: `Examples:
+  quarry anomalies
+  quarry anomalies --since 2026-09 --until 2026-09
+  quarry anomalies --account "Visa Infinite" --json
+`},
+		{command: "findings", examples: `Examples:
+  quarry findings
+  quarry findings --type duplicate
+  quarry findings --status all --csv > findings.csv
+`},
+		{command: "holdings", examples: `Examples:
+  quarry holdings
+  quarry holdings --as-of 2025-12-31
+  quarry holdings --account RRSP --currency native --json
+`},
+		{command: "recurring", examples: `Examples:
+  quarry recurring
+  quarry recurring --since 2026-09 --until 2026-09 --json
+  quarry recurring --since 2000
+`},
+		{command: "spend", examples: `Examples:
+  quarry spend
+  quarry spend --by payee --since 2025-01 --until 2025-03
+  quarry spend --since 2024 --until 2024 --json
+  quarry spend --account "Visa Infinite" --account Chequing
+`},
+		{command: "cashflow", examples: `Examples:
+  quarry cashflow
+  quarry cashflow --by year --since 2020 --until 2025
+  quarry cashflow --account Chequing --json
+`},
+		{command: "summary", examples: `Examples:
+  quarry summary
+  quarry summary --month 2026-08 --currency USD
+  quarry summary --json
+`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, currencyEnv(&stdout, &stderr))
+
+			require.NoError(t, err)
+			assert.Contains(t, stdout.String(), c.examples)
+		})
+	}
+}
+
+func Test_help_lists_each_report_flag_with_its_description(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		line    string
+	}{
+		{name: "acb_currency", command: "acb", line: `(?m)--currency currency +` + regexp.QuoteMeta(acbCurrencyHelp) + `$`},
+		{name: "acb_year", command: "acb", line: `(?m)--year year +list the sales in tax year \(YYYY\) one by one$`},
+		{name: "acb_security", command: "acb", line: `(?m)--security name +show the full history of the security with this name, ticker or id; repeat for more$`},
+		{name: "holdings_currency", command: "holdings", line: `(?m)--currency code +` + regexp.QuoteMeta(holdingsCurrencyHelp) + `$`},
+		{name: "holdings_as_of", command: "holdings", line: `(?m)--as-of date +` + regexp.QuoteMeta(holdingsAsOfHelp) + `$`},
+		{name: "holdings_account", command: "holdings", line: `(?m)--account name +` + regexp.QuoteMeta(holdingsAccountHelp) + `$`},
+		{name: "search_limit", command: "search", line: `(?m)--limit n +print at most n transactions, newest first \(500 unless set; 0 prints every one\)$`},
+		{name: "search_max", command: "search", line: `(?m)--max amount +list only transactions of at most this amount, sign ignored, in the account's own currency$`},
+		{name: "search_min", command: "search", line: `(?m)--min amount +list only transactions of at least this amount, sign ignored, in the account's own currency$`},
+		{name: "search_category", command: "search", line: `(?m)--category path +list only transactions with a split in this category or one under it, by full path such as Food:Groceries$`},
+		{name: "spend_since", command: "spend", line: `--since date +count transactions dated on or after date ` +
+			`\(YYYY, YYYY-MM or YYYY-MM-DD; default January 1 this year\)`},
+		{name: "spend_until", command: "spend", line: `--until date +count transactions dated on or before date ` +
+			`\(YYYY, YYYY-MM or YYYY-MM-DD; default today\)`},
+		{name: "spend_account", command: "spend", line: `--account name +count only the account with this name or id; repeat for more`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+
+			err := cli.Execute(t.Context(), []string{c.command, "--help"}, currencyEnv(&stdout, &stderr))
+
+			require.NoError(t, err)
+			assert.Regexp(t, c.line, stdout.String())
+		})
+	}
+}

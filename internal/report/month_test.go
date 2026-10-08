@@ -9,9 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// edt is a zone whose midnight falls on the previous day in UTC.
-var edt = time.FixedZone("EDT", -4*60*60)
-
 func Test_the_default_month_is_the_calendar_month_before_the_local_day(t *testing.T) {
 	cases := []struct {
 		name string

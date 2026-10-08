@@ -44,21 +44,21 @@ func unconvertedAnomaly() report.Anomaly {
 }
 
 // anomaliesInJSON renders listed anomalies reported in currency and returns the document.
-func anomaliesInJSON(t *testing.T, currency money.Currency, anomalies ...report.Anomaly) []byte {
-	t.Helper()
+func anomaliesInJSON(tb testing.TB, currency money.Currency, anomalies ...report.Anomaly) []byte {
+	tb.Helper()
 	a := listed(anomalies...)
 	a.Currency = currency
-	return []byte(indented(t, document.NewAnomalies(a, []string{})))
+	return []byte(indented(tb, document.NewAnomalies(a, []string{})))
 }
 
 // firstEntry is the first element of the document's "anomalies", still raw.
-func firstEntry(t *testing.T, doc []byte) []byte {
-	t.Helper()
+func firstEntry(tb testing.TB, doc []byte) []byte {
+	tb.Helper()
 	var parsed struct {
 		Anomalies []json.RawMessage `json:"anomalies"`
 	}
-	require.NoError(t, json.Unmarshal(doc, &parsed))
-	require.NotEmpty(t, parsed.Anomalies)
+	require.NoError(tb, json.Unmarshal(doc, &parsed))
+	require.NotEmpty(tb, parsed.Anomalies)
 	return parsed.Anomalies[0]
 }
 

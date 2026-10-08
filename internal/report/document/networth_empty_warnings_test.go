@@ -12,10 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func civil(year int, month time.Month, d int) time.Time {
-	return time.Date(year, month, d, 0, 0, 0, 0, time.UTC)
-}
-
 // emptySnapshot lists 2026-03-01 with no rows; first is the store's first balance.
 func emptySnapshot(first time.Time) report.NetWorth {
 	return report.NetWorth{

@@ -2,7 +2,6 @@ package snapshot_test
 
 import (
 	"io/fs"
-	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -11,55 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// variantEntry reports name and mode in place of those of the real entry it wraps, keeping that entry's Info.
-type variantEntry struct {
-	fs.DirEntry
-
-	name string
-	mode fs.FileMode
-}
-
-func (e variantEntry) Name() string      { return e.name }
-func (e variantEntry) Type() fs.FileMode { return e.mode.Type() }
-func (e variantEntry) IsDir() bool       { return e.mode.IsDir() }
-
-// variant is an extra entry named name that wraps the real entry named like and has type mode.
-// A case-insensitive volume cannot hold two letter cases of one name, so the second case exists only in the listing.
-type variant struct {
-	name, like string
-	mode       fs.FileMode
-}
-
-// regularVariant is a regular-file variant named name, wrapping the real entry named like.
-func regularVariant(name, like string) variant { return variant{name: name, like: like} }
-
-// readDirWith is os.ReadDir plus one extra entry for each of variants, in the order given.
-func readDirWith(t *testing.T, variants ...variant) func(string) ([]fs.DirEntry, error) {
-	t.Helper()
-	return func(dir string) ([]fs.DirEntry, error) {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return nil, err
-		}
-		onDisk := entries
-		for _, v := range variants {
-			i := indexOfEntry(onDisk, v.like)
-			require.GreaterOrEqual(t, i, 0, "no real entry named %s to wrap", v.like)
-			entries = append(entries, variantEntry{DirEntry: onDisk[i], name: v.name, mode: v.mode})
-		}
-		return entries, nil
-	}
-}
-
-func indexOfEntry(entries []fs.DirEntry, name string) int {
-	for i, e := range entries {
-		if e.Name() == name {
-			return i
-		}
-	}
-	return -1
-}
 
 func Test_list_reads_the_snapshots_folder_through_the_read_dir_seam(t *testing.T) {
 	t.Parallel()

@@ -44,6 +44,28 @@ const (
 		"all three start again with this sync"
 )
 
+// badConfigValue is a config file one value of which a command refuses, and the refusal's line before the fix hint.
+type badConfigValue struct{ name, content, line string }
+
+// quickenAndReportingBadValues are the refused quicken.path and reporting.currency values every config-reading
+// command refuses the same way.
+func quickenAndReportingBadValues() []badConfigValue {
+	return []badConfigValue{
+		{
+			name: "quicken.path not a string", content: "quicken.path = 12\n",
+			line: configShown + ": quicken.path must be a path in quotes, got 12",
+		},
+		{
+			name: "quicken.path relative", content: "quicken.path = \"Home.quicken\"\n",
+			line: configShown + ": quicken.path must be a full path or start with ~/, got \"Home.quicken\"",
+		},
+		{
+			name: "reporting.currency another currency", content: "reporting.currency = \"EUR\"\n",
+			line: configShown + ": reporting.currency must be CAD, USD or native, got \"EUR\"",
+		},
+	}
+}
+
 // corruptPreviousStore syncs once, then replaces the store with bytes DuckDB cannot open.
 func corruptPreviousStore(t *testing.T, home string) {
 	t.Helper()
@@ -72,8 +94,7 @@ func fileDigest(t *testing.T, path string) string {
 }
 
 func Test_run_sync_refuses_a_malformed_config_before_taking_a_snapshot(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	quarryDir := storeDirUnder(home)
 	snapshotsDir := filepath.Join(quarryDir, "snapshots")
@@ -81,9 +102,8 @@ func Test_run_sync_refuses_a_malformed_config_before_taking_a_snapshot(t *testin
 	require.Equal(t, 0, run(context.Background(), []string{"sync"}, &goodStdout, &goodStderr), goodStderr.String())
 	storeBefore := fileDigest(t, filepath.Join(quarryDir, "quarry.duckdb"))
 	require.NoError(t, os.WriteFile(filepath.Join(quarryDir, "config.toml"), []byte("[snapshots\nkeep = 24\n"), 0o600))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	assert.Equal(t, 1, countFilesWithSuffix(t, snapshotsDir, ".sqlite"))
 	assert.Equal(t, storeBefore, fileDigest(t, filepath.Join(quarryDir, "quarry.duckdb")))
@@ -104,13 +124,11 @@ func Test_run_sync_refuses_a_relative_quicken_path(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			bundle := writeStatusFixtureBundle(t, home)
 			writeConfig(t, home, "quicken.path = \"Home.quicken\"\n")
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args(bundle.Dir), &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args(bundle.Dir))
 
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, "quarry: "+configShown+": quicken.path must be a full path or start with ~/, got \"Home.quicken\""+configFix+"\n", stderr.String())
@@ -130,12 +148,10 @@ func Test_run_sync_refuses_a_quicken_path_that_is_not_a_string(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeConfig(t, home, "quicken.path = 12\n")
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), c.args, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), c.args)
 
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, "quarry: "+configShown+": quicken.path must be a path in quotes, got 12"+configFix+"\n", stderr.String())
@@ -194,12 +210,10 @@ func Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy(t *testing.T) 
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
+			home := newHome(t)
 			writeConfig(t, home, c.content)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+			exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 			assert.Empty(t, stdout.String())
 			assert.Equal(t, "quarry: "+c.line+configFix+"\n", stderr.String())
@@ -209,12 +223,10 @@ func Test_run_sync_refuses_a_bad_config_value_with_the_ruled_copy(t *testing.T) 
 }
 
 func Test_run_refuses_an_account_number_in_an_accounts_list_masked(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "[accounts]\nregistered = [12345678]\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: "+configShown+": accounts.registered must hold only account ids in quotes, got ****5678 as item 1"+configFix+"\n", stderr.String())
@@ -222,12 +234,10 @@ func Test_run_refuses_an_account_number_in_an_accounts_list_masked(t *testing.T)
 }
 
 func Test_run_sync_refuses_a_config_it_cannot_read(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	require.NoError(t, os.MkdirAll(filepath.Join(storeDirUnder(home), "config.toml"), 0o700))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync"})
 
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: cannot read "+configShown+": is a directory"+configFix+"\n", stderr.String())
@@ -268,8 +278,7 @@ func currencyHonouringCommands() []string {
 // it returns HOME and each invocation's output, except acb's.
 func readCommandFixture(t *testing.T) (string, map[string]string) {
 	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	rows := cashFlowRows(
 		[]store.Account{chequingAccount("acct-chq", 1), brokerageAccount("acct-cad", 2, "CAD")},
 		spendSplit{id: "s01", account: "acct-chq", category: "cat-salary", currency: "CAD", day: day(2026, 3, 1), cents: 50000},
@@ -316,9 +325,7 @@ func Test_run_read_commands_refuse_a_malformed_config(t *testing.T) {
 
 	for name, args := range readCommandArgs() {
 		t.Run(name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), args)
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -333,9 +340,7 @@ func Test_run_read_commands_refuse_a_masked_account_list(t *testing.T) {
 
 	for name, args := range readCommandArgs() {
 		t.Run(name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), args)
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -352,9 +357,7 @@ func Test_run_read_commands_refuse_a_bad_acb_adjustment(t *testing.T) {
 
 	for name, args := range readCommandArgs() {
 		t.Run(name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := runWith(context.Background(), args, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), args)
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -371,9 +374,7 @@ func Test_run_read_commands_ignore_a_malformed_config_when_given_a_currency(t *t
 
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-
-			exitCode := runWith(context.Background(), append(args[name], "--currency", "CAD"), spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), append(args[name], "--currency", "CAD"))
 
 			assert.Equal(t, before[name], stdout.String())
 			assert.Empty(t, stderr.String())
@@ -386,9 +387,8 @@ func Test_run_accounts_and_acb_refuse_a_malformed_config_even_when_given_a_curre
 	for _, command := range []string{"accounts", "acb"} {
 		t.Run(command, func(t *testing.T) {
 			malformedConfigFixture(t)
-			var stdout, stderr bytes.Buffer
 
-			exitCode := runWith(context.Background(), []string{command, "--currency", "CAD"}, spendEnv(&stdout, &stderr))
+			exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{command, "--currency", "CAD"})
 
 			assert.Equal(t, 1, exitCode)
 			assert.Empty(t, stdout.String())
@@ -399,9 +399,8 @@ func Test_run_accounts_and_acb_refuse_a_malformed_config_even_when_given_a_curre
 
 func Test_run_sql_ignores_a_malformed_config(t *testing.T) {
 	malformedConfigFixture(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"sql", "SELECT name FROM accounts"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"sql", "SELECT name FROM accounts"})
 
 	assert.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Chequing")
@@ -410,9 +409,8 @@ func Test_run_sql_ignores_a_malformed_config(t *testing.T) {
 
 func Test_run_search_ignores_a_malformed_config(t *testing.T) {
 	malformedConfigFixture(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"search"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"search"})
 
 	assert.Equal(t, 0, exitCode, stderr.String())
 	assert.Contains(t, stdout.String(), "Costco")
@@ -439,9 +437,8 @@ func Test_run_mcp_search_transactions_ignores_a_malformed_config(t *testing.T) {
 
 func Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config(t *testing.T) {
 	malformedConfigFixture(t)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := runWith(context.Background(), []string{"spend", "--since", "bogus"}, spendEnv(&stdout, &stderr))
+	exitCode, stdout, stderr := runSpendCapture(context.Background(), []string{"spend", "--since", "bogus"})
 
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
@@ -449,12 +446,10 @@ func Test_run_spend_refuses_a_bad_flag_before_reading_a_malformed_config(t *test
 }
 
 func Test_run_findings_refuses_a_bad_config_before_looking_for_a_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "snapshots.keep = 0\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -462,12 +457,10 @@ func Test_run_findings_refuses_a_bad_config_before_looking_for_a_store(t *testin
 }
 
 func Test_run_findings_refuses_a_bad_reporting_currency_before_looking_for_a_store(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeConfig(t, home, "reporting.currency = \"EUR\"\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	assert.Equal(t, 1, exitCode)
 	assert.Empty(t, stdout.String())
@@ -475,14 +468,12 @@ func Test_run_findings_refuses_a_bad_reporting_currency_before_looking_for_a_sto
 }
 
 func Test_run_findings_lists_after_warning_about_an_unknown_config_key(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	replaceStore(t, home, spendRows([]store.Account{chequingAccount("acct-1", 1)},
 		spendSplit{id: "1", account: "acct-1", category: "cat-fuel", payee: "payee-costco", currency: "CAD", day: day(2026, 9, 1), cents: -4500}))
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"findings"})
 
 	assert.Equal(t, 0, exitCode)
 	assert.Equal(t, "No open findings\n", stdout.String())
@@ -490,14 +481,12 @@ func Test_run_findings_lists_after_warning_about_an_unknown_config_key(t *testin
 }
 
 func Test_run_sync_warns_about_unknown_config_keys_before_its_own_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n"+
@@ -506,14 +495,12 @@ func Test_run_sync_warns_about_unknown_config_keys_before_its_own_warnings(t *te
 }
 
 func Test_run_sync_warns_about_a_config_key_that_differs_from_a_known_one_only_in_letter_case(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	corruptPreviousStore(t, home)
 	writeConfig(t, home, "[Snapshots]\nKeep = 50\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key Snapshots; quarry ignores it\n"+
@@ -522,14 +509,12 @@ func Test_run_sync_warns_about_a_config_key_that_differs_from_a_known_one_only_i
 }
 
 func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
@@ -543,14 +528,12 @@ func Test_run_sync_json_lists_config_warnings_before_its_own_without_the_prefix(
 }
 
 func Test_run_sync_json_lists_the_history_warning_after_the_config_warning_without_the_prefix(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	corruptPreviousStore(t, home)
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
@@ -564,14 +547,12 @@ func Test_run_sync_json_lists_the_history_warning_after_the_config_warning_witho
 }
 
 func Test_run_sync_quotes_an_unknown_config_key_that_is_not_a_bare_key(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	corruptPreviousStore(t, home)
 	writeConfig(t, home, "\"snapshots.keep\" = 5\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync"}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"sync"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, "quarry: warning: "+configShown+": unknown key \"snapshots.keep\"; quarry ignores it\n"+
@@ -580,14 +561,12 @@ func Test_run_sync_quotes_an_unknown_config_key_that_is_not_a_bare_key(t *testin
 }
 
 func Test_run_sync_json_lists_a_quoted_unknown_config_key_without_the_prefix(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	writeStatusFixtureBundle(t, home)
 	corruptPreviousStore(t, home)
 	writeConfig(t, home, "\"a\\nb\" = 1\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
@@ -601,14 +580,12 @@ func Test_run_sync_json_lists_a_quoted_unknown_config_key_without_the_prefix(t *
 }
 
 func Test_run_sync_from_json_names_the_config_file_by_its_absolute_path_and_stderr_abbreviates_it(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncBundle(t, writeNamedAccountBundle(t, filepath.Join(home, "Documents"), "Chequing"))
 	manifest := onlyFileWithSuffix(t, filepath.Join(storeDirUnder(home), "snapshots"), ".json")
 	writeConfig(t, home, "snapshot.keep = 3\n")
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json"), "--json"}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", strings.TrimSuffix(filepath.Base(manifest), ".json"), "--json"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	var doc struct {
@@ -623,9 +600,8 @@ func Test_run_spend_warns_about_an_unknown_config_key_and_json_names_it_absolute
 	t.Run("text", func(t *testing.T) {
 		home, _ := readCommandFixture(t)
 		writeConfig(t, home, "snapshot.keep = 3\n")
-		var stdout, stderr bytes.Buffer
 
-		exitCode := runWith(context.Background(), readCommandArgs()["spend"], spendEnv(&stdout, &stderr))
+		exitCode, _, stderr := runSpendCapture(context.Background(), readCommandArgs()["spend"])
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		assert.Equal(t, "quarry: warning: "+configShown+": unknown key snapshot.keep; quarry ignores it\n", stderr.String())
@@ -633,9 +609,8 @@ func Test_run_spend_warns_about_an_unknown_config_key_and_json_names_it_absolute
 	t.Run("json", func(t *testing.T) {
 		home, _ := readCommandFixture(t)
 		writeConfig(t, home, "snapshot.keep = 3\n")
-		var stdout, stderr bytes.Buffer
 
-		exitCode := runWith(context.Background(), append(readCommandArgs()["spend"], "--json"), spendEnv(&stdout, &stderr))
+		exitCode, stdout, stderr := runSpendCapture(context.Background(), append(readCommandArgs()["spend"], "--json"))
 
 		require.Equal(t, 0, exitCode, stderr.String())
 		var doc struct {

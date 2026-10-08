@@ -17,20 +17,20 @@ import (
 )
 
 // summaryDocument is the document NewSummary builds, read back as a map, so a null and an absent key differ.
-func summaryDocument(t *testing.T, s report.Summary, tally document.FindingsTally, warnings []string) map[string]any {
-	t.Helper()
+func summaryDocument(tb testing.TB, s report.Summary, tally document.FindingsTally, warnings []string) map[string]any {
+	tb.Helper()
 	var got map[string]any
 
-	require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewSummary(s, tally, warnings))), &got))
+	mustReadBack(tb, document.NewSummary(s, tally, warnings), &got)
 	return got
 }
 
 // object is the JSON object at path in doc.
-func object(t *testing.T, doc map[string]any, path ...string) map[string]any {
-	t.Helper()
+func object(tb testing.TB, doc map[string]any, path ...string) map[string]any {
+	tb.Helper()
 	for _, key := range path {
 		next, ok := doc[key].(map[string]any)
-		require.True(t, ok, "%s is not an object", key)
+		require.True(tb, ok, "%s is not an object", key)
 		doc = next
 	}
 	return doc
@@ -38,21 +38,21 @@ func object(t *testing.T, doc map[string]any, path ...string) map[string]any {
 
 // keysAt is the keys of the object at path in the NewSummary document, in document order; a numeric path step
 // is an array index.
-func keysAt(t *testing.T, s report.Summary, path ...string) []string {
-	t.Helper()
-	raw := []byte(indented(t, document.NewSummary(s, document.FindingsTally{}, nil)))
+func keysAt(tb testing.TB, s report.Summary, path ...string) []string {
+	tb.Helper()
+	raw := []byte(indented(tb, document.NewSummary(s, document.FindingsTally{}, nil)))
 	for _, key := range path {
 		if index, err := strconv.Atoi(key); err == nil {
 			var elements []json.RawMessage
-			require.NoError(t, json.Unmarshal(raw, &elements))
+			require.NoError(tb, json.Unmarshal(raw, &elements))
 			raw = elements[index]
 			continue
 		}
 		var fields map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(raw, &fields))
+		require.NoError(tb, json.Unmarshal(raw, &fields))
 		raw = fields[key]
 	}
-	return topLevelKeys(t, raw)
+	return topLevelKeys(tb, raw)
 }
 
 // septemberSummary holds one of every section's entries, so every object of the document is written.

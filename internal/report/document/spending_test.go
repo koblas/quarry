@@ -1,7 +1,6 @@
 package document_test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/koblas/quarry/internal/platform/money"
@@ -215,7 +214,7 @@ func Test_NewSpending_reads_back_with_every_row_total_and_warning_it_was_given(t
 		Warnings []string `json:"warnings"`
 	}
 
-	require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewSpending(s, []string{"first", "second"}))), &back))
+	mustReadBack(t, document.NewSpending(s, []string{"first", "second"}), &back)
 
 	assert.Equal(t, "2026-01-01", back.Since)
 	assert.Equal(t, "2026-09-29", back.Until)

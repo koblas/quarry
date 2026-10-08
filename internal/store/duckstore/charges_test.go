@@ -1,92 +1,20 @@
 package duckstore_test
 
 import (
+	"strconv"
 	"testing"
-	"time"
 
+	"github.com/koblas/quarry/internal/platform/money"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const (
-	catFuel  = "cat-fuel"
-	payeeGym = "payee-gym"
-	nameGym  = "Gym"
-)
-
-// chargesThrough is the last day the charges tests read.
-var chargesThrough = day(2026, 9, 29)
-
-// splitPart is one split of a chargeSpec; negative cents is money out and a nil category is none.
-type splitPart struct {
-	category *string
-	cents    int64
-}
-
-// chargeSpec is one transaction of any number of splits; account defaults to acctInReports,
-// currency to CAD and date to 2026-03-15.
-type chargeSpec struct {
-	id       string
-	sourceID int64
-	account  string
-	currency string
-	payee    *string
-	date     time.Time
-	splits   []splitPart
-}
-
-// addCharge appends spec's transaction and its splits to rows.
-func addCharge(rows *store.Rows, spec chargeSpec) {
-	account, currency, date := spec.account, spec.currency, spec.date
-	if account == "" {
-		account = acctInReports
-	}
-	if currency == "" {
-		currency = "CAD"
-	}
-	if date.IsZero() {
-		date = day(2026, 3, 15)
-	}
-	var amount int64
-	for i, part := range spec.splits {
-		amount += part.cents
-		rows.Splits = append(rows.Splits, store.Split{
-			ID: spec.id + "-" + string(rune('a'+i)), SourceID: int64(len(rows.Splits) + 1), TransactionID: "txn-" + spec.id,
-			CategoryID: part.category, Amount: part.cents,
-		})
-	}
-	rows.Transactions = append(rows.Transactions, store.Transaction{
-		ID: "txn-" + spec.id, SourceID: spec.sourceID, AccountID: account, Date: date, PayeeID: spec.payee,
-		Amount: amount, Currency: currency, Status: "uncleared",
-	})
-}
-
-// chargeRowsFor is spendRows with the Gym payee and a fuel category.
-func chargeRowsFor() store.Rows {
-	rows := spendRows(expenseCategory(catFuel, "Fuel"))
-	rows.Payees = []store.Payee{{ID: payeeGym, SourceID: 1, Name: nameGym}}
-	return rows
-}
-
-// oneSplit is a charge of cents in catExpense.
-func oneSplit(id string, sourceID int64, cents int64) chargeSpec {
-	return chargeSpec{id: id, sourceID: sourceID, splits: []splitPart{{category: new(catExpense), cents: -cents}}}
-}
 
 func chargesOf(t *testing.T, rows store.Rows) store.Charges {
 	t.Helper()
 	got, err := newStoreWith(t, rows).Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
 	require.NoError(t, err)
 	return got
-}
-
-func amountsOf(charges store.Charges) []int64 {
-	amounts := make([]int64, len(charges.Rows))
-	for i, c := range charges.Rows {
-		amounts[i] = c.Amount
-	}
-	return amounts
 }
 
 func Test_charges_sums_a_split_transaction_into_one_charge(t *testing.T) {
@@ -292,25 +220,19 @@ func Test_charges_gives_no_rows_and_a_zero_span_for_a_store_without_transactions
 	assert.Zero(t, got.Transactions)
 }
 
-func Test_charges_returns_the_transaction_range_query_fault_as_another_fault(t *testing.T) {
+func Test_charges_returns_a_transaction_range_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT min"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT min", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+			_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_charges_returns_a_transaction_range_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
 // namedChargesOf reads chargesOf's charges with the span scoped to ids.
@@ -379,4 +301,191 @@ func Test_charges_gives_a_zero_span_when_the_named_accounts_have_no_transactions
 
 	assert.Zero(t, got.Transactions)
 	assert.Equal(t, []string{"txn-unnamed"}, transactionIDsOf(got))
+}
+
+// usdCharge is a one-split charge of cents on the USD account on date.
+func usdCharge(id string, cents int64, date int) chargeSpec {
+	return chargeSpec{
+		id: id, sourceID: 1, account: acctUSD, currency: "USD", date: march(date),
+		splits: []splitPart{{category: new(catExpense), cents: -cents}},
+	}
+}
+
+// ratedChargesOf reads the charges of rows on a store holding fridayAndMonday's rates.
+func ratedChargesOf(t *testing.T, rows store.Rows) store.Charges {
+	t.Helper()
+	got, err := newStoreWithRates(t, rows, fridayAndMonday()...).Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+	require.NoError(t, err)
+	return got
+}
+
+func Test_charges_converts_a_usd_charge_at_the_rate_of_its_date(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	addCharge(&rows, usdCharge("usd", 1000, 16))
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(1300), *got.Rows[0].AmountCAD)
+	assert.Equal(t, int64(1000), *got.Rows[0].AmountUSD)
+	assert.Equal(t, money.Rate(mondayRate), got.Rows[0].USDCAD)
+}
+
+func Test_charges_converts_a_cad_charge_into_usd_at_the_rate_of_its_date(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	addCharge(&rows, chargeSpec{id: "cad", sourceID: 1, date: march(13), splits: []splitPart{{category: new(catExpense), cents: -1250}}})
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(1250), *got.Rows[0].AmountCAD)
+	assert.Equal(t, int64(1000), *got.Rows[0].AmountUSD)
+	assert.Equal(t, money.Rate(fridayRate), got.Rows[0].USDCAD)
+}
+
+func Test_charges_sums_the_converted_splits_of_a_charge_not_its_converted_total(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	spec := usdCharge("split", 0, 13)
+	spec.splits = []splitPart{{new(catExpense), -1}, {new(catExpense), -1}}
+	addCharge(&rows, spec)
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(2), got.Rows[0].Amount)
+	assert.Equal(t, int64(2), *got.Rows[0].AmountCAD)
+}
+
+func Test_charges_cells_match_money_convert_for_single_split_charges(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	var id int64
+	for _, currency := range []string{"CAD", "USD"} {
+		for _, cents := range []int64{1, 10, 20, 99, 12_345, 99_999_999} {
+			for _, day := range []int{13, 16, 17} {
+				id++
+				spec := chargeSpec{id: "c" + strconv.FormatInt(id, 10), sourceID: id, date: march(day), splits: []splitPart{{category: new(catExpense), cents: -cents}}}
+				if currency == "USD" {
+					spec.account, spec.currency = acctUSD, "USD"
+				}
+				addCharge(&rows, spec)
+			}
+		}
+	}
+	st := newStoreWithRates(t, rows, ratesOn(13, 1_250_000, "FXUSDCAD"), ratesOn(16, 1_600_001, "FXUSDCAD"), ratesOn(17, 1_249_999, "FXUSDCAD"))
+
+	got, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+
+	require.NoError(t, err)
+	require.Len(t, got.Rows, int(id))
+	for _, c := range got.Rows {
+		own, _ := money.ParseCurrency(c.Currency)
+		wantCAD, okCAD := money.Convert(c.Amount, own, money.CAD, c.USDCAD)
+		wantUSD, okUSD := money.Convert(c.Amount, own, money.USD, c.USDCAD)
+		require.True(t, okCAD && okUSD)
+		require.NotNil(t, c.AmountCAD)
+		require.NotNil(t, c.AmountUSD)
+		assert.Equal(t, []int64{wantCAD, wantUSD}, []int64{*c.AmountCAD, *c.AmountUSD}, "%s %d at %d", c.Currency, c.Amount, c.USDCAD)
+	}
+}
+
+func Test_charges_cell_of_a_split_charge_differs_from_converting_its_total(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	spec := usdCharge("split", 0, 13)
+	spec.splits = []splitPart{{new(catExpense), -1}, {new(catExpense), -1}}
+	addCharge(&rows, spec)
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	converted, ok := money.Convert(got.Rows[0].Amount, money.USD, money.CAD, got.Rows[0].USDCAD)
+	require.True(t, ok)
+	assert.Equal(t, int64(3), converted)
+	assert.Equal(t, int64(2), *got.Rows[0].AmountCAD)
+}
+
+func Test_charges_takes_the_prior_rate_for_a_weekend_charge(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	addCharge(&rows, usdCharge("weekend", 1000, 14))
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, money.Rate(fridayRate), got.Rows[0].USDCAD)
+	assert.Equal(t, int64(1250), *got.Rows[0].AmountCAD)
+}
+
+func Test_charges_leaves_the_cross_cell_and_rate_empty_for_a_usd_charge_before_the_first_rate(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	addCharge(&rows, usdCharge("early", 1000, 10))
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Nil(t, got.Rows[0].AmountCAD)
+	assert.Equal(t, int64(1000), *got.Rows[0].AmountUSD)
+	assert.Zero(t, got.Rows[0].USDCAD)
+}
+
+func Test_charges_leaves_the_cross_cell_and_rate_empty_for_a_cad_charge_before_the_first_rate(t *testing.T) {
+	t.Parallel()
+	rows := fxSpendRows()
+	addCharge(&rows, chargeSpec{id: "early", sourceID: 1, date: march(10), splits: []splitPart{{category: new(catExpense), cents: -700}}})
+
+	got := ratedChargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(700), *got.Rows[0].AmountCAD)
+	assert.Nil(t, got.Rows[0].AmountUSD)
+	assert.Zero(t, got.Rows[0].USDCAD)
+}
+
+func Test_charges_gives_a_cad_charge_in_a_store_without_rates_as_its_own_cad_cell(t *testing.T) {
+	t.Parallel()
+	rows := chargeRowsFor()
+	addCharge(&rows, oneSplit("cad", 1, 1200))
+
+	got := chargesOf(t, rows)
+
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, int64(1200), *got.Rows[0].AmountCAD)
+	assert.Nil(t, got.Rows[0].AmountUSD)
+	assert.Zero(t, got.Rows[0].USDCAD)
+}
+
+func Test_charges_gives_the_date_of_the_first_rate(t *testing.T) {
+	t.Parallel()
+
+	got := ratedChargesOf(t, fxSpendRows())
+
+	assert.Equal(t, march(13), got.FirstRate)
+}
+
+func Test_charges_gives_no_first_rate_date_for_a_store_without_rates(t *testing.T) {
+	t.Parallel()
+
+	got := chargesOf(t, chargeRowsFor())
+
+	assert.True(t, got.FirstRate.IsZero())
+}
+
+func Test_charges_returns_a_first_rate_read_fault_as_another_fault(t *testing.T) {
+	t.Parallel()
+	for _, c := range otherFaults("SELECT min(date) FROM fx_rates", 2) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
+
+			_, err := st.Charges(t.Context(), store.ChargeParams{Through: chargesThrough})
+
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }

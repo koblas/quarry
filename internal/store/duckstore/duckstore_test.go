@@ -2,13 +2,15 @@ package duckstore_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -19,67 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// minimalRows fills every table (transfers: one paired, one one-sided) so a
-// round trip covers each table and each nullable column set and NULL.
-func minimalRows() store.Rows {
-	return store.Rows{
-		Accounts: []store.Account{{
-			ID: "acct-1", SourceID: 1, Name: "Chequing", Type: "chequing", Currency: "CAD",
-			Institution: new("Big Bank"), Closed: false, Active: true,
-		}},
-		Categories: []store.Category{{
-			ID: "cat-1", SourceID: 1, Name: "Groceries", FullPath: "Groceries", Kind: "expense", Hidden: false,
-		}},
-		Payees: []store.Payee{{ID: "payee-1", SourceID: 1, Name: "Coffee Shop"}},
-		Tags:   []store.Tag{{ID: "tag-1", SourceID: 1, Name: "Reimbursable"}},
-		Transactions: []store.Transaction{{
-			ID: "txn-1", SourceID: 1, AccountID: "acct-1",
-			Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), PayeeID: new("payee-1"), Memo: new("Beans"),
-			Amount: 1234, Currency: "CAD", Status: "uncleared", ChequeNumber: new("101"),
-		}},
-		Splits: []store.Split{{
-			ID: "split-1", SourceID: 1, TransactionID: "txn-1", CategoryID: new("cat-1"),
-			Amount: 1234, Memo: new("split memo"),
-		}, {
-			ID: "split-4", SourceID: 4, TransactionID: "txn-1", CategoryID: new("cat-1"), Amount: 1234,
-		}},
-		SplitTags: []store.SplitTag{{SplitID: "split-1", TagID: "tag-1"}},
-		Transfers: []store.Transfer{
-			{ID: "xfer-1", FromSplitID: "split-1", ToSplitID: new("split-2"), CrossCurrency: true},
-			{ID: "xfer-3", FromSplitID: "split-3", OtherAccount: new("Savings")},
-		},
-		Securities: []store.Security{
-			{ID: "sec-1", SourceID: 1, Name: "Acme Corp", Ticker: new("ACME"), Currency: new("CAD")},
-			{ID: "sec-2", SourceID: 2, Name: "Plain Fund"},
-		},
-		Prices: []store.Price{{
-			SecurityID: "sec-1", SourceID: 7, Date: time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), Price: 12_345_678,
-		}},
-		InvestmentTransactions: []store.InvestmentTransaction{{
-			ID: "inv-1", SourceID: 21, AccountID: "acct-1", SecurityID: new("sec-1"),
-			Date: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC), Action: "split", Shares: new(int64(1_500_000)),
-			Amount: 12_345, Commission: new(int64(84_998)), CostBasis: new(int64(100_050)), Currency: "CAD", Memo: new("note"),
-			SplitNewShares: new(int64(12_000_000)), SplitOldShares: new(int64(1_000_000)),
-		}, {
-			ID: "inv-2", SourceID: 22, AccountID: "acct-1",
-			Date: time.Date(2026, 3, 17, 0, 0, 0, 0, time.UTC), Action: "dividend", Amount: 500, Currency: "CAD",
-		}},
-		ImportRuns: []store.ImportRun{{
-			ID: 1, StartedAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), FinishedAt: time.Date(2026, 9, 27, 14, 30, 7, 0, time.UTC),
-			Snapshot: store.SnapshotRef{
-				Path: "/snapshots/20260927T143005Z.sqlite", SHA256: "9f86", SchemaFingerprint: "sha256:abc",
-				TakenAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC), Source: "/Users/alex/Documents/Home.quicken",
-			},
-			Counts: store.Counts{
-				Accounts: 1, Categories: 2, Payees: 3, Tags: 4, Transactions: 5, Splits: 6, SplitTags: 7, Transfers: 8,
-				Securities: 18, Prices: 19, InvestmentTransactions: 20,
-			},
-			BalancesChecked: 9, BalancesMismatched: 10, SplitsMismatched: 11, TransfersOneSided: 12,
-			BalancesNeverReconciled: 14, InvestmentAccounts: 15, TransfersPaired: 16, TransfersCrossCurrency: 17, SharesChecked: 21,
-		}},
-	}
-}
 
 // Reads back via a fresh read-only connection: the only proof of the
 // bytes on disk, not just the in-memory build.
@@ -627,95 +568,6 @@ func Test_replace_fails_when_the_context_is_already_cancelled(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-// faultDB wraps the real partial-file connection and injects at most one
-// fault; with no fault configured it passes every call through.
-type faultDB struct {
-	duckstore.DB
-
-	path             string
-	checkpointFault  error
-	afterCheckpoint  func()
-	walOnClose       bool
-	appendFaultTable string
-	appendFault      error
-	queryFaultOn     string // the build query that fails with queryFault, or whose first row's scan fails with scanFault
-	queryFault       error
-	scanFault        error
-	execFaultOn      string // the statement Exec fails with execFault
-	execFault        error
-	appended         []string // every table AppendRows was asked to load, in order
-	checkpoints      int      // CheckpointClose calls
-	closes           int      // Close calls
-}
-
-// QueryRows fails with queryFault for the query queryFaultOn, hands its row callback a scan that
-// fails with scanFault, else queries for real.
-func (f *faultDB) QueryRows(ctx context.Context, query string, args []any, row func(scan func(dest ...any) error) error) error {
-	if f.queryFault != nil && query == f.queryFaultOn {
-		return f.queryFault
-	}
-	if f.scanFault != nil && query == f.queryFaultOn {
-		return row(func(...any) error { return f.scanFault })
-	}
-	return f.DB.QueryRows(ctx, query, args, row)
-}
-
-// Exec fails with execFault for the statement execFaultOn, else runs it for real.
-func (f *faultDB) Exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	if f.execFault != nil && query == f.execFaultOn {
-		return nil, f.execFault
-	}
-	return f.DB.Exec(ctx, query, args...)
-}
-
-// AppendRows fails with appendFault for appendFaultTable, else appends for real.
-func (f *faultDB) AppendRows(ctx context.Context, table string, rows [][]any) error {
-	f.appended = append(f.appended, table)
-	if f.appendFault != nil && table == f.appendFaultTable {
-		return fmt.Errorf("append %s: %w", table, f.appendFault)
-	}
-	return f.DB.AppendRows(ctx, table, rows)
-}
-
-// CheckpointClose returns checkpointFault wrapped as duckdb.CheckpointClose
-// wraps a driver error, or runs the real one and then afterCheckpoint.
-func (f *faultDB) CheckpointClose(ctx context.Context) error {
-	f.checkpoints++
-	if f.checkpointFault != nil {
-		return fmt.Errorf("checkpoint %s: %w", f.path, f.checkpointFault)
-	}
-	err := f.DB.CheckpointClose(ctx)
-	if f.afterCheckpoint != nil {
-		f.afterCheckpoint()
-	}
-	return err
-}
-
-// Close closes the real connection, then leaves a .wal beside the partial
-// when walOnClose is set, as a crash mid-checkpoint would.
-func (f *faultDB) Close() error {
-	f.closes++
-	err := f.DB.Close()
-	if f.walOnClose {
-		_ = os.WriteFile(f.path+".wal", []byte("wal"), 0o600)
-	}
-	return err
-}
-
-// newFaultStore returns a Store over dir that builds its partial file
-// through f over a real DuckDB connection, configured further by opts.
-func newFaultStore(dir string, f *faultDB, opts ...duckstore.Option) *duckstore.Store {
-	create := duckstore.WithCreate(func(ctx context.Context, path string) (duckstore.DB, error) {
-		db, err := duckdb.Create(ctx, path)
-		if err != nil {
-			return nil, err
-		}
-		f.DB, f.path = db, path
-		return f, nil
-	})
-	return duckstore.New(dir, append([]duckstore.Option{create}, opts...)...)
-}
-
 func Test_replace_removes_the_partial_and_wal_when_the_checkpoint_fails(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -1003,20 +855,496 @@ func Test_replace_removes_the_partial_its_failed_create_left_behind(t *testing.T
 	assert.Empty(t, direntNames(entries))
 }
 
-func direntNames(entries []os.DirEntry) []string {
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
+var (
+	errTwoLines = errors.New("connector refused\nsecond line")
+	errEmpty    = errors.New("")
+)
+
+// storeInfoDDL creates store_info holding one row per format version given.
+func storeInfoDDL(versions ...string) string {
+	var ddl strings.Builder
+	ddl.WriteString("CREATE TABLE store_info (format_version INTEGER, quarry_version VARCHAR, built_at TIMESTAMP);")
+	for _, v := range versions {
+		ddl.WriteString("INSERT INTO store_info VALUES (" + v + ", '(devel)', now());")
 	}
-	return names
+	return ddl.String()
 }
 
-func assertScalar(t *testing.T, db *duckdb.DB, query, want string) {
+// openRefusal is the *store.OpenError a read of st refuses with.
+func openRefusal(t *testing.T, st *duckstore.Store) *store.OpenError {
 	t.Helper()
-	var got string
-	err := db.QueryRows(t.Context(), query, nil, func(scan func(dest ...any) error) error {
-		return scan(&got)
-	})
+	_, err := st.Status(t.Context())
+	openErr, ok := errors.AsType[*store.OpenError](err)
+	require.True(t, ok, "want *store.OpenError, got %v", err)
+	return openErr
+}
+
+func Test_open_read_classifies_each_store_file_it_cannot_read(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		arrange func(t *testing.T, dir string)
+		want    store.OpenFault
+	}{
+		{name: "no file", arrange: func(*testing.T, string) {}, want: store.OpenFaultMissing},
+		{
+			name: "a file that is not a database",
+			arrange: func(t *testing.T, dir string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, duckstore.FileName), []byte("text\n"), 0o600))
+			},
+			want: store.OpenFaultNotDuckDB,
+		},
+		{
+			name: "a file the process may not read",
+			arrange: func(t *testing.T, dir string) {
+				t.Helper()
+				skipAsRoot(t)
+				path := filepath.Join(dir, duckstore.FileName)
+				require.NoError(t, os.WriteFile(path, []byte("text\n"), 0o600))
+				require.NoError(t, os.Chmod(path, 0o000))
+			},
+			want: store.OpenFaultPermission,
+		},
+		{
+			name: "a directory the process may not search",
+			arrange: func(t *testing.T, dir string) {
+				t.Helper()
+				skipAsRoot(t)
+				require.NoError(t, os.WriteFile(filepath.Join(dir, duckstore.FileName), []byte("text\n"), 0o600))
+				require.NoError(t, os.Chmod(dir, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+			},
+			want: store.OpenFaultPermission,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			c.arrange(t, dir)
+
+			got := openRefusal(t, duckstore.New(dir))
+
+			assert.Equal(t, c.want, got.Fault)
+		})
+	}
+}
+
+func Test_open_read_classifies_each_fault_the_open_returns(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		fault error
+		want  store.OpenFault
+	}{
+		{
+			name: "another process holds the file",
+			fault: driverIOError(`IO Error: Could not set lock on file "x.duckdb": Conflicting lock is held in ` +
+				`/usr/local/bin/quarry (PID 42) by user dave. See also https://duckdb.org/docs/stable/connect/concurrency`),
+			want: store.OpenFaultLocked,
+		},
+		{
+			name:  "an OS permission fault",
+			fault: &fs.PathError{Op: "open", Path: "x", Err: fs.ErrPermission},
+			want:  store.OpenFaultPermission,
+		},
+		{
+			name:  "the driver's missing-database text while the file is there",
+			fault: driverIOError(`IO Error: Cannot open database "x.duckdb" in read-only mode: database does not exist`),
+			want:  store.OpenFaultOther,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, failingOpener(c.fault))
+
+			got := openRefusal(t, st)
+
+			assert.Equal(t, c.want, got.Fault)
+		})
+	}
+}
+
+func Test_open_read_refuses_a_store_removed_between_the_check_and_the_open(t *testing.T) {
+	t.Parallel()
+	st := newBuiltStore(t, duckstore.WithOpenReadOnly(func(_ context.Context, path string) (duckstore.ReadDB, error) {
+		require.NoError(t, os.Remove(path))
+		return nil, driverIOError(`IO Error: Cannot open database "x.duckdb" in read-only mode: database does not exist`)
+	}))
+
+	got := openRefusal(t, st)
+
+	assert.Equal(t, store.OpenFaultMissing, got.Fault)
+}
+
+func Test_open_read_refuses_a_store_of_another_format(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ddl  string
+	}{
+		{name: "no store_info", ddl: importRunsDDL},
+		{name: "an older format", ddl: importRunsDDL + storeInfoDDL(strconv.Itoa(duckstore.FormatVersion-1))},
+		{name: "a newer format", ddl: importRunsDDL + storeInfoDDL(strconv.Itoa(duckstore.FormatVersion+1))},
+		{name: "a NULL format", ddl: importRunsDDL + storeInfoDDL("NULL")},
+		{name: "store_info with no row", ddl: importRunsDDL + storeInfoDDL()},
+		{
+			name: "store_info with two rows of this format",
+			ddl:  importRunsDDL + storeInfoDDL(strconv.Itoa(duckstore.FormatVersion), strconv.Itoa(duckstore.FormatVersion)),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreFile(t, c.ddl)
+
+			got := openRefusal(t, st)
+
+			assert.Equal(t, store.OpenError{
+				Fault: store.OpenFaultOtherFormat, Path: st.Path(), SnapshotPath: snapshotFile, Err: got.Err,
+			}, *got)
+		})
+	}
+}
+
+func Test_open_read_names_a_snapshot_only_when_import_runs_yields_one(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ddl  string
+		want string
+	}{
+		{name: "one import run", ddl: importRunsDDL, want: snapshotFile},
+		{name: "no import_runs table", ddl: "CREATE TABLE accounts (id VARCHAR);", want: ""},
+		{name: "no snapshot_path column", ddl: "CREATE TABLE import_runs (id BIGINT); INSERT INTO import_runs VALUES (1);", want: ""},
+		{name: "no import run", ddl: "CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR);", want: ""},
+		{name: "a NULL snapshot path", ddl: "CREATE TABLE import_runs (id BIGINT, snapshot_path VARCHAR); INSERT INTO import_runs VALUES (1, NULL);", want: ""},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreFile(t, c.ddl)
+
+			got := openRefusal(t, st)
+
+			assert.Equal(t, c.want, got.SnapshotPath)
+		})
+	}
+}
+
+func Test_open_read_names_the_latest_import_runs_snapshot(t *testing.T) {
+	t.Parallel()
+	st := newStoreFile(t, importRunsDDL+
+		"INSERT INTO import_runs VALUES (3, '/snapshots/run-3.sqlite'); INSERT INTO import_runs VALUES (2, '/snapshots/run-2.sqlite');")
+
+	got := openRefusal(t, st)
+
+	assert.Equal(t, "/snapshots/run-3.sqlite", got.SnapshotPath)
+}
+
+// The store's directory is reached through a symlink, so the path given and the path the driver names differ on every OS.
+func Test_open_read_reports_other_faults_naming_the_store_by_its_given_path(t *testing.T) {
+	t.Parallel()
+	realDir := t.TempDir()
+	_, err := duckstore.New(realDir).Replace(t.Context(), minimalRows())
 	require.NoError(t, err)
-	assert.Equal(t, want, got)
+	linkDir := filepath.Join(t.TempDir(), "link")
+	require.NoError(t, os.Symlink(realDir, linkDir))
+	given := filepath.Join(linkDir, duckstore.FileName)
+	resolved, err := filepath.EvalSymlinks(given)
+	require.NoError(t, err)
+	st := duckstore.New(linkDir, failingOpener(driverIOError(`IO Error: Cannot open file "`+resolved+`": Input/output error`)))
+
+	got := openRefusal(t, st)
+
+	assert.Equal(t, store.OpenFaultOther, got.Fault)
+	assert.Equal(t, `Cannot open file "`+given+`": Input/output error`, got.Reason)
+}
+
+func Test_open_read_reports_other_faults_with_a_one_line_reason(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		fault error
+		want  string
+	}{
+		{
+			name:  "the driver's first line without its error type",
+			fault: driverIOError("IO Error: Could not read from file: Is a directory\nmore detail"),
+			want:  "Could not read from file: Is a directory",
+		},
+		{
+			name:  "only the OS reason of a path error",
+			fault: &fs.PathError{Op: "open", Path: "/elsewhere/quarry.duckdb", Err: syscall.EIO},
+			want:  syscall.EIO.Error(),
+		},
+		{name: "the first line of any other error", fault: errTwoLines, want: "connector refused"},
+		{name: "a driver message of only its error type", fault: driverIOError("IO Error: "), want: "unknown error"},
+		{name: "an empty error", fault: errEmpty, want: "unknown error"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, failingOpener(c.fault))
+
+			got := openRefusal(t, st)
+
+			assert.Equal(t, c.want, got.Reason)
+		})
+	}
+}
+
+func Test_open_read_reports_a_failed_format_check_as_another_fault(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		query string
+	}{
+		{name: "the catalog query", query: duckstore.ColumnExistsQuery},
+		{name: "the format_version read", query: duckstore.FormatVersionQuery},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fault := ioFault(`query rows "SELECT"`)
+			st := newBuiltStore(t, spyOpener(&spyReadDB{checkFaults: map[string]error{c.query: fault}}))
+
+			got := openRefusal(t, st)
+
+			assert.Equal(t, store.OpenFaultOther, got.Fault)
+			assert.ErrorIs(t, got, fault)
+		})
+	}
+}
+
+func Test_open_read_refuses_another_format_without_a_snapshot_when_its_read_fails(t *testing.T) {
+	t.Parallel()
+	spy := &spyReadDB{checkFaults: map[string]error{duckstore.SnapshotPathQuery: ioFault(`query rows "SELECT"`)}}
+	st := newStoreFile(t, importRunsDDL, spyOpener(spy))
+
+	got := openRefusal(t, st)
+
+	assert.Equal(t, store.OpenFaultOtherFormat, got.Fault)
+	assert.Empty(t, got.SnapshotPath)
+}
+
+func Test_open_read_closes_the_connection_when_it_refuses_the_store(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		ddl   string
+		spy   *spyReadDB
+		fault store.OpenFault
+	}{
+		{name: "another format", ddl: importRunsDDL, spy: &spyReadDB{}, fault: store.OpenFaultOtherFormat},
+		{
+			name: "a failed format check", ddl: importRunsDDL + storeInfoDDL(strconv.Itoa(duckstore.FormatVersion)),
+			spy:   &spyReadDB{checkFaults: map[string]error{duckstore.FormatVersionQuery: errQueryFailed}},
+			fault: store.OpenFaultOther,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newStoreFile(t, c.ddl, spyOpener(c.spy))
+
+			got := openRefusal(t, st)
+
+			require.Equal(t, c.fault, got.Fault)
+			assert.Equal(t, 1, c.spy.closes)
+		})
+	}
+}
+
+func Test_replace_removes_a_leftover_partial_just_past_the_age_gate(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		file string
+	}{
+		{"per-run name", ".quarry-20260101T000000Z-4242.duckdb.partial"},
+		{"per-run name's wal", ".quarry-20260101T000000Z-4242.duckdb.partial.wal"},
+		{"seconds-only name from an older release", ".quarry-20260101T000000Z.duckdb.partial"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			leftover := filepath.Join(dir, c.file)
+			require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))
+			old := time.Now().Add(-61 * time.Minute)
+			require.NoError(t, os.Chtimes(leftover, old, old))
+			st := duckstore.New(dir)
+
+			_, err := st.Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			_, statErr := os.Stat(leftover)
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
+}
+
+func Test_replace_leaves_a_leftover_partial_just_inside_the_age_gate_alone(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	leftover := filepath.Join(dir, ".quarry-20260101T000000Z.duckdb.partial")
+	require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))
+	recent := time.Now().Add(-59 * time.Minute)
+	require.NoError(t, os.Chtimes(leftover, recent, recent))
+	st := duckstore.New(dir)
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	_, statErr := os.Stat(leftover)
+	assert.NoError(t, statErr)
+}
+
+// Each case is old enough for the age gate alone to remove it, so only the
+// pattern's precision keeps it.
+func Test_replace_sweep_leaves_near_miss_and_unrelated_files_alone(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		file string
+	}{
+		{"no .partial suffix", ".quarry-20260927T143005Z.duckdb"},
+		{"no leading dot", "quarry-20260927T143005Z.duckdb.partial"},
+		{"trailing suffix after partial", ".quarry-20260927T143005Z.duckdb.partial.bak"},
+		{"extra prefix before the dot", "x.quarry-20260927T143005Z.duckdb.partial"},
+		{"sqlite wal suffix, not duckdb's", ".quarry-20260927T143005Z.duckdb.partial-wal"},
+		{"snapshot-shaped, wrong extension", ".20260927T143005Z.sqlite.partial"},
+		{"empty process id", ".quarry-20260927T143005Z-.duckdb.partial"},
+		{"non-numeric process id", ".quarry-20260927T143005Z-12a.duckdb.partial"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			path := filepath.Join(dir, c.file)
+			require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+			old := time.Now().Add(-2 * time.Hour)
+			require.NoError(t, os.Chtimes(path, old, old))
+			st := duckstore.New(dir)
+
+			_, err := st.Replace(t.Context(), minimalRows())
+
+			require.NoError(t, err)
+			_, statErr := os.Stat(path)
+			assert.NoError(t, statErr)
+		})
+	}
+}
+
+// The directory's own name matches buildFilePattern, so only the
+// entry.IsDir() check (not the pattern) keeps it.
+func Test_replace_sweep_ignores_subdirectories(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	sub := filepath.Join(dir, ".quarry-20200101T000000Z.duckdb.partial")
+	require.NoError(t, os.Mkdir(sub, 0o700))
+	old := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(sub, old, old))
+	st := duckstore.New(dir)
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	info, statErr := os.Stat(sub)
+	require.NoError(t, statErr)
+	assert.True(t, info.IsDir())
+}
+
+// The pattern must never match the live store's own files: unlike a
+// leftover, quarry.duckdb(.wal) is the store still in place, and the sweep
+// runs before a build that can still fail.
+func Test_replace_sweep_never_matches_the_live_stores_own_files(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	storeFile := filepath.Join(dir, "quarry.duckdb")
+	storeWAL := filepath.Join(dir, "quarry.duckdb.wal")
+	require.NoError(t, os.WriteFile(storeFile, []byte("live store"), 0o600))
+	require.NoError(t, os.WriteFile(storeWAL, []byte("live wal"), 0o600))
+	old := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(storeFile, old, old))
+	require.NoError(t, os.Chtimes(storeWAL, old, old))
+	st := duckstore.New(dir, duckstore.WithCreate(func(context.Context, string) (duckstore.DB, error) {
+		return nil, errCreateBoom
+	}))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, errCreateBoom)
+	after, statErr := os.ReadFile(storeFile)
+	require.NoError(t, statErr)
+	assert.Equal(t, []byte("live store"), after)
+	afterWAL, statErr := os.ReadFile(storeWAL)
+	require.NoError(t, statErr)
+	assert.Equal(t, []byte("live wal"), afterWAL)
+}
+
+// A concurrent sync's own in-flight partial matches the pattern but is not
+// yet aged; the sweep must not race it.
+func Test_replace_leaves_a_fresh_partial_alone(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fresh := filepath.Join(dir, ".quarry-20260927T143005Z.duckdb.partial")
+	require.NoError(t, os.WriteFile(fresh, []byte("in flight"), 0o600))
+	st := duckstore.New(dir)
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.NoError(t, err)
+	_, statErr := os.Stat(fresh)
+	assert.NoError(t, statErr)
+}
+
+// dir is write+execute only, so the sweep's own os.ReadDir fails; WithCreate
+// is wired to a distinct forced error, independent of the filesystem.
+func Test_replace_ignores_a_sweep_that_cannot_list_the_directory(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o300))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	st := duckstore.New(dir, duckstore.WithCreate(func(context.Context, string) (duckstore.DB, error) {
+		return nil, errCreateBoom
+	}))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, errCreateBoom)
+}
+
+// dir is chmoded read-only, WithCreate wired to a distinct forced error:
+// both faults independent, only the sweep's must never surface.
+func Test_replace_leaves_a_leftover_alone_when_the_sweep_cannot_remove_it(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	leftover := filepath.Join(dir, ".quarry-20260101T000000Z.duckdb.partial")
+	require.NoError(t, os.WriteFile(leftover, []byte("stale"), 0o600))
+	old := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(leftover, old, old))
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	st := duckstore.New(dir, duckstore.WithCreate(func(context.Context, string) (duckstore.DB, error) {
+		return nil, errCreateBoom
+	}))
+
+	_, err := st.Replace(t.Context(), minimalRows())
+
+	require.ErrorIs(t, err, errCreateBoom)
+	_, statErr := os.Stat(leftover)
+	assert.NoError(t, statErr)
 }

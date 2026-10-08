@@ -1,7 +1,6 @@
 package document_test
 
 import (
-	"encoding/json"
 	"math/big"
 	"testing"
 	"time"
@@ -17,10 +16,10 @@ import (
 var netWorthTestDay = time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 
 // netWorthJSON is n's document as a map, so a null and an absent key differ.
-func netWorthJSON(t *testing.T, n report.NetWorth, warnings []string) map[string]any {
-	t.Helper()
+func netWorthJSON(tb testing.TB, n report.NetWorth, warnings []string) map[string]any {
+	tb.Helper()
 	var got map[string]any
-	require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewNetWorth(n, warnings))), &got))
+	mustReadBack(tb, document.NewNetWorth(n, warnings), &got)
 	return got
 }
 
@@ -160,7 +159,7 @@ func Test_NewNetWorth_keeps_a_zero_balance_row_and_writes_converted_balance_by_l
 					} `json:"balances"`
 				} `json:"dates"`
 			}
-			require.NoError(t, json.Unmarshal([]byte(indented(t, document.NewNetWorth(n, nil))), &got))
+			mustReadBack(t, document.NewNetWorth(n, nil), &got)
 
 			require.Len(t, got.Dates, 1)
 			require.Len(t, got.Dates[0].Balances, 2)

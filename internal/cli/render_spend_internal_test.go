@@ -4,19 +4,11 @@ package cli
 
 import (
 	"testing"
-	"time"
 
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
 )
-
-func spendingWindow() store.Window {
-	return store.Window{
-		Since: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		Until: time.Date(2026, time.March, 9, 0, 0, 0, 0, time.UTC),
-	}
-}
 
 func Test_renderSpending(t *testing.T) {
 	cases := []struct {
@@ -113,4 +105,21 @@ func Test_renderSpending(t *testing.T) {
 			assert.Equal(t, c.want, renderSpending(spending))
 		})
 	}
+}
+
+func Test_renderSpending_escapes_a_category_key_and_an_account_name_in_the_caption(t *testing.T) {
+	got := renderSpending(report.Spending{
+		Window:   spendingWindow(),
+		Accounts: []store.Account{{Name: "Chequ\ning"}},
+		Rows:     []report.SpendingRow{{Key: new("Auto\t:Fuel"), Currency: "CAD", Spent: 100}, {Key: new("Food"), Currency: "CAD", Spent: 100}},
+		Totals:   []store.SpendingTotal{{Currency: "CAD", Spent: 200}},
+	})
+
+	assert.Equal(t, ""+
+		"Spending 2026-01-01 to 2026-03-09 in Chequ\\ning\n"+
+		"\n"+
+		"Category     Currency  Spent\n"+
+		"Auto\\t:Fuel  CAD        1.00\n"+
+		"Food         CAD        1.00\n"+
+		"Total        CAD        2.00\n", got)
 }

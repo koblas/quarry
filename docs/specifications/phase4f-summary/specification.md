@@ -512,19 +512,19 @@ Architect sizing pass (2026-10-06). Order: 01a → 01b → 06 → 10 → 12 → 
 - [x] SCENARIO-20: A subscription resumed after it ended is new again — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_resumed_after_it_ended_as_new`
 - [x] SCENARIO-04: A past month's recurring charges do not change with later charges — delivered by SCENARIO-01a — `internal/report/summary_recurring_test.go` `Test_summary_recurring_ignores_charges_after_the_month`
 - [x] SCENARIO-01b: Summary of last month — `cmd/quarry/run_summary_test.go` `Test_run_summary_prints_last_months_summary`
-- [x] SCENARIO-05: Net worth change between month ends — delivered by SCENARIO-01b — `cmd/quarry/run_summary_change_test.go` `Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_zero_in_the_change`
+- [x] SCENARIO-05: Net worth change between month ends — delivered by SCENARIO-01b — `cmd/quarry/run_summary_test.go` `Test_run_summary_counts_a_type_without_a_balance_on_the_first_month_end_as_zero_in_the_change`
 - [x] SCENARIO-08: Findings line names the last sync — delivered by SCENARIO-01b — `internal/cli/summary_test.go` `Test_summary_findings_row_names_the_last_sync`
-- [x] SCENARIO-09: --month that cannot be summarized is refused — delivered by SCENARIO-01b — `cmd/quarry/run_summary_refusals_test.go` `Test_run_summary_refuses_a_month_it_cannot_summarize`
-- [x] SCENARIO-13: Summary in another currency — delivered by SCENARIO-01b — `cmd/quarry/run_summary_change_test.go` `Test_run_summary_lists_cad_and_usd_separately_with_native`
+- [x] SCENARIO-09: --month that cannot be summarized is refused — delivered by SCENARIO-01b — `cmd/quarry/run_summary_test.go` `Test_run_summary_refuses_a_month_it_cannot_summarize`
+- [x] SCENARIO-13: Summary in another currency — delivered by SCENARIO-01b — `cmd/quarry/run_summary_test.go` `Test_run_summary_lists_cad_and_usd_separately_with_native`
 - [x] SCENARIO-15: Summary with no store refuses — delivered by SCENARIO-01b — `cmd/quarry/run_read_refusals_test.go` `Test_run_read_commands_refuse_when_there_is_no_store`
-- [x] SCENARIO-06: First month of data shows no change — `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_shows_no_change_in_the_first_month_of_data_and_warns_when_the_snapshot_time_is_unknown`
-- [x] SCENARIO-07: A quiet month — delivered by SCENARIO-06 — `cmd/quarry/run_summary_empty_test.go` `Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge`
-- [x] SCENARIO-10: Snapshot taken before the month ended is warned about — `cmd/quarry/run_summary_snapshot_test.go` `Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended`
-- [x] SCENARIO-11: Snapshot with no recorded time is warned about — delivered by SCENARIO-10 — `cmd/quarry/run_summary_snapshot_test.go` `Test_run_summary_warns_when_the_snapshot_records_no_time`
-- [x] SCENARIO-12: Machine-readable summary — `cmd/quarry/run_summary_json_test.go` `Test_run_summary_json_prints_the_ruled_document`
-- [x] SCENARIO-14: Missing exchange rates are warned about once — `cmd/quarry/run_summary_warnings_test.go` `Test_run_summary_warns_once_per_kind_when_the_store_has_no_exchange_rates`
-- [x] SCENARIO-16: Claude asks for last month's summary — `cmd/quarry/run_mcp_summary_test.go` `Test_run_mcp_monthly_summary_returns_the_summary_json_document`
-- [x] SCENARIO-17: Docs describe the monthly job — `cmd/quarry/run_skill_monthly_summary_test.go` `Test_monthly_summary_job_is_documented_where_a_reader_looks`
+- [x] SCENARIO-06: First month of data shows no change — `cmd/quarry/run_summary_test.go` `Test_run_summary_shows_no_change_in_the_first_month_of_data_and_warns_when_the_snapshot_time_is_unknown`
+- [x] SCENARIO-07: A quiet month — delivered by SCENARIO-06 — `cmd/quarry/run_summary_test.go` `Test_run_summary_says_so_in_a_month_with_no_unusual_charge_and_no_new_recurring_charge`
+- [x] SCENARIO-10: Snapshot taken before the month ended is warned about — `cmd/quarry/run_summary_test.go` `Test_run_summary_warns_when_the_snapshot_was_taken_before_the_month_ended`
+- [x] SCENARIO-11: Snapshot with no recorded time is warned about — delivered by SCENARIO-10 — `cmd/quarry/run_summary_test.go` `Test_run_summary_warns_when_the_snapshot_records_no_time`
+- [x] SCENARIO-12: Machine-readable summary — `cmd/quarry/run_summary_test.go` `Test_run_summary_json_prints_the_ruled_document`
+- [x] SCENARIO-14: Missing exchange rates are warned about once — `cmd/quarry/run_summary_test.go` `Test_run_summary_warns_once_per_kind_when_the_store_has_no_exchange_rates`
+- [x] SCENARIO-16: Claude asks for last month's summary — `cmd/quarry/run_mcp_spending_test.go` `Test_run_mcp_monthly_summary_returns_the_summary_json_document`
+- [x] SCENARIO-17: Docs describe the monthly job — `cmd/quarry/run_skill_test.go` `Test_monthly_summary_job_is_documented_where_a_reader_looks`
 - [x] SCENARIO-21: A subscription that kept charging through a stray charge is not new — `internal/report/summary_recurring_test.go` `Test_summary_does_not_list_a_subscription_that_kept_charging_through_a_stray_charge_as_new`
 - [x] SCENARIO-22: A subscription never listed before is new when it first lists — `internal/report/summary_recurring_test.go` `Test_summary_lists_a_subscription_as_new_when_its_earlier_series_was_never_listable`
 

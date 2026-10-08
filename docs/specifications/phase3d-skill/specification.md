@@ -83,7 +83,7 @@ Triage ran on 2026-10-03.
 - MCP tools (`internal/mcp/tools.go:18-26`): query, describe_schema, sync_status, data_quality, spending, cash_flow, recurring_charges, anomalies, search_transactions.
 - Conventions: `internal/report/sql_conventions.go:7-20`.
 - Describe-schema (`internal/report/describe_schema.go`) returns accounts and categories, which is why Rule P2 bounds `schema.md`.
-- Golden fixtures and helpers: `cmd/quarry/run_analysis_documents_golden_test.go` and the `cmd/quarry/run_*_test.go` helpers.
+- Golden fixtures and helpers: `cmd/quarry/run_analysis_documents_test.go` and the `cmd/quarry/run_*_test.go` helpers.
 - The only `go:embed` is at `internal/quicken/v9/reference.go:14`.
 
 **Caller table.** No Go symbol, flag, or format changes. The new artifacts read from:
@@ -486,12 +486,12 @@ Sizing pass by architect (opus), 2026-10-03. The 7 IDs come out as 5 units, all 
 | SCENARIO-03 | OWNS A RUN (opus), 3 batches in 1 package. (1) The five reference `.md` files (§S.6). (2) Command and flag extraction and resolution, with negative controls. (3) MCP tool names, tables and `v_*` views, and the §10 links, with controls. |
 
 ## BDD Acceptance Progress
-- [x] SCENARIO-01: the marketplace lists the quarry plugin, which starts quarry's MCP server — `cmd/quarry/run_plugin_manifest_test.go` `Test_plugin_manifests_list_quarry_and_start_its_mcp_server`
-- [x] SCENARIO-07: SKILL.md carries the ruled frontmatter and the rules Claude must follow — delivered by SCENARIO-01 `cmd/quarry/run_skill_text_test.go` `Test_skill_text_carries_the_ruled_frontmatter_and_rules`
-- [x] SCENARIO-02: references/schema.md is generated from the store and carries no user data — `cmd/quarry/run_skill_schema_reference_test.go` `Test_skill_schema_reference_matches_the_committed_file`
+- [x] SCENARIO-01: the marketplace lists the quarry plugin, which starts quarry's MCP server — `cmd/quarry/run_plugin_test.go` `Test_plugin_manifests_list_quarry_and_start_its_mcp_server`
+- [x] SCENARIO-07: SKILL.md carries the ruled frontmatter and the rules Claude must follow — delivered by SCENARIO-01 `cmd/quarry/run_skill_test.go` `Test_skill_text_carries_the_ruled_frontmatter_and_rules`
+- [x] SCENARIO-02: references/schema.md is generated from the store and carries no user data — `cmd/quarry/run_skill_test.go` `Test_skill_schema_reference_matches_the_committed_file`
 - [x] SCENARIO-04: spending-trend.sql agrees with quarry spend — `cmd/quarry/run_skill_recipes_test.go` `Test_spending_trend_recipe_agrees_with_quarry_spend`
 - [x] SCENARIO-05: income-by-category.sql agrees with quarry cashflow — delivered by SCENARIO-04 — `cmd/quarry/run_skill_recipes_test.go` `Test_income_by_category_recipe_agrees_with_quarry_cashflow`
-- [x] SCENARIO-06: each in-scope use-case question is answered by the command the skill names — `cmd/quarry/run_skill_use_cases_test.go` `Test_each_use_case_question_is_answered_by_the_command_the_skill_names`
+- [x] SCENARIO-06: each in-scope use-case question is answered by the command the skill names — `cmd/quarry/run_skill_test.go` `Test_each_use_case_question_is_answered_by_the_command_the_skill_names`
 - [x] SCENARIO-03: every quarry name the skill uses exists — `cmd/quarry/run_skill_drift_test.go` `Test_every_quarry_name_the_skill_uses_exists`
 
 ---

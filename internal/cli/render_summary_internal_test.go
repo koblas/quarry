@@ -19,8 +19,8 @@ import (
 // net worth holds both month ends, as Server.Summary always returns them.
 func septemberSummary(currency money.Currency) report.Summary {
 	month := report.Month{
-		Start: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
-		End:   time.Date(2026, time.September, 30, 0, 0, 0, 0, time.UTC),
+		Start: utcDay(2026, time.September, 1),
+		End:   utcDay(2026, time.September, 30),
 	}
 	window := store.Window{Since: month.Start, Until: month.End}
 	return report.Summary{
@@ -29,7 +29,7 @@ func septemberSummary(currency money.Currency) report.Summary {
 		Anomalies: report.Anomalies{Window: window, Currency: currency},
 		Recurring: report.Recurring{Window: window, Currency: currency},
 		NetWorth: report.NetWorth{Currency: currency, Dates: []report.NetWorthDate{
-			monthEndHolding(time.Date(2026, time.August, 31, 0, 0, 0, 0, time.UTC), nil),
+			monthEndHolding(utcDay(2026, time.August, 31), nil),
 			monthEndHolding(month.End, nil),
 		}},
 	}
@@ -165,7 +165,7 @@ func Test_summaryRecurringSection_keeps_the_recurring_table_when_a_series_is_new
 		Currency: money.CAD,
 		Series: []report.Series{{
 			Payee: "Rogers", Currency: "CAD", NativeCurrency: "CAD", Cadence: report.CadenceMonthly, Amount: 9500, PerYear: new(int64(114000)),
-			First: recurringDay(time.February, 3), Last: recurringDay(time.March, 3), State: report.SeriesActive, New: true,
+			First: utcDay(2026, time.February, 3), Last: utcDay(2026, time.March, 3), State: report.SeriesActive, New: true,
 		}},
 		Totals: []report.RecurringTotal{{Currency: "CAD", PerYear: 114000}},
 	}
@@ -178,8 +178,8 @@ func Test_summaryRecurringSection_keeps_the_recurring_table_when_a_series_is_new
 }
 
 var (
-	augustEnd    = time.Date(2026, time.August, 31, 0, 0, 0, 0, time.UTC)
-	septemberEnd = time.Date(2026, time.September, 30, 0, 0, 0, 0, time.UTC)
+	augustEnd    = utcDay(2026, time.August, 31)
+	septemberEnd = utcDay(2026, time.September, 30)
 )
 
 // monthEndRow is a month-end row of accountType in currency worth cents, which converts to CAD at par.
