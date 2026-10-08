@@ -2,10 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/claudeplugin"
@@ -44,6 +46,16 @@ const (
 	desktopFixFolder      = "; check the permissions of %q, then run quarry claude %s again"
 	desktopForeignRefusal = `Claude Desktop has an MCP server named "quarry" that does not run quarry mcp, ` +
 		"so quarry leaves it alone; rename or remove it in %q, then run quarry claude %s again"
+
+	// The three unusable-content refusals share their fix clause: repair the file, then the verb.
+	desktopInvalidJSONRefusal = "cannot read %q: it is not valid JSON (%s%s)" + desktopFixJSON
+	desktopTopLevelRefusal    = "cannot add quarry to %q: it holds a JSON %s, not an object" + desktopFixJSON
+	desktopServersRefusal     = "cannot add quarry to %q: its mcpServers is a JSON %s, not an object" + desktopFixJSON
+	desktopFixJSON            = "; fix it so Claude Desktop can read it too, then run quarry claude %s again"
+	desktopSymlinkRefusal     = "%q is a symbolic link, so quarry leaves it alone; add %s under mcpServers " +
+		"in the file it links to yourself, then quit and reopen Claude Desktop"
+	desktopNotAFileRefusal = "%q is not a file, so quarry leaves it alone; move it aside, then run quarry claude install again"
+	desktopReadRefusal     = "cannot read %q (%s); check its permissions, then run quarry claude %s again"
 
 	pluginUninstalledLine  = "Uninstalled the quarry plugin from Claude Code.\n"
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
@@ -187,25 +199,83 @@ func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 // reportDesktopFailure writes err's report for a failed Claude Desktop step and returns
 // ReportedError; an unclassified error is a runtime error.
 func reportDesktopFailure(cmd *cobra.Command, verb, home string, err error) error {
-	if errors.Is(err, claudedesktop.ErrNoHome) {
-		writeClaudeLine(cmd, verb, desktopNoHome)
-		return ReportedError{}
+	line, ok := desktopFailureLine(verb, home, err)
+	if !ok {
+		return &runtimeError{err: err}
 	}
+	writeClaudeLine(cmd, verb, line)
+	return ReportedError{}
+}
+
+// desktopFailureLine returns the stderr text for a classified Claude Desktop failure, else false.
+func desktopFailureLine(verb, home string, err error) (string, bool) {
+	if errors.Is(err, claudedesktop.ErrNoHome) {
+		return desktopNoHome, true
+	}
+	if line, ok := desktopWriteFailureLine(verb, home, err); ok {
+		return line, true
+	}
+	return desktopConfigFailureLine(verb, home, err)
+}
+
+// desktopWriteFailureLine classifies the failures of saving the backup and writing the config.
+func desktopWriteFailureLine(verb, home string, err error) (string, bool) {
 	if backup, ok := errors.AsType[*claudedesktop.BackupError](err); ok {
-		writeClaudeLine(cmd, verb, fmt.Sprintf(desktopBackupRefusal, claudePath(home, backup.Path), osreason.Reason(backup.Err),
-			claudePath(home, backup.Config), claudePath(home, filepath.Dir(backup.Path)), verb))
-		return ReportedError{}
+		return fmt.Sprintf(desktopBackupRefusal, claudePath(home, backup.Path), osreason.Reason(backup.Err),
+			claudePath(home, backup.Config), claudePath(home, filepath.Dir(backup.Path)), verb), true
 	}
 	if write, ok := errors.AsType[*claudedesktop.WriteError](err); ok {
-		writeClaudeLine(cmd, verb, fmt.Sprintf(desktopWriteRefusal, claudePath(home, write.Path), osreason.Reason(write.Err),
-			claudePath(home, filepath.Dir(write.Path)), verb))
-		return ReportedError{}
+		return fmt.Sprintf(desktopWriteRefusal, claudePath(home, write.Path), osreason.Reason(write.Err),
+			claudePath(home, filepath.Dir(write.Path)), verb), true
 	}
+	return "", false
+}
+
+// desktopConfigFailureLine classifies the failures of reading and understanding the config.
+func desktopConfigFailureLine(verb, home string, err error) (string, bool) {
 	if foreign, ok := errors.AsType[*claudedesktop.ForeignEntryError](err); ok {
-		writeClaudeLine(cmd, verb, fmt.Sprintf(desktopForeignRefusal, claudePath(home, foreign.Path), verb))
-		return ReportedError{}
+		return fmt.Sprintf(desktopForeignRefusal, claudePath(home, foreign.Path), verb), true
 	}
-	return &runtimeError{err: err}
+	if link, ok := errors.AsType[*claudedesktop.SymlinkError](err); ok {
+		return fmt.Sprintf(desktopSymlinkRefusal, claudePath(home, link.Path), desktopEntryJSON(link.Command)), true
+	}
+	if notFile, ok := errors.AsType[*claudedesktop.NotAFileError](err); ok {
+		return fmt.Sprintf(desktopNotAFileRefusal, claudePath(home, notFile.Path)), true
+	}
+	if read, ok := errors.AsType[*claudedesktop.ReadError](err); ok {
+		return fmt.Sprintf(desktopReadRefusal, claudePath(home, read.Path), osreason.Reason(read.Err), verb), true
+	}
+	if bad, ok := errors.AsType[*claudedesktop.InvalidJSONError](err); ok {
+		return fmt.Sprintf(desktopInvalidJSONRefusal, claudePath(home, bad.Path), bad.Err, invalidJSONDetail(bad.Err), verb), true
+	}
+	if top, ok := errors.AsType[*claudedesktop.TopLevelError](err); ok {
+		return fmt.Sprintf(desktopTopLevelRefusal, claudePath(home, top.Path), top.Kind, installCommand), true
+	}
+	if servers, ok := errors.AsType[*claudedesktop.ServersError](err); ok {
+		return fmt.Sprintf(desktopServersRefusal, claudePath(home, servers.Path), servers.Kind, installCommand), true
+	}
+	return "", false
+}
+
+// invalidJSONDetail returns ", at byte N" for a syntax error, else "".
+func invalidJSONDetail(err error) string {
+	if syntax, ok := errors.AsType[*json.SyntaxError](err); ok {
+		return ", at byte " + strconv.FormatInt(syntax.Offset, 10)
+	}
+	return ""
+}
+
+// desktopEntryJSON returns the quarry entry for a Claude Desktop config in its one-line form, with
+// command as the absolute path: a pasted "~" would not expand in JSON.
+func desktopEntryJSON(command string) string {
+	var quoted bytes.Buffer
+	enc := json.NewEncoder(&quoted)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(command); err != nil { // unreachable: encoding/json encodes a Go string without error
+		quoted.Reset()
+		quoted.WriteString(strconv.Quote(command))
+	}
+	return `"quarry": {"command": ` + strings.TrimSuffix(quoted.String(), "\n") + `, "args": ["mcp"]}`
 }
 
 // claudePath returns p as printed to the user: "~/..." under home, raw when home is unset.
