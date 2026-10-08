@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-16
-status: open
+status: done
 ---
 
 # SCENARIO-16: Help and docs describe both targets
@@ -27,10 +27,10 @@ Existing state read: `claude.go:35-37`, `claude_install.go:20-31`, `claude_unins
 - [x] Step 5: `docs/initial-prd.md:333` -> spec change 5 (replaces the `Plugin install:` bullet); new Security bullet from change 6 inserted after `:266`; `cmd/quarry/run_plugin_notices_test.go:77` two new rows in `Test_notices_and_prd_carry_the_ruled_plugin_edits` (one per PRD line, whole sentence, `collapseWhitespace` match) — departure from sibling precedent: the mcp-install PRD bullet was never pinned; the Gherkin names the PRD, so these two are.
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; grep `internal/cli` doc comments for "Claude Code only" wording (`newClaudeCommand`, `newClaudeInstallCommand`, `newClaudeUninstallCommand`) and `docs/`/`plugin/` for the retired Shorts (positive control: the old Short in `docs/specifications/mcp-install`).
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; grep `internal/cli` doc comments for "Claude Code only" wording (`newClaudeCommand`, `newClaudeInstallCommand`, `newClaudeUninstallCommand`) and `docs/`/`plugin/` for the retired Shorts (positive control: the old Short in `docs/specifications/mcp-install`).
 
 ### Verify
-- [ ] Step 7: `.claude/scripts/verify.sh <start> ./internal/cli/... ./cmd/quarry/...` + `.claude/scripts/spec-check.py desktop-install` -> tick SCENARIO-16 with its acceptance test; rewrite STATE.md (drop the "Left unbuilt" Help/README/PRD line; note the new README headings).
+- [x] Step 7: `.claude/scripts/verify.sh <start> ./internal/cli/... ./cmd/quarry/...` + `.claude/scripts/spec-check.py desktop-install` -> tick SCENARIO-16 with its acceptance test; rewrite STATE.md (drop the "Left unbuilt" Help/README/PRD line; note the new README headings).
 
 ## Handoff
 
@@ -50,8 +50,8 @@ Existing state read: `claude.go:35-37`, `claude_install.go:20-31`, `claude_unins
 
 ## Phase report
 
-Runs A (steps 1-2), B1 (step 3), B2 (steps 4-5) done. Start commit 7efc8c5c. V (steps 6-7) remains.
+All runs done (A, B1, B2, V). Start commit 7efc8c5c.
 
-B2: `README.md` L5/L14/L20/L28/L30/L44/new Desktop paragraph/L46 set to spec change 4 verbatim; `cmd/quarry/run_plugin_readme_test.go` heading consts and both section consts mirror it (byte-equal, backticks as `¤`). `docs/initial-prd.md`: `- Plugin install:` bullet replaced by spec change 5 verbatim; Security bullet (spec change 6) inserted after the `MCP boundary` bullet per orchestrator ruling, not after `Encrypted at rest`. `run_plugin_notices_test.go`: two new rows in `Test_notices_and_prd_carry_the_ruled_plugin_edits` (one per PRD line, whole sentence). No production Go touched. Green: `go test ./cmd/quarry/ -run 'readme|notices_and_prd|claude_commands_agree|every_quarry_name|run_help_prints_quarrys|monthly_summary_job'` and `go test ./internal/cli/ -run 'Help|group_help|root_help'` both ok; skill drift tests saw nothing new in the Claude Code section.
+V: sweep clean. `docs/`, `plugin/`, `README.md`, `internal/`, `cmd/` carry no retired README heading (`## Install or remove the plugin`, `## Use quarry with Claude Code` bare) nor the old Shorts outside archived mcp-install/phase3d specs (positive control: both found in mcp-install). Doc comments of `newClaudeCommand`/`newClaudeInstallCommand`/`newClaudeUninstallCommand` carry no Code-only wording. Spec change 6 wording updated to "after the `MCP boundary` bullet (orchestrator ruling)".
 
-Next (V): step 6 sweep (`go build ./... && golangci-lint run ./...` to `0 issues`; doc comments of `newClaudeCommand`, `newClaudeInstallCommand`, `newClaudeUninstallCommand` for Code-only wording; grep `docs/`, `plugin/` for retired Shorts/headings `## Install or remove the plugin`, `## Use quarry with Claude Code$`), step 7 `verify.sh 7efc8c5c118f99cd37521984d48dba1638df8c74 ./internal/cli/... ./cmd/quarry/...`, spec-check, tick SCENARIO-16 with `Test_help_names_both_claude_targets`, rewrite STATE.md (drop the Help/README/PRD "Left unbuilt" line; note the new README headings).
+Verify: `verify.sh` rc=0 for build, test, uncovered-diff (0 added lines uncovered), race, lint (0 issues). test-stats: cmd/quarry 1025 (+0), internal/cli 730 (-1: two help tests deleted, one table test added), TOTAL 1755 (-1).

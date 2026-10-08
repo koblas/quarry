@@ -1,6 +1,6 @@
 # desktop-install — current state
 
-Scenarios complete: SCENARIO-01, SCENARIO-02 (folds 07), SCENARIO-04 (folds 03, 05), SCENARIO-06, SCENARIO-08, SCENARIO-09 (folds 10, 12), SCENARIO-11, SCENARIO-13 (folds 14, 15). Last updated by SCENARIO-11.
+Scenarios complete: SCENARIO-01, SCENARIO-02 (folds 07), SCENARIO-04 (folds 03, 05), SCENARIO-06, SCENARIO-08, SCENARIO-09 (folds 10, 12), SCENARIO-11, SCENARIO-13 (folds 14, 15), SCENARIO-16. Last updated by SCENARIO-16.
 
 ## Binding decisions
 - BR-D20 / D9b: `Install` refuses `*BinaryNameError{Base}` when `lastElement(command)` (text after the last `/`, the same helper `parseOurs` uses) is not exactly `quarry`; checked on the chosen path (so a SameFile `quarry` link on PATH makes a renamed binary acceptable), after D9, before `readConfig`. Install can therefore never write an entry `parseOurs` calls foreign, which keeps D4/D4u unreachable from our own writes; round-trip tests (install then uninstall, install-update then uninstall) pin it. cli renders it in `desktopBinaryFailureLine` (`<base>` via `%q`, no path); uninstall is unaffected (mid-feature ruling, SCENARIO-13).
@@ -31,9 +31,12 @@ Scenarios complete: SCENARIO-01, SCENARIO-02 (folds 07), SCENARIO-04 (folds 03, 
 - `NewServer` defaults only the temp root: nil `Executable` panics once the folder exists. Every cli test that creates the Desktop folder sets `Env.Executable` (SCENARIO-01).
 - Test fixtures: `Executable` is a fixed absolute string outside `$TMPDIR` (a temp-dir exe is D9); `testEnv` `Home` is a fixed absent absolute path (`testHome`). cli success-path tests use `t.TempDir()` homes. Desktop cli tests live in `internal/cli/claude_install_desktop_test.go`; printed paths go through `claudePath` + `%q` (SCENARIO-01).
 
+- Help copy: group, install, uninstall and mcp Longs are asserted once each, in `claude_help_test.go` (`claudeInstallLong`, `claudeUninstallLong`) and `claude_test.go`/`mcp_test.go` (`claudeGroupHelp`, `mcpHelpLong`); no second copy in any test. Install Long does not mention D9b (SCENARIO-16).
+- README headings are `## Use quarry with Claude Code or Claude Desktop` and `## Install or remove quarry`, carried by `readmeClaudeCodeHeading`/`readmeInstallHeading`; `readmeSection` matches `heading+"\n"`, so the old Code-only heading is a prefix trap. PRD pins: `Test_notices_and_prd_carry_the_ruled_plugin_edits` only (SCENARIO-16).
+
 ## Left unbuilt
 - W1 under uninstall: none (install-only).
-- Help Long for uninstall/install/mcp, README, PRD — SCENARIO-16.
+- Nothing owed to the spec's scenario list.
 
 ## Traps
 - Code-failure cli tests need a `t.TempDir()` home (a fixed `/home/ada` stats a real path); with no Desktop folder every non-interrupt Code-failure stdout gains S2, while interrupt rows stay `Empty` stdout (that emptiness proves Desktop was not attempted). `ctx.Err()` is only seen by `Server` when the test cancels the command's context (`toolCalls.cancel`) (SCENARIO-11).
