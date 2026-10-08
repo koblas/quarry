@@ -736,7 +736,31 @@ func Test_claude_install_prints_a_symbolic_link_refusal_whose_entry_is_pasteable
 	err := installDesktopAs(t, &toolCalls{}, home, exe, &out, &errOut)
 
 	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine, out.String())
 	assert.Equal(t, desktopSymlinkLine(`"/opt/a<b>&c\"d\\e/quarry"`), errOut.String())
+}
+
+func Test_claude_install_escapes_control_characters_in_the_symbolic_link_refusal_as_json(t *testing.T) {
+	const exe = "/opt/a\x01b\tc/quarry"
+	home, folder := desktopHome(t)
+	require.NoError(t, os.Symlink(filepath.Join(folder, "elsewhere.json"), filepath.Join(folder, desktopConfigName)))
+	var out, errOut bytes.Buffer
+
+	err := installDesktopAs(t, &toolCalls{}, home, exe, &out, &errOut)
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, desktopSymlinkLine(`"/opt/a\u0001b\tc/quarry"`), errOut.String())
+	_, afterAdd, found := strings.Cut(errOut.String(), "add ")
+	require.True(t, found)
+	entry, _, found := strings.Cut(afterAdd, " under mcpServers")
+	require.True(t, found)
+	var pasted struct {
+		Quarry struct {
+			Command string `json:"command"`
+		} `json:"quarry"`
+	}
+	require.NoError(t, json.Unmarshal([]byte("{"+entry+"}"), &pasted))
+	assert.Equal(t, exe, pasted.Quarry.Command)
 }
 
 func Test_claude_install_prints_the_absolute_path_in_the_symbolic_link_refusal_for_a_binary_under_home(t *testing.T) {
@@ -748,6 +772,7 @@ func Test_claude_install_prints_the_absolute_path_in_the_symbolic_link_refusal_f
 	err := installDesktopAs(t, &toolCalls{}, home, exe, &out, &errOut)
 
 	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine, out.String())
 	assert.Equal(t, desktopSymlinkLine(`"`+exe+`"`), errOut.String())
 }
 

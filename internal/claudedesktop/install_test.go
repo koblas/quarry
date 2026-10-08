@@ -193,6 +193,7 @@ func Test_install_refuses_a_config_path_that_is_not_a_regular_file(t *testing.T)
 			require.True(t, ok, "got %v", err)
 			assert.Equal(t, config, notAFile.Path)
 			require.NotErrorIs(t, err, fs.ErrExist)
+			assert.Equal(t, config+" is not a regular file", err.Error())
 			assert.Equal(t, before, snapshot(t, folder))
 			assert.Equal(t, 1, exe.calls)
 		})
@@ -230,6 +231,7 @@ func Test_install_refuses_a_config_path_that_is_a_symlink(t *testing.T) {
 			require.True(t, ok, "got %v", err)
 			assert.Equal(t, config, symlink.Path)
 			assert.Equal(t, quarryBinary, symlink.Command)
+			assert.Equal(t, config+" is a symbolic link", err.Error())
 			assert.Equal(t, before, snapshot(t, folder))
 			assert.Equal(t, 1, exe.calls)
 		})
@@ -508,6 +510,7 @@ func Test_install_refuses_a_config_that_is_not_valid_json(t *testing.T) {
 			require.True(t, ok, "got %v", err)
 			assert.Equal(t, config, invalid.Path)
 			require.Error(t, invalid.Err)
+			assert.Equal(t, config+": invalid JSON: "+invalid.Err.Error(), err.Error())
 			assert.Equal(t, before, snapshot(t, folder))
 		})
 	}
@@ -537,6 +540,7 @@ func Test_install_refuses_a_config_whose_top_level_is_not_an_object(t *testing.T
 			top, ok := errors.AsType[*claudedesktop.TopLevelError](err)
 			require.True(t, ok, "got %v", err)
 			assert.Equal(t, &claudedesktop.TopLevelError{Path: config, Kind: c.kind}, top)
+			assert.Equal(t, config+": the config is a JSON "+c.kind+", not an object", err.Error())
 			assert.Equal(t, before, snapshot(t, folder))
 		})
 	}
@@ -563,6 +567,7 @@ func Test_install_refuses_a_config_whose_mcpservers_is_not_an_object(t *testing.
 			servers, ok := errors.AsType[*claudedesktop.ServersError](err)
 			require.True(t, ok, "got %v", err)
 			assert.Equal(t, &claudedesktop.ServersError{Path: config, Kind: c.kind}, servers)
+			assert.Equal(t, config+": mcpServers is a JSON "+c.kind+", not an object", err.Error())
 			assert.Equal(t, before, snapshot(t, folder))
 		})
 	}
@@ -582,6 +587,7 @@ func Test_install_fails_without_writing_when_the_config_cannot_be_read(t *testin
 	readErr, ok := errors.AsType[*claudedesktop.ReadError](err)
 	require.True(t, ok, "got %v", err)
 	assert.Equal(t, config, readErr.Path)
+	assert.Equal(t, "read "+config+": "+readErr.Err.Error(), err.Error())
 	require.NoError(t, os.Chmod(config, 0o644))
 	assert.Equal(t, before, snapshot(t, folder))
 }
@@ -655,6 +661,7 @@ func Test_install_fails_without_writing_when_the_config_cannot_be_checked(t *tes
 	readErr, ok := errors.AsType[*claudedesktop.ReadError](err)
 	require.True(t, ok, "got %v", err)
 	assert.Equal(t, config, readErr.Path)
+	assert.Equal(t, "read "+config+": "+readErr.Err.Error(), err.Error())
 	assert.Equal(t, before, snapshot(t, folder))
 }
 

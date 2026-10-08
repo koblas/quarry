@@ -271,7 +271,8 @@ func desktopEntryJSON(command string) string {
 	var quoted bytes.Buffer
 	enc := json.NewEncoder(&quoted)
 	enc.SetEscapeHTML(false)
-	if err := enc.Encode(command); err != nil { // unreachable: encoding/json encodes a Go string without error
+	if err := enc.Encode(command); err != nil {
+		// unreachable: encoding a Go string cannot fail and bytes.Buffer.Write never returns an error
 		quoted.Reset()
 		quoted.WriteString(strconv.Quote(command))
 	}

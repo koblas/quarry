@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: Install refuses a config it cannot safely change
@@ -31,10 +31,10 @@ Rulings this plan makes (departures from precedent or silent spec):
 - [x] Step 4 (batch 3): `internal/cli/render_claude.go:34-46,187-209` — copy consts for D1, D2, D3, D5s, D5o, D6 (spec §D verbatim, `claudePath` + `%q` for P; D1/D6 with `%s` verb); extract the `errors.AsType` chain of `reportDesktopFailure` into `desktopFailureLine(verb, home, err) (string, bool)` (nine arms would trip the complexity lint; 13 adds D4u/D5su there); `invalidJSONDetail(err) string` (`, at byte N` only for `*json.SyntaxError`); `entryJSON(command)` (JSON string via `SetEscapeHTML(false)`; encode error `// unreachable:` — a string always encodes). Tests, all through `cli.Execute` in `claude_install_desktop_test.go` unless noted: D1 rows truncated, BOM, trailing data, garbage, each with literal offset taken from running `encoding/json` on the fixture; D2 one row per kind (null, array, string, number, true, false); D3 rows array/string/number/boolean; D5s symlink to a file and dangling, `<E>` for exe `/opt/a<b>&c"d\e/quarry` (literal `<>&`, `\"`, `\\`) and one under-home exe (absolute in `<E>`, `~` in nothing); D5o folder and FIFO; D6 unreadable file and Claude folder `0o000`; re-point `:188-200` to assert the D5s line. New `internal/cli/claude_desktop_internal_test.go` (`package cli`, precedent `fx_warning_internal_test.go`): `invalidJSONDetail` with a non-SyntaxError, and `reportDesktopFailure` under verb `uninstall` for `*InvalidJSONError` and `*ReadError` (13 wires uninstall; not reachable via `Execute` yet). Cross edge rows × output: stdout carries the Code lines only, stderr exactly one line, in every row.
 
 ### Sweep
-- [ ] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the six new types (short, no spec ids).
+- [x] Step 5: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on the six new types (short, no spec ids).
 
 ### Verify
-- [ ] Step 6: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...` + `.claude/scripts/spec-check.py desktop-install`; tick SCENARIO-06 with its acceptance test; rewrite `STATE.md` (drop the S2b re-point debt, add the new types and the D1 ruling); `status: done`.
+- [x] Step 6: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...` + `.claude/scripts/spec-check.py desktop-install`; tick SCENARIO-06 with its acceptance test; rewrite `STATE.md` (drop the S2b re-point debt, add the new types and the D1 ruling); `status: done`.
 
 ## Handoff
 
@@ -55,11 +55,11 @@ Rulings this plan makes (departures from precedent or silent spec):
 
 ## Phase report
 
-Run B2 (step 4) done. Acceptance test `Test_claude_install_refuses_a_desktop_config_it_cannot_safely_change` is green (all six rows); `go test ./internal/cli/ ./internal/claudedesktop/` green; `golangci-lint run ./...` 0 issues (testifylint encoded-compare cleared). V not yet run: no `verify.sh`, spec tick, STATE.md rewrite or `status: done`.
+Run V done; scenario complete. `verify.sh` rc=0 throughout (go build, go test, -race, golangci-lint 0 issues); uncovered-diff 0 uncovered, 2 declared unreachable; test-stats: claudedesktop 30 (+3), cli 697 (+13), total 727 (+16).
 
-- `internal/cli/render_claude.go`: copy consts D1/D2/D3/D5s/D5o/D6; `reportDesktopFailure` now calls `desktopFailureLine` (-> `desktopWriteFailureLine`, `desktopConfigFailureLine`); `invalidJSONDetail`; `desktopEntryJSON(command)` (`SetEscapeHTML(false)`, absolute command; encode error is `// unreachable:` with a `strconv.Quote` fallback). D2/D3/D5o are install-only (hardcode `installCommand`/no verb); D1/D6 take `verb`.
-- `internal/cli/claude_install_desktop_test.go`: `installDesktopAs`, `assertDesktopRefusal`, `desktopSymlinkLine`; tables for D1 (BOM, trailing, garbage, trailing comma), D2 (null, array, string, number, true, false), D3 (array, string, number, boolean); D5s html-char and under-home rows; D5o folder; D6 Claude folder 0o000; the old `...unreported...` test became a dangling-link D5s test. Acceptance table's byte slices are locals (`backupBefore` etc.) to satisfy testifylint.
-- `internal/cli/claude_desktop_internal_test.go` (new): uninstall-verb D1 and D6, the unclassified `runtimeError` arm, `invalidJSONDetail` non-syntax arm.
-- Mutations (restored, diff clean): `SetEscapeHTML(true)` -> red `Test_claude_install_prints_a_symbolic_link_refusal_whose_entry_is_pasteable_json` (`<b>` became `\u003cb\u003e`); `claudePath` on `<E>` command -> red `..._for_a_binary_under_home` (`"~/bin/quarry"` vs absolute).
-- Traps: the plan's narrow loop `-run 'Install|Desktop'` matches no test (names are lowercase `claude_install`); use `-run 'claude_install|desktop|Desktop|invalidJSON'`. The BOM row's text is the stdlib's escaped `'\ufeff'` (literal backslash-u), not the rune. The runtime-error arm of `reportDesktopFailure` is now covered only by the internal test; D12 (SCENARIO-09) will make `Library` 0o000 a classified failure.
-- Next (V): step 5 sweep (already 0 issues; check doc comments on the six types, done in B1), step 6 `verify.sh 9ee8363494ef69b15666331338fbb8a3dbfd6aec ./internal/claudedesktop/... ./internal/cli/...`, spec tick, STATE.md, `status: done`.
+- `internal/claudedesktop/claudedesktop.go`: `notObjectError.Error` marked `// unreachable:` (merge converts it, `parseOurs` drops it); `merge` and `readConfig` docs cut to 2 lines.
+- `internal/cli/render_claude.go`: `desktopEntryJSON` unreachable marker moved onto the fallback body (line above `quoted.Reset()`), reason names both halves.
+- `internal/claudedesktop/install_test.go`: `err.Error()` asserted on all six exported types (symlink, not-a-file, invalid JSON, top level, servers, read x2).
+- `internal/cli/claude_install_desktop_test.go`: new control-character `<E>` row (`\u0001`, `\t`, round-tripped through `json.Unmarshal`); stdout == Code lines on the html-char and under-home rows.
+- Mutations (restored, diffs clean): each Error() text change / dropped Path reddened its install_test row; `strconv.Quote` in place of the encoder reddened `Test_claude_install_escapes_control_characters_in_the_symbolic_link_refusal_as_json` (`\u0001` vs `\x01`).
+- Nothing left for a later run.

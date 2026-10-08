@@ -32,6 +32,7 @@ var ErrNoHome = errors.New("home directory is not set")
 // notObjectError is why a value cannot be merged into: it is valid JSON, but of another kind.
 type notObjectError struct{ kind string }
 
+// unreachable: merge turns it into *TopLevelError or *ServersError and parseOurs drops it, so nothing formats it
 func (e *notObjectError) Error() string { return "a JSON " + e.kind + ", not an object" }
 
 // ForeignEntryError is returned by Install when mcpServers.quarry is not an entry that starts
@@ -232,9 +233,8 @@ type existing struct {
 	mode    fs.FileMode
 }
 
-// readConfig reads the config at path. A missing config yields no data and configMode; a
-// symlink is refused with *SymlinkError, any other non-regular path with *NotAFileError, and a
-// path it cannot check or read with *ReadError.
+// readConfig reads the config at path; a missing one yields no data and configMode. A path it
+// cannot take as a regular file is refused with *SymlinkError, *NotAFileError or *ReadError.
 func readConfig(path string) (existing, error) {
 	// Lstat, not Stat: a dangling symlink looks missing to Stat, and the rename would replace it.
 	info, err := os.Lstat(path)
@@ -280,10 +280,8 @@ type merged struct {
 	previous string
 }
 
-// merge returns original (empty meaning "{}") with the quarry entry set under mcpServers.
-// It refuses a config that is not an object it can merge into and a quarry key that is not ours,
-// with the typed errors Install documents (path names the config in them); an entry of ours keeps
-// all but its command.
+// merge returns original (empty meaning "{}") with the quarry entry set under mcpServers, or the
+// typed refusal Install documents; an entry of ours keeps all but its command. path names the config.
 func merge(path string, original []byte, command string) (merged, error) {
 	top, err := decodeObject(original)
 	if notObject, ok := errors.AsType[*notObjectError](err); ok {
