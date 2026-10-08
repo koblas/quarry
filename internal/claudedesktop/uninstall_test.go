@@ -377,6 +377,29 @@ func Test_uninstall_saves_the_original_in_a_private_backup_and_replaces_an_earli
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
+func Test_uninstall_replaces_a_symlink_at_the_backup_name_without_following_it(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	original := quarryEntryConfig(`{"command":"quarry","args":["mcp"]}`)
+	config := writeConfig(t, folder, original, 0o644)
+	target := filepath.Join(folder, "precious.txt")
+	require.NoError(t, os.WriteFile(target, []byte("precious"), 0o600))
+	require.NoError(t, os.Symlink(target, config+backupSuffix))
+
+	_, err := uninstall(t, home)
+
+	require.NoError(t, err)
+	kept, readErr := os.ReadFile(target)
+	require.NoError(t, readErr)
+	assert.Equal(t, "precious", string(kept))
+	info, statErr := os.Lstat(config + backupSuffix)
+	require.NoError(t, statErr)
+	assert.True(t, info.Mode().IsRegular())
+	backup, readErr := os.ReadFile(config + backupSuffix)
+	require.NoError(t, readErr)
+	assert.Equal(t, []byte(original), backup)
+}
+
 func Test_uninstall_fails_without_writing_when_the_config_cannot_be_read(t *testing.T) {
 	t.Parallel()
 	home, folder := desktopFolder(t)

@@ -154,7 +154,7 @@ type ExecutableError struct {
 func (e *ExecutableError) Error() string { return "find the quarry binary: " + e.Err.Error() }
 func (e *ExecutableError) Unwrap() error { return e.Err }
 
-// Server installs quarry's MCP server into Claude Desktop's config file.
+// Server installs quarry's MCP server into Claude Desktop's config file and removes it again.
 type Server struct {
 	home       string
 	executable Executable
@@ -274,9 +274,8 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	return res, nil
 }
 
-// locate resolves Claude Desktop's folder and config path from the home directory and reports
-// whether the folder exists. It returns ErrNoHome for an empty home, and a wrapped error when the
-// folder cannot be checked.
+// locate returns Claude Desktop's folder, its config path and whether the folder exists. It
+// returns ErrNoHome for an empty home and a wrapped error when the folder cannot be checked.
 func (s *Server) locate() (string, string, bool, error) {
 	if s.home == "" {
 		return "", "", false, ErrNoHome

@@ -10,7 +10,8 @@ import (
 const uninstallCommand = "uninstall"
 
 // newClaudeUninstallCommand builds claude uninstall: it refuses arguments, then --json, then has the
-// plugin Server uninstall quarry's plugin and remove its marketplace, reporting each step on stdout.
+// plugin Server uninstall quarry's plugin and remove its marketplace, then removes quarry from
+// Claude Desktop, reporting each step on stdout.
 func newClaudeUninstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   uninstallCommand,

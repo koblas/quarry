@@ -64,7 +64,6 @@ func tempHome(t *testing.T) string {
 	return t.TempDir()
 }
 
-// unsetHome is a hints-table home: $HOME unset.
 func unsetHome(*testing.T) string { return "" }
 
 func Test_claude_uninstall_hints_each_remaining_copy(t *testing.T) {

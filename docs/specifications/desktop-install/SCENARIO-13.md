@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-13
-status: open
+status: done
 ---
 
 # SCENARIO-13: Uninstall removes quarry's Desktop entry (folds 14, 15)
@@ -29,10 +29,10 @@ User contract: `quarry claude uninstall` — Code lines and hints unchanged, the
 - [x] Step 6: `render_claude.go:258-265` D4u in the `ForeignEntryError` arm and D5su in the `SymlinkError` arm, both branching on `verb` (never on `Command == ""`); folded-15 test `Test_claude_uninstall_refuses_a_desktop_config_it_cannot_judge` (rows D4u, D5su, D1 with offset, D6, D7, D8; config untouched via `desktopRefusalSnapshot` `claude_install_desktop_test.go:498`). Delete `claude_desktop_internal_test.go:30-48` (now reachable through `Execute`) and rewrite its header comment `:1-2`.
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (complexity on `desktopConfigFailureLine` likely); doc comments: `claudedesktop/doc.go` (adds and removes), `Server` and `Uninstall` (name its refusals), `newClaudeUninstallCommand` (`claude_uninstall.go:11-12`). Expected test-count drop: the two deleted white-box tests.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues` (complexity on `desktopConfigFailureLine` likely); doc comments: `claudedesktop/doc.go` (adds and removes), `Server` and `Uninstall` (name its refusals), `newClaudeUninstallCommand` (`claude_uninstall.go:11-12`). Expected test-count drop: the two deleted white-box tests.
 
 ### Verify
-- [ ] Step 8: `verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...` + `spec-check.py desktop-install` → tick SCENARIO-13 (with 14 and 15 fold notes) and rewrite STATE.md.
+- [x] Step 8: `verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...` + `spec-check.py desktop-install` → tick SCENARIO-13 (with 14 and 15 fold notes) and rewrite STATE.md.
 
 ## Handoff
 
@@ -55,10 +55,4 @@ User contract: `quarry claude uninstall` — Code lines and hints unchanged, the
 
 ## Phase report
 
-Run B2 (steps 5-6) done; start commit bd145daf. `go test ./internal/cli/ ./internal/claudedesktop/` green (cli 712 (+4), claudedesktop 63 (+17) vs start), `golangci-lint run ./internal/cli/...` = 0 issues. All three acceptance tests green (`Test_claude_uninstall_removes_quarry_from_claude_desktop_after_claude_code`, `..._leaves_claude_desktop_alone_when_its_config_has_no_quarry_entry`, `..._refuses_a_desktop_config_it_cannot_judge`).
-
-- `internal/cli/claude_uninstall.go`: `uninstallDesktop(cmd, home)` called after the hints (no Executable/LookPath); doc comment of `newClaudeUninstallCommand` and Long help NOT touched (V step 7 doc comment; Long is SCENARIO-16).
-- `internal/cli/render_claude.go`: `desktopSkippedFmt` (shared S2), `desktopNoHome` now `%s`-verb, DR/DN/DQu constants, `renderDesktopUninstalled`, `desktopForeignLine`/`desktopSymlinkLine` branch on `verb == uninstallCommand` (D4u/D5su), never on `Command == ""`.
-- Tests: `claude_uninstall_desktop_test.go` (folded 14/15 + 3 siblings; `uninstallDesktop`, `folderState` helpers); `claude_uninstall_test.go` re-pointed (Code-success pins gain S2; hints table uses `tool func(home)`, `home func(t)`, `wantErr`; unset-home rows gain D11 + `ReportedError`); `claude_install_test.go` `projectPlugin` const became `projectPluginUnder(home)`; `claude_desktop_internal_test.go` lost its two uninstall-verb tests, header rewritten.
-- Step 6 production arms were written in the same batch as step 5 copy (acceptance went green first), so D4u/D5su tests were not seen red before code; proved by mutation instead: foreign verb branch off -> `.../a_foreign_quarry_entry`; symlink verb branch off -> `.../a_symbolic_link`; `desktopNoHome` verb ignored -> missing-home, outside-home and unset-home rows; DQu dropped / Removed negated -> acceptance rows. All restored.
-- V must: sweep (`go build ./... && golangci-lint run ./...`), doc comments (`claudedesktop/doc.go`, `Server`, `Uninstall`, `newClaudeUninstallCommand`), `verify.sh`, spec tick (13 + folds 14, 15), `spec-check.py`, STATE.md rewrite, `status: done`. Expected test-count change: the two deleted white-box tests (already counted in cli +4).
+Run V done; start commit bd145daf. Checkpoint pin-only fixes applied: `Test_uninstall_replaces_a_symlink_at_the_backup_name_without_following_it` (`uninstall_test.go`; mutation: `os.Readlink` on the backup before `replacefile.Write` reddened it on the link-target bytes and the regular-file assertion; restored, diff clean), `locate` doc shortened, `unsetHome` comment deleted, `doc.go`, `Server` and `newClaudeUninstallCommand` docs now cover Uninstall. Sweep `0 issues`; `verify.sh` all rc=0 (claudedesktop 72 (+26), cli 713 (+5), 0 uncovered added lines, 1 declared unreachable at `claudedesktop.go:341`). Spec ticked with folds 14 and 15, `spec-check.py` OK, STATE.md rewritten.
