@@ -1,0 +1,21 @@
+spec-check: 20 problem(s)
+discovery-quicken-library/ SCENARIO-01: acceptance test file not found: cmd/quarry/run_test.go
+discovery-quicken-library/ SCENARIO-02: acceptance test file not found: cmd/quarry/run_test.go
+discovery-quicken-library/ SCENARIO-03: acceptance test file not found: cmd/quarry/run_test.go
+discovery-quicken-library/ SCENARIO-04: acceptance test file not found: cmd/quarry/run_test.go
+discovery-quicken-library/ SCENARIO-05: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-01b: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-02: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-14: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-05: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-04: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-06: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-07: acceptance test file not found: internal/snapshot/sync_faults_test.go
+phase0-snapshot/ SCENARIO-08: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-10: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-09: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-12: acceptance test file not found: cmd/quarry/run_test.go
+phase0-snapshot/ SCENARIO-13: acceptance test file not found: cmd/quarry/run_test.go
+phase1-import-store/ SCENARIO-21: `Test_run_keeps_investment_transactions_out_of_the_cash_transactions_table` not found in cmd/quarry/run_transfers_test.go
+phase2c-snapshots-config/ SCENARIO-04: `Test_run_read_commands_ignore_a_malformed_config` not found in cmd/quarry/run_config_test.go
+phase4a-investments/ SCENARIO-11: acceptance test file not found: cmd/quarry/run_accounts_not_valued_test.go

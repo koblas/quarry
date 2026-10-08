@@ -15,7 +15,7 @@ import (
 func searchRowOf() store.SearchRow {
 	return store.SearchRow{
 		TransactionID: "txn-1",
-		Date:          time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC),
+		Date:          utcDay(2026, time.March, 10),
 		Account:       store.Account{ID: "acct-1", Name: "Chequing", Currency: "CAD", Active: true},
 		Payee:         new("Costco"),
 		Amount:        -4217,
@@ -28,11 +28,6 @@ func foundRows(matched int, rows ...store.SearchRow) report.Search {
 	var found report.Search
 	found.Rows, found.Matched = rows, matched
 	return found
-}
-
-func searchDay(y int, m time.Month, d int) *time.Time {
-	t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-	return &t
 }
 
 func Test_renderSearch_pads_each_column_right_aligns_the_amount_and_trims_trailing_spaces(t *testing.T) {
@@ -54,16 +49,23 @@ func Test_renderSearch_pads_each_column_right_aligns_the_amount_and_trims_traili
 	assert.Equal(t, want, got)
 }
 
-func Test_renderSearch_footer_counts_every_match_not_the_rows_listed(t *testing.T) {
-	got := renderSearch(foundRows(1234, searchRowOf()))
+func Test_renderSearch_footer(t *testing.T) {
+	cases := []struct {
+		name    string
+		matched int
+		want    string
+	}{
+		{name: "counts_every_match_not_the_rows_listed", matched: 1234, want: "\n\n1,234 matching transactions\n"},
+		{name: "uses_the_singular_for_one_match", matched: 1, want: "\n\n1 matching transaction\n"},
+	}
 
-	assert.True(t, strings.HasSuffix(got, "\n\n1,234 matching transactions\n"), got)
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := renderSearch(foundRows(c.matched, searchRowOf()))
 
-func Test_renderSearch_footer_uses_the_singular_for_one_match(t *testing.T) {
-	got := renderSearch(foundRows(1, searchRowOf()))
-
-	assert.True(t, strings.HasSuffix(got, "\n\n1 matching transaction\n"), got)
+			assert.True(t, strings.HasSuffix(got, c.want), got)
+		})
+	}
 }
 
 func Test_renderSearch_prints_the_caption_header_and_a_zero_footer_when_nothing_matched(t *testing.T) {
@@ -83,11 +85,11 @@ func Test_searchCaption_names_the_dates_the_window_bounds(t *testing.T) {
 		want   string
 	}{
 		{name: "no bound searches all dates", window: store.SearchWindow{}, want: "Transactions in all accounts, all dates"},
-		{name: "since only reads from", window: store.SearchWindow{Since: searchDay(2026, time.January, 1)}, want: "Transactions in all accounts, from 2026-01-01"},
-		{name: "until only reads through", window: store.SearchWindow{Until: searchDay(2025, time.December, 31)}, want: "Transactions in all accounts, through 2025-12-31"},
+		{name: "since only reads from", window: store.SearchWindow{Since: new(utcDay(2026, time.January, 1))}, want: "Transactions in all accounts, from 2026-01-01"},
+		{name: "until only reads through", window: store.SearchWindow{Until: new(utcDay(2025, time.December, 31))}, want: "Transactions in all accounts, through 2025-12-31"},
 		{
 			name:   "both bounds read as a range",
-			window: store.SearchWindow{Since: searchDay(2026, time.January, 1), Until: searchDay(2026, time.March, 31)},
+			window: store.SearchWindow{Since: new(utcDay(2026, time.January, 1)), Until: new(utcDay(2026, time.March, 31))},
 			want:   "Transactions in all accounts, 2026-01-01 to 2026-03-31",
 		},
 	}
@@ -97,12 +99,6 @@ func Test_searchCaption_names_the_dates_the_window_bounds(t *testing.T) {
 			assert.Equal(t, c.want, searchCaption(report.Search{Window: c.window}))
 		})
 	}
-}
-
-func Test_searchCaption_names_the_accounts_the_search_was_limited_to(t *testing.T) {
-	s := report.Search{Accounts: []store.Account{{Name: "Chequing"}, {Name: "Sav\nings"}}}
-
-	assert.Equal(t, `Transactions in Chequing, Sav\nings, all dates`, searchCaption(s))
 }
 
 func Test_searchCaption_names_the_amount_range_after_the_dates(t *testing.T) {
@@ -128,16 +124,41 @@ func Test_searchCaption_names_the_amount_range_after_the_dates(t *testing.T) {
 	}
 }
 
-func Test_searchCaption_puts_the_amount_after_the_text_accounts_and_dates(t *testing.T) {
+func Test_searchCaption_places_each_clause(t *testing.T) {
 	least := int64(10000)
-	s := report.Search{
-		Text:     new("costco"),
-		Accounts: []store.Account{{Name: "Visa"}},
-		Window:   store.SearchWindow{Since: searchDay(2025, time.January, 1)},
-		Amounts:  report.SearchAmounts{Min: &least},
+	quoted := "say \"hi\"\n"
+	cases := []struct {
+		name  string
+		found report.Search
+		want  string
+	}{
+		{
+			name:  "names_the_accounts_the_search_was_limited_to",
+			found: report.Search{Accounts: []store.Account{{Name: "Chequing"}, {Name: "Sav\nings"}}},
+			want:  `Transactions in Chequing, Sav\nings, all dates`,
+		},
+		{
+			name: "puts_the_amount_after_the_text_accounts_and_dates",
+			found: report.Search{
+				Text:     new("costco"),
+				Accounts: []store.Account{{Name: "Visa"}},
+				Window:   store.SearchWindow{Since: new(utcDay(2025, time.January, 1))},
+				Amounts:  report.SearchAmounts{Min: &least},
+			},
+			want: `Transactions matching "costco" in Visa, from 2025-01-01, amount at least 100.00`,
+		},
+		{
+			name:  "quotes_text_that_has_a_quote_or_a_newline",
+			found: report.Search{Text: &quoted},
+			want:  `Transactions matching "say \"hi\"\n" in all accounts, all dates`,
+		},
 	}
 
-	assert.Equal(t, `Transactions matching "costco" in Visa, from 2025-01-01, amount at least 100.00`, searchCaption(s))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, searchCaption(c.found))
+		})
+	}
 }
 
 func Test_searchCategoryCell_labels_each_split_once_in_split_order(t *testing.T) {
@@ -249,7 +270,7 @@ func Test_renderSearch_escapes_account_payee_category_and_memo(t *testing.T) {
 
 func Test_searchCaption_names_the_text_right_after_transactions(t *testing.T) {
 	text := "costco"
-	since := searchDay(2026, time.January, 1)
+	since := new(utcDay(2026, time.January, 1))
 	cases := []struct {
 		name  string
 		found report.Search
@@ -272,7 +293,7 @@ func Test_searchCaption_names_the_text_right_after_transactions(t *testing.T) {
 		},
 		{
 			name:  "text with both bounds",
-			found: report.Search{Text: &text, Window: store.SearchWindow{Since: since, Until: searchDay(2026, time.March, 31)}},
+			found: report.Search{Text: &text, Window: store.SearchWindow{Since: since, Until: new(utcDay(2026, time.March, 31))}},
 			want:  `Transactions matching "costco" in all accounts, 2026-01-01 to 2026-03-31`,
 		},
 	}
@@ -284,15 +305,9 @@ func Test_searchCaption_names_the_text_right_after_transactions(t *testing.T) {
 	}
 }
 
-func Test_searchCaption_quotes_text_that_has_a_quote_or_a_newline(t *testing.T) {
-	text := "say \"hi\"\n"
-
-	assert.Equal(t, `Transactions matching "say \"hi\"\n" in all accounts, all dates`, searchCaption(report.Search{Text: &text}))
-}
-
 func Test_searchCaption_names_the_category_after_the_dates_and_before_the_amount(t *testing.T) {
 	least := int64(10000)
-	since := searchDay(2025, time.January, 1)
+	since := new(utcDay(2025, time.January, 1))
 	cases := []struct {
 		name  string
 		found report.Search

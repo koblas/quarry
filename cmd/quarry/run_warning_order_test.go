@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -29,21 +28,18 @@ func stderrWarnings(lines ...string) string {
 }
 
 func Test_run_findings_prints_config_then_unmatched_ignore_then_unmatched_account_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncIgnoreFixture(t, home)
 	writeConfig(t, home, orderConfig)
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"findings"}, &stdout, &stderr)
+	exitCode, _, stderr := runCapture(context.Background(), []string{"findings"})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Equal(t, stderrWarnings(findingsWarningsAt(configShown)...), stderr.String())
 }
 
 func Test_run_findings_json_orders_config_then_unmatched_ignore_then_unmatched_account_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncIgnoreFixture(t, home)
 	writeConfig(t, home, orderConfig)
 
@@ -54,8 +50,7 @@ func Test_run_findings_json_orders_config_then_unmatched_ignore_then_unmatched_a
 }
 
 func Test_run_accounts_orders_config_then_unmatched_account_then_all_closed_warnings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 	syncClosedAccountsFixture(t, home, 3)
 	writeConfig(t, home, "colour = \"red\"\n[accounts]\nregistered = [\"acct-99\"]\n")
 	closed := "all 3 accounts are closed; pass --all to list them"

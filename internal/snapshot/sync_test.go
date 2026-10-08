@@ -1,6 +1,7 @@
 package snapshot_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,22 +13,14 @@ import (
 	"time"
 
 	"github.com/koblas/quarry/internal/platform/sqlite"
+	"github.com/koblas/quarry/internal/platform/sqlschema"
 	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
+	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func newServer(t *testing.T, snapshotsDir string, opts ...snapshot.Option) *snapshot.Server {
-	t.Helper()
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
-	return snapshot.NewServer(append([]snapshot.Option{
-		snapshot.WithSnapshotDir(snapshotsDir),
-		snapshot.WithReference(v9.ReferenceLabel, ref),
-	}, opts...)...)
-}
 
 func Test_sync_writes_a_verified_private_snapshot_of_an_open_file(t *testing.T) {
 	t.Parallel()
@@ -61,8 +54,7 @@ func Test_sync_writes_a_verified_private_snapshot_of_an_open_file(t *testing.T) 
 func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundle_lacks(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	ref["ZFAKETABLE"] = []string{"ZFAKECOLUMN"}
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
@@ -84,8 +76,7 @@ func Test_sync_reports_verified_false_when_the_reference_names_a_table_the_bundl
 func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_lacks(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	ref["ZACCOUNT"] = append(ref["ZACCOUNT"], "ZFAKECOLUMN")
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
@@ -106,8 +97,7 @@ func Test_sync_reports_a_missing_column_when_the_reference_names_one_the_bundle_
 func Test_sync_stays_verified_and_lists_unexpected_tables_when_the_bundle_has_extra_tables_only(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	delete(ref, "ZALERT")
 	srv := snapshot.NewServer(
 		snapshot.WithSnapshotDir(filepath.Join(t.TempDir(), "snapshots")),
@@ -155,8 +145,7 @@ func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testin
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			bundle := v9fixture.OpenBundle(t, t.TempDir())
-			ref, err := v9.Reference(t.Context())
-			require.NoError(t, err)
+			ref := v9Reference(t)
 			for _, table := range c.dropTables {
 				delete(ref, table)
 			}
@@ -181,8 +170,7 @@ func Test_sync_warns_with_correct_singular_plural_agreement_for_extras(t *testin
 func Test_sync_does_not_populate_warnings_when_extras_are_accompanied_by_missing_entries(t *testing.T) {
 	t.Parallel()
 	bundle := v9fixture.OpenBundle(t, t.TempDir())
-	ref, err := v9.Reference(t.Context())
-	require.NoError(t, err)
+	ref := v9Reference(t)
 	delete(ref, "ZALERT")
 	ref["ZFAKETABLE"] = []string{"ZFAKECOLUMN"}
 	srv := snapshot.NewServer(
@@ -255,8 +243,7 @@ func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
 	require.NoError(t, err)
 	statBefore, err := os.Stat(bundle.DataPath)
 	require.NoError(t, err)
-	entriesBefore, err := os.ReadDir(bundle.Dir)
-	require.NoError(t, err)
+	namesBefore := dirNames(t, bundle.Dir)
 
 	manifest, err := srv.Sync(t.Context(), bundle.Dir)
 	require.NoError(t, err)
@@ -267,12 +254,11 @@ func Test_sync_leaves_the_live_bundle_unchanged(t *testing.T) {
 	require.NoError(t, err)
 	statAfter, err := os.Stat(bundle.DataPath)
 	require.NoError(t, err)
-	entriesAfter, err := os.ReadDir(bundle.Dir)
-	require.NoError(t, err)
+	namesAfter := dirNames(t, bundle.Dir)
 
 	assert.Equal(t, before, after)
 	assert.True(t, statBefore.ModTime().Equal(statAfter.ModTime()))
-	assert.Equal(t, namesOf(entriesBefore), namesOf(entriesAfter))
+	assert.Equal(t, namesBefore, namesAfter)
 }
 
 func Test_sync_appends_a_suffix_when_the_current_second_already_has_a_snapshot(t *testing.T) {
@@ -341,10 +327,158 @@ func onlyFileWithSuffix(t *testing.T, dir, suffix string) string {
 	return filepath.Join(dir, found[0])
 }
 
-func namesOf(entries []os.DirEntry) []string {
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
+// A cancelled ctx overrides whatever refusal each pre-commit failure site
+// would otherwise classify to, across every failure kind.
+func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_at_a_precommit_failure(t *testing.T) {
+	t.Parallel()
+	blockedPath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(blockedPath, []byte("x"), 0o600))
+
+	cases := []struct {
+		name string
+		dir  string
+		src  *fakeSource
+	}{
+		{name: "open fails", dir: t.TempDir(), src: &fakeSource{openErr: errBoom}},
+		{name: "probe fails", dir: t.TempDir(), src: &fakeSource{probeErr: errBoom}},
+		{name: "prepare fails", dir: blockedPath, src: &fakeSource{}},
+		{
+			name: "backup fails with a classified sqlite fault", dir: t.TempDir(),
+			src: &fakeSource{backupErr: sqlite3.Error{Code: sqlite3.ErrBusy}},
+		},
+		{name: "backup fails with an unclassified cause", dir: t.TempDir(), src: &fakeSource{backupErr: errBoom}},
 	}
-	return names
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			srv := snapshot.NewServer(
+				snapshot.WithSnapshotDir(c.dir),
+				snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+				snapshot.WithSource(c.src),
+				snapshot.WithHome(home),
+			)
+
+			_, err := srv.Sync(ctx, filepath.Join(home, "Documents", "Home.quicken"))
+
+			assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
+		})
+	}
+}
+
+// buildManifest's own ctx-cancellation failure (opening the snapshot copy)
+// is also routed through FailureOutcome, distinct from the sites above.
+func Test_sync_reports_interrupted_when_the_context_is_already_cancelled_during_buildManifest(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	srv := snapshot.NewServer(
+		snapshot.WithReference(v9.ReferenceLabel, sqlschema.Schema{}),
+		snapshot.WithSource(&fakeSource{}),
+		snapshot.WithDestination(&fixedPathDestination{snapshotPath: filepath.Join(t.TempDir(), "missing.sqlite")}),
+	)
+
+	_, err := srv.Sync(ctx, t.TempDir())
+
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
+}
+
+// cancelAndFailWriteManifestDestination cancels ctx and fails WriteManifest
+// in the same call, landing exactly on that failure site's FailureOutcome check.
+type cancelAndFailWriteManifestDestination struct {
+	snapshot.Destination
+
+	cancel context.CancelFunc
+}
+
+func (f *cancelAndFailWriteManifestDestination) WriteManifest(context.Context, string, []byte) (string, error) {
+	f.cancel()
+	return "", errBoom
+}
+
+func Test_sync_reports_interrupted_when_the_context_ends_exactly_when_writing_the_manifest_fails(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ctx, cancel := context.WithCancel(t.Context())
+	srv := newDestinationServer(t, home, snapshotsDir, &cancelAndFailWriteManifestDestination{
+		Destination: snapshot.NewDirDestination(snapshotsDir),
+		cancel:      cancel,
+	})
+
+	_, err := srv.Sync(ctx, bundle.Dir)
+
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
+}
+
+// cancelAfterWriteManifestDestination wraps the real adapter and cancels ctx
+// once the manifest partial is actually on disk, so a test can land exactly
+// on Sync's single pre-commit ctx check.
+type cancelAfterWriteManifestDestination struct {
+	snapshot.Destination
+
+	cancel context.CancelFunc
+}
+
+func (f *cancelAfterWriteManifestDestination) WriteManifest(ctx context.Context, name string, data []byte) (string, error) {
+	partial, err := f.Destination.WriteManifest(ctx, name, data)
+	if err == nil {
+		f.cancel()
+	}
+	return partial, err
+}
+
+func Test_sync_discards_everything_and_reports_interrupted_when_the_context_ends_just_before_the_commit_sequence(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ctx, cancel := context.WithCancel(t.Context())
+	srv := newDestinationServer(t, home, snapshotsDir, &cancelAfterWriteManifestDestination{
+		Destination: snapshot.NewDirDestination(snapshotsDir),
+		cancel:      cancel,
+	})
+
+	_, err := srv.Sync(ctx, bundle.Dir)
+
+	assert.Equal(t, "sync interrupted; nothing was kept; run quarry sync again", refusalText(t, err))
+	assertSnapshotsDirEmpty(t, snapshotsDir)
+}
+
+// cancelDuringCommitManifestDestination cancels ctx from inside
+// CommitManifest itself, after the pre-commit checkpoint has already passed.
+type cancelDuringCommitManifestDestination struct {
+	snapshot.Destination
+
+	cancel context.CancelFunc
+}
+
+func (f *cancelDuringCommitManifestDestination) CommitManifest(ctx context.Context, partial string) (string, error) {
+	f.cancel()
+	return f.Destination.CommitManifest(ctx, partial)
+}
+
+// Once the pre-commit checkpoint has passed, ctx ending mid-rename must not
+// abort the sequence.
+func Test_sync_completes_normally_when_the_context_ends_during_the_commit_sequence(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	snapshotsDir := filepath.Join(home, "snapshots")
+	bundle := v9fixture.OpenBundle(t, t.TempDir())
+	ctx, cancel := context.WithCancel(t.Context())
+	srv := newDestinationServer(t, home, snapshotsDir, &cancelDuringCommitManifestDestination{
+		Destination: snapshot.NewDirDestination(snapshotsDir),
+		cancel:      cancel,
+	})
+
+	manifest, err := srv.Sync(ctx, bundle.Dir)
+
+	require.NoError(t, err)
+	assert.True(t, manifest.Schema.Verified)
+	assert.FileExists(t, manifest.Snapshot.Path)
+	assert.FileExists(t, manifest.Snapshot.Manifest)
 }

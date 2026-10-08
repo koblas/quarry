@@ -46,7 +46,7 @@ Method: read 3b spec Rules, §4.2, §5, §6 and triage §4 (lines 20-31, 76-81, 
 - service: `report.Server` methods follow the `Anomalies` shape (`internal/report/anomalies.go:90-100`): `s.namedAccounts` -> store read -> `s.readRefusal(ctx, <command>, err)`.
 - document: `internal/report/document` holds the builders (`NewAnomalies` etc.). A new `NewSearch` would follow them, with `[]` never null and warnings passed in (3a STATE:6-8).
 - mcp: tool consts are `internal/mcp/tools.go:17-25`. Registration is `tools.go:192-223` (`sdk.AddTool(... tool(name, desc, objectSchema(...)), handler(s.timeout, stoppedLine(name), s.fn))`). The handler template is `internal/mcp/anomalies.go:12-34`: `s.now()` once -> window parse (`windowRefusal`) -> `resolveCurrency` -> `s.newReport` -> `accountRefusal` -> `document.New*` -> `capList`.
-- copy that mentions the tool list and must change: `instructions` (`tools.go:36-38`, "Tools: describe_schema, query, ..."), `quarry mcp` Long (`internal/cli/mcp.go:24-36`, "every list a tool returns stops at 500"), `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools` (the only pin, with its own byte copies), and the `query` description redirect.
+- copy that mentions the tool list and must change: `instructions` (`tools.go:36-38`, "Tools: describe_schema, query, ..."), `quarry mcp` Long (`internal/cli/mcp.go:24-36`, "every list a tool returns stops at 500"), `cmd/quarry/run_mcp_test.go` `Test_run_mcp_describes_all_eight_tools` (the only pin, with its own byte copies), and the `query` description redirect.
 
 #### Prior art in this repo
 - CLI twin shape: `internal/cli/anomalies.go` (whole file). `reportFlags{}` + `flags.bind(cmd, reportFlagHelp)` (`internal/cli/window.go:14-37`) gives `--since`, `--until`, repeatable `--account`. `flags.window(cmd, at)` (`window.go:40-58`) calls `report.ParseWindow` and turns a refusal into `UsageError`. `currency.resolve` and `withConfigWarnings` handle currency. `openReport` -> `srv.X` -> `emitReport(cmd, *jsonOut, warnings, renderJSON, renderText)` (`output.go:33-40`, warnings on stderr as `quarry: warning: `). Table renderer: `renderTable(caption, aligns, rows)` (`render_table.go:23-47`), `windowCaption` (`:55`). `transactionFlagHelp` (`window.go:26-30`) is the "count transactions dated ..." help text, which fits search better than `anomaliesFlagHelp`.
@@ -89,7 +89,7 @@ Method: read 3b spec Rules, §4.2, §5, §6 and triage §4 (lines 20-31, 76-81, 
 | `registerTools` (AddTool calls) | `internal/mcp/tools.go:192-223` | grep |
 | tools list strings: `instructions` | `internal/mcp/tools.go:36-38` | grep |
 | `quarry mcp` Long | `internal/cli/mcp.go:24-36` | grep |
-| descriptions pin | `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_all_eight_tools` | grep |
+| descriptions pin | `cmd/quarry/run_mcp_test.go` `Test_run_mcp_describes_all_eight_tools` | grep |
 
 #### Becomes dead if this ships
 Nothing becomes dead. `query` stays as the ad-hoc path; its description will want a "call search_transactions for payee/memo lookups" redirect (copy, not deletion).
@@ -740,20 +740,20 @@ Sizing pass (architect, opus) 2026-10-03 — 15 IDs → 6 runs, all code-first. 
 | SCENARIO-13 | FOLD into SCENARIO-10 |
 
 ## BDD Acceptance Progress
-- [x] SCENARIO-01: quarry search lists matching transactions newest first, flagged, with their splits — `cmd/quarry/run_search_json_test.go` `Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_splits`
-- [x] SCENARIO-05: without --since and --until every date is searched — delivered by SCENARIO-01 — `cmd/quarry/run_search_window_test.go` `Test_run_search_without_since_or_until_searches_every_date`
-- [x] SCENARIO-02: text matches payee, transaction memo and split memo, ignoring case, every character literal — `cmd/quarry/run_search_text_test.go` `Test_run_search_text_lists_payee_memo_and_split_memo_matches_ignoring_case_with_every_character_literal`
-- [x] SCENARIO-06: more matches than the limit print the newest ones — delivered by SCENARIO-02 — `cmd/quarry/run_search_limit_test.go` `Test_run_search_prints_the_newest_500_of_501_matches_unless_limit_0`
-- [x] SCENARIO-07: no match prints an empty result and the no-match warning — delivered by SCENARIO-02 — `cmd/quarry/run_search_no_match_test.go` `Test_run_search_with_text_that_matches_nothing_prints_an_empty_result_and_the_no_match_warning`
+- [x] SCENARIO-01: quarry search lists matching transactions newest first, flagged, with their splits — `cmd/quarry/run_search_test.go` `Test_run_search_json_lists_every_transaction_newest_first_flagged_with_its_splits`
+- [x] SCENARIO-05: without --since and --until every date is searched — delivered by SCENARIO-01 — `cmd/quarry/run_search_test.go` `Test_run_search_without_since_or_until_searches_every_date`
+- [x] SCENARIO-02: text matches payee, transaction memo and split memo, ignoring case, every character literal — `cmd/quarry/run_search_test.go` `Test_run_search_text_lists_payee_memo_and_split_memo_matches_ignoring_case_with_every_character_literal`
+- [x] SCENARIO-06: more matches than the limit print the newest ones — delivered by SCENARIO-02 — `cmd/quarry/run_search_test.go` `Test_run_search_prints_the_newest_500_of_501_matches_unless_limit_0`
+- [x] SCENARIO-07: no match prints an empty result and the no-match warning — delivered by SCENARIO-02 — `cmd/quarry/run_search_test.go` `Test_run_search_with_text_that_matches_nothing_prints_an_empty_result_and_the_no_match_warning`
 - [x] SCENARIO-12a: a broken config file never affects quarry search — delivered by SCENARIO-02 — `cmd/quarry/run_config_test.go` `Test_run_search_ignores_a_malformed_config`
-- [x] SCENARIO-03: --min and --max compare the amount without its sign — `cmd/quarry/run_search_amount_test.go` `Test_run_search_min_and_max_compare_the_amount_without_its_sign`
-- [x] SCENARIO-04: --category matches the category and any category under it — `cmd/quarry/run_search_category_test.go` `Test_run_search_category_lists_the_category_and_everything_under_it`
-- [x] SCENARIO-08: quarry search refuses bad input with the ruled line and exit code — delivered by SCENARIO-04 — `cmd/quarry/run_search_refusals_test.go` `Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code`
+- [x] SCENARIO-03: --min and --max compare the amount without its sign — `cmd/quarry/run_search_test.go` `Test_run_search_min_and_max_compare_the_amount_without_its_sign`
+- [x] SCENARIO-04: --category matches the category and any category under it — `cmd/quarry/run_search_test.go` `Test_run_search_category_lists_the_category_and_everything_under_it`
+- [x] SCENARIO-08: quarry search refuses bad input with the ruled line and exit code — delivered by SCENARIO-04 — `cmd/quarry/run_search_test.go` `Test_run_search_refuses_bad_input_with_the_ruled_line_and_exit_code`
 - [x] SCENARIO-09: search_transactions returns the quarry search --json document — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_returns_the_search_json_document`
 - [x] SCENARIO-11: search_transactions cuts to its limit with the MCP cut line — delivered by SCENARIO-09 — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_cuts_to_its_limit_with_the_mcp_cut_line`
 - [x] SCENARIO-12b: a broken config file never affects search_transactions — delivered by SCENARIO-09 — `cmd/quarry/run_config_test.go` `Test_run_mcp_search_transactions_ignores_a_malformed_config`
-- [x] SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr — `cmd/quarry/run_mcp_search_refusals_test.go` `Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_values_on_stderr`
-- [x] SCENARIO-13: the server names search to the client — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_descriptions_test.go` `Test_run_mcp_describes_every_tool`
+- [x] SCENARIO-10: search_transactions refuses bad input without the caller's values on stderr — `cmd/quarry/run_mcp_search_test.go` `Test_run_mcp_search_transactions_refuses_bad_input_without_the_callers_values_on_stderr`
+- [x] SCENARIO-13: the server names search to the client — delivered by SCENARIO-10 — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_describes_every_tool`
 
 ---
 

@@ -29,7 +29,7 @@ func (failingWriter) Write([]byte) (int, error) { return 0, errClientGone }
 // newServer is a Server with a report factory and config loader, which Serve requires, and opts.
 func newServer(opts ...mcp.Option) *mcp.Server {
 	factory := func(context.Context, string) (*report.Server, error) { return nil, errFactoryBroke }
-	return mcp.NewServer(append([]mcp.Option{mcp.WithReport(factory), mcp.WithConfig((&configStub{}).load)}, opts...)...)
+	return mcp.NewServer(append([]mcp.Option{mcp.WithReport(factory), withDefaultConfig()}, opts...)...)
 }
 
 // running is a Serve call wired to an in-process MCP client.
@@ -105,7 +105,7 @@ func Test_serve_refuses_a_server_built_without_its_report_factory_or_config_load
 	}{
 		{name: "neither", options: nil},
 		{name: "no config loader", options: []mcp.Option{mcp.WithReport(factory)}},
-		{name: "no report factory", options: []mcp.Option{mcp.WithConfig((&configStub{}).load)}},
+		{name: "no report factory", options: []mcp.Option{withDefaultConfig()}},
 	}
 
 	for _, c := range cases {
@@ -162,7 +162,7 @@ func Test_serve_returns_the_context_error_when_the_context_ends(t *testing.T) {
 }
 
 func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler_with_the_schema_defaults(t *testing.T) {
-	h := newHarness(t, listOf(uncategorized(60)...), nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, listOf(uncategorized(60)...), nil, withDefaultConfig())
 
 	for name, args := range map[string]any{
 		"omitted": nil,
@@ -170,7 +170,7 @@ func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler_wi
 		"empty":   map[string]any{},
 	} {
 		t.Run(name, func(t *testing.T) {
-			doc := decodeFindings(t, h.dataQuality(t, args))
+			doc := decodeDoc[document.FindingsList](t, h.dataQuality(t, args))
 
 			assert.Equal(t, "open", doc.Status)
 			assert.Equal(t, uncategorizedIDs(50), findingIDs(doc))
@@ -179,7 +179,7 @@ func Test_a_tool_call_with_absent_null_or_empty_arguments_reaches_the_handler_wi
 }
 
 func Test_a_by_tool_call_with_absent_null_or_empty_arguments_applies_the_by_default(t *testing.T) {
-	h := newHarness(t, &fakeStore{}, nil, mcp.WithConfig((&configStub{}).load))
+	h := newHarness(t, &fakeStore{}, nil, withDefaultConfig())
 	argumentShapes := map[string]any{
 		"omitted": nil,
 		"null":    json.RawMessage("null"),
@@ -188,10 +188,10 @@ func Test_a_by_tool_call_with_absent_null_or_empty_arguments_applies_the_by_defa
 
 	for name, args := range argumentShapes {
 		t.Run("spending "+name, func(t *testing.T) {
-			assert.Equal(t, "category", decodeSpending(t, h.spending(t, args)).By)
+			assert.Equal(t, "category", decodeDoc[document.Spending](t, h.spending(t, args)).By)
 		})
 		t.Run("cash_flow "+name, func(t *testing.T) {
-			assert.Equal(t, "month", decodeCashFlow(t, h.cashFlow(t, args)).By)
+			assert.Equal(t, "month", decodeDoc[document.CashFlow](t, h.cashFlow(t, args)).By)
 		})
 	}
 }
@@ -206,20 +206,11 @@ func Test_a_search_call_with_absent_null_or_empty_arguments_searches_the_newest_
 			fake := &fakeStore{}
 			h := newHarness(t, fake, nil)
 
-			doc := decodeSearch(t, h.searchTransactions(t, args))
+			doc := decodeDoc[document.Search](t, h.searchTransactions(t, args))
 
 			require.Len(t, fake.searched, 1)
 			assert.Equal(t, 500, fake.searched[0].Limit)
 			assert.Equal(t, 500, doc.Limit)
 		})
 	}
-}
-
-// decodeCashFlow is result's one text block decoded as the cash flow document.
-func decodeCashFlow(t *testing.T, result *sdk.CallToolResult) document.CashFlow {
-	t.Helper()
-	require.False(t, result.IsError, textOf(t, result))
-	var doc document.CashFlow
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
 }

@@ -2,9 +2,12 @@ package cli_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/cli"
+	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/require"
@@ -116,4 +119,66 @@ func (f fakeReportStore) Summary(_ context.Context, params store.SummaryParams) 
 		*f.gotSummary = params
 	}
 	return f.summary, f.err
+}
+
+// envOption adjusts an Env built by reportEnv or failingReportEnv.
+type envOption func(*cli.Env)
+
+// atSpendNow pins the Env clock to spendNow.
+func atSpendNow(env *cli.Env) { atTime(spendNow)(env) }
+
+// atWallClock gives the Env the real clock, for runs that fail before a window is read.
+func atWallClock(env *cli.Env) { env.Now = time.Now }
+
+// reportEnv is an Env with a CAD config whose report store is fake; its clock stays unset unless opts set it.
+func reportEnv(fake report.Store, stdout, stderr io.Writer, opts ...envOption) cli.Env {
+	env := cli.Env{
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
+		NewReport: func(context.Context, string) (*report.Server, error) {
+			return report.NewServer(report.WithStore(fake)), nil
+		},
+	}
+	for _, opt := range opts {
+		opt(&env)
+	}
+	return env
+}
+
+// failingReportEnv is an Env with a CAD config whose report store cannot be opened: NewReport returns err.
+func failingReportEnv(err error, stdout, stderr io.Writer, opts ...envOption) cli.Env {
+	env := cli.Env{
+		LoadConfig: cadConfig,
+		Stdout:     stdout, Stderr: stderr,
+		NewReport: func(context.Context, string) (*report.Server, error) { return nil, err },
+	}
+	for _, opt := range opts {
+		opt(&env)
+	}
+	return env
+}
+
+// withClock gives the Env now as its clock.
+func withClock(now func() time.Time) envOption { return func(env *cli.Env) { env.Now = now } }
+
+// atTime pins the Env clock to at.
+func atTime(at time.Time) envOption { return withClock(func() time.Time { return at }) }
+
+// withLoader replaces the Env's config loader.
+func withLoader(load cli.ConfigLoader) envOption { return func(env *cli.Env) { env.LoadConfig = load } }
+
+// withConfig makes the Env's config loader answer cfg.
+func withConfig(cfg config.Config) envOption {
+	return withLoader(func(string) (config.Config, error) { return cfg, nil })
+}
+
+// leftOutWarning is the warning command prints for an account Quicken's reports leave out.
+func leftOutWarning(command, name string) string {
+	return "account \"" + name + "\" is not used in reports in Quicken, so " + command + " leaves it out; " +
+		"to include it, turn on reports for it in Quicken's account settings, then run quarry sync"
+}
+
+// linkedTrackingWarning is the warning command prints for an account on linked account tracking.
+func linkedTrackingWarning(command, name string) string {
+	return "account \"" + name + "\" uses linked account tracking in Quicken, so " + command + " leaves it out, as Quicken's reports do"
 }

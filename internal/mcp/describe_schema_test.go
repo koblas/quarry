@@ -1,7 +1,6 @@
 package mcp_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -9,7 +8,6 @@ import (
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/report/document"
 	"github.com/koblas/quarry/internal/store"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,7 +47,7 @@ func Test_describe_schema_returns_what_the_store_holds_with_the_conventions(t *t
 	result := h.describeSchema(t)
 
 	require.False(t, result.IsError, textOf(t, result))
-	doc := decodeSchema(t, result)
+	doc := decodeDoc[document.Schema](t, result)
 	assert.Equal(t, report.SQLConventions, doc.Conventions)
 	assert.Equal(t, []document.SchemaRelation{{Name: "accounts", Kind: "table", Columns: []document.SchemaColumn{{Name: "id", Type: "VARCHAR"}}}}, doc.Relations)
 	assert.Equal(t, []document.SchemaAccount{{ID: "acct-1", Name: "Chequing", Type: "chequing", Currency: "CAD", Closed: true}}, doc.Accounts)
@@ -57,20 +55,12 @@ func Test_describe_schema_returns_what_the_store_holds_with_the_conventions(t *t
 	assert.Equal(t, document.SchemaDates{First: new("2024-01-02"), Last: new("2026-09-30")}, doc.Dates)
 }
 
-// decodeSchema is result's one text block decoded as the describe_schema document.
-func decodeSchema(t *testing.T, result *sdk.CallToolResult) document.Schema {
-	t.Helper()
-	var doc document.Schema
-	require.NoError(t, json.Unmarshal([]byte(textOf(t, result)), &doc))
-	return doc
-}
-
 func Test_describe_schema_keeps_500_accounts_and_categories_without_a_warning(t *testing.T) {
 	h := newHarness(t, &fakeStore{schema: schemaWith(500, 500)}, nil)
 
 	result := h.describeSchema(t)
 
-	doc := decodeSchema(t, result)
+	doc := decodeDoc[document.Schema](t, result)
 	assert.Len(t, doc.Accounts, 500)
 	assert.Len(t, doc.Categories, 500)
 	assert.Equal(t, []string{}, doc.Warnings)
@@ -104,7 +94,7 @@ func Test_describe_schema_says_which_list_it_cut_with_the_total_grouped_in_thous
 
 			result := h.describeSchema(t)
 
-			assert.Equal(t, c.want, decodeSchema(t, result).Warnings)
+			assert.Equal(t, c.want, decodeDoc[document.Schema](t, result).Warnings)
 		})
 	}
 }

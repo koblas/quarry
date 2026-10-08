@@ -41,9 +41,9 @@ func Test_NewSchema_of_an_empty_store_has_empty_lists_and_null_dates(t *testing.
 }
 
 // quoted is s as the JSON string encoding/json writes for it.
-func quoted(t *testing.T, s string) string {
-	t.Helper()
+func quoted(tb testing.TB, s string) string {
+	tb.Helper()
 	out, err := json.Marshal(s)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return string(out)
 }

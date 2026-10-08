@@ -26,15 +26,6 @@ func yearExcess(year int) report.ACBEvent {
 	return report.ACBEvent{Date: day(year, time.March, 1), Action: report.ACBActionReturnOfCapital, Realized: true, Gain: 40}
 }
 
-func securityIDs(a report.ACB) []string {
-	ids := make([]string, 0, len(a.Securities))
-	for _, s := range a.Securities {
-		ids = append(ids, s.Security.ID)
-	}
-
-	return ids
-}
-
 func Test_in_year_keeps_that_years_sales_and_the_securities_that_sold_in_it(t *testing.T) {
 	sales2025 := report.ACBYear{Year: 2025, Sales: []report.ACBSale{yearSale("sec-b", 2025)}, Proceeds: 100}
 	a := report.ACB{

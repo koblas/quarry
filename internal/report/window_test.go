@@ -11,13 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// windowNow is 2026-09-29 in a zone where that evening is already 2026-09-30 in UTC.
-var windowNow = time.Date(2026, 9, 29, 22, 0, 0, 0, time.FixedZone("UTC-5", -5*60*60))
-
-func day(year int, month time.Month, dayOfMonth int) time.Time {
-	return time.Date(year, month, dayOfMonth, 0, 0, 0, 0, time.UTC)
-}
-
 func Test_parse_window_resolves_a_bare_year_or_month_to_its_last_day(t *testing.T) {
 	cases := []struct {
 		name  string

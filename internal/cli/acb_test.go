@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -77,47 +76,6 @@ accountant, not a tax filing.
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), long)
-}
-
-func Test_acb_help_shows_examples(t *testing.T) {
-	const examples = `Examples:
-  quarry acb
-  quarry acb --year 2024
-  quarry acb --security XEQT --json
-`
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"acb", "--help"}, currencyEnv(&stdout, &stderr))
-
-	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), examples)
-}
-
-func Test_acb_help_shows_the_currency_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"acb", "--help"}, currencyEnv(&stdout, &stderr))
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--currency currency +`+regexp.QuoteMeta(acbCurrencyHelp)+`$`, stdout.String())
-}
-
-func Test_acb_help_shows_the_year_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"acb", "--help"}, currencyEnv(&stdout, &stderr))
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--year year +list the sales in tax year \(YYYY\) one by one$`, stdout.String())
-}
-
-func Test_acb_help_shows_the_security_flag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"acb", "--help"}, currencyEnv(&stdout, &stderr))
-
-	require.NoError(t, err)
-	assert.Regexp(t, `(?m)--security name +show the full history of the security with this name, ticker or id; repeat for more$`, stdout.String())
 }
 
 func Test_acb_security_takes_a_name_containing_a_comma_as_one_selector(t *testing.T) {
@@ -222,25 +180,5 @@ func Test_acb_refuses_while_an_account_is_unclassified(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, report.RefusalUnclassifiedAccounts, refusal.Kind)
 	assert.NotErrorAs(t, err, new(cli.UsageError))
-	assert.Empty(t, stdout.String())
-}
-
-func Test_acb_returns_a_failed_store_read(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	env := holdingsEnv(cadConfig, fakeReportStore{err: errStoreRead}, &stdout, &stderr)
-
-	err := cli.Execute(t.Context(), []string{"acb"}, env)
-
-	require.ErrorIs(t, err, errStoreRead)
-	assert.NotErrorAs(t, err, new(cli.UsageError))
-	assert.Empty(t, stdout.String())
-}
-
-func Test_acb_returns_a_failed_report_open(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	err := cli.Execute(t.Context(), []string{"acb"}, refusedEnv(&stdout, &stderr))
-
-	require.ErrorIs(t, err, errStoreRead)
 	assert.Empty(t, stdout.String())
 }

@@ -380,44 +380,32 @@ func Test_unconverted_transactions_are_positive_exactly_when_the_rows_list_the_o
 	}
 }
 
-func Test_spending_returns_the_unconverted_query_fault_as_another_fault(t *testing.T) {
+func Test_spending_returns_an_unconverted_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	fault := ioFault(`query rows "SELECT count"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
+	for _, c := range otherFaults("SELECT count", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Spending(t.Context(), spendingIn(money.CAD, store.SpendByCategory))
+			_, err := st.Spending(t.Context(), spendingIn(money.CAD, store.SpendByCategory))
 
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }
 
-func Test_spending_returns_an_unconverted_scan_fault_as_another_fault(t *testing.T) {
+func Test_cash_flow_returns_an_unconverted_read_fault_as_another_fault(t *testing.T) {
 	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
+	for _, c := range otherFaults("SELECT count", 1) {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st := newBuiltStore(t, spyOpener(c.spy))
 
-	_, err := st.Spending(t.Context(), spendingIn(money.CAD, store.SpendByCategory))
+			_, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
 
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
-}
-
-func Test_cash_flow_returns_the_unconverted_query_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	fault := ioFault(`query rows "SELECT count"`)
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, queryFault: fault}))
-
-	_, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
-
-	assertOtherFault(t, err, "disk read failed")
-	assert.ErrorIs(t, err, fault)
-}
-
-func Test_cash_flow_returns_an_unconverted_scan_fault_as_another_fault(t *testing.T) {
-	t.Parallel()
-	st := newBuiltStore(t, spyOpener(&spyReadDB{passQueries: 1, scanFault: errScanFailed}))
-
-	_, err := st.CashFlow(t.Context(), cashFlowIn(money.CAD, store.CashFlowByMonth))
-
-	assertOtherFault(t, err, errScanFailed.Error())
-	assert.ErrorIs(t, err, errScanFailed)
+			assertOtherFault(t, err, c.reason)
+			assert.ErrorIs(t, err, c.fault)
+		})
+	}
 }

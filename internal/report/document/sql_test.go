@@ -14,8 +14,8 @@ import (
 )
 
 // encodedCell renders a one-row, one-column document and returns the row's only cell as JSON text.
-func encodedCell(t *testing.T, col store.QueryColumn, value store.QueryValue) string {
-	t.Helper()
+func encodedCell(tb testing.TB, col store.QueryColumn, value store.QueryValue) string {
+	tb.Helper()
 	result := report.QueryResult{
 		Columns: []store.QueryColumn{col},
 		Rows:    [][]store.QueryValue{{value}},
@@ -23,11 +23,11 @@ func encodedCell(t *testing.T, col store.QueryColumn, value store.QueryValue) st
 
 	out, err := json.Marshal(document.NewSQL(result, 500, nil))
 
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	var doc struct {
 		Rows [][]json.RawMessage `json:"rows"`
 	}
-	require.NoError(t, json.Unmarshal(out, &doc))
+	require.NoError(tb, json.Unmarshal(out, &doc))
 	return string(doc.Rows[0][0])
 }
 

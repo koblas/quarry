@@ -12,15 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// useZone makes zone the process-local zone for the test.
-func useZone(t *testing.T, zone *time.Location) {
-	t.Helper()
-	//nolint:gosmopolitan // the test swaps the process-local zone to pin the local rendering; Cleanup restores it
-	previous := time.Local
-	time.Local = zone                           //nolint:gosmopolitan // restored by Cleanup
-	t.Cleanup(func() { time.Local = previous }) //nolint:gosmopolitan // restores the zone swapped above
-}
-
 func Test_snapshotAge(t *testing.T) {
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	cases := []struct {
@@ -54,36 +45,6 @@ func Test_snapshotTakenPhrase(t *testing.T) {
 	got := snapshotTakenPhrase(takenAt.Add(48*time.Hour), takenAt)
 
 	assert.Equal(t, "2026-09-27 10:30 EDT (2 days ago)", got)
-}
-
-func statusFixture() store.Status {
-	return store.Status{
-		Path: "/Users/dave/Library/Application Support/quarry/quarry.duckdb",
-		Run: store.ImportRun{
-			Snapshot: store.SnapshotRef{
-				Path:    "/Users/dave/Library/Application Support/quarry/snapshots/20260927T143005Z.sqlite",
-				TakenAt: time.Date(2026, 9, 27, 14, 30, 5, 0, time.UTC),
-				Source:  "/Users/dave/Documents/Home.quicken",
-			},
-			Counts: store.Counts{
-				Transactions: 18204, Splits: 21977, Transfers: 3141, Payees: 1873, Categories: 312, Tags: 14,
-				InvestmentTransactions: 1605, Securities: 84, Prices: 99352,
-			},
-			BalancesChecked: 35, BalancesNeverReconciled: 3, InvestmentAccounts: 4,
-			TransfersPaired: 3112, TransfersOneSided: 29,
-			SharesChecked: 7,
-		},
-		FirstDate: time.Date(2003, 1, 4, 0, 0, 0, 0, time.UTC),
-		LastDate:  time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC),
-		Rates: store.StatusRates{
-			First: time.Date(2003, 1, 4, 0, 0, 0, 0, time.UTC),
-			Last:  time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC),
-		},
-	}
-}
-
-func findingsFixture() document.FindingsTally {
-	return document.FindingsTally{Counts: finding.Counts{Open: 12, Ignored: 4}, IgnoreKnown: true}
 }
 
 func Test_renderStatus(t *testing.T) {

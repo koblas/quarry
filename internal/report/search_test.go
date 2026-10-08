@@ -38,30 +38,6 @@ func Test_search_passes_the_amounts_to_the_store_and_echoes_them(t *testing.T) {
 	assert.Equal(t, amounts, result.Amounts)
 }
 
-func Test_search_leaves_both_amount_bounds_open_when_the_request_gives_none(t *testing.T) {
-	var got store.SearchParams
-	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
-
-	result, err := srv.Search(t.Context(), report.SearchRequest{})
-
-	require.NoError(t, err)
-	assert.Equal(t, store.SearchParams{}, got)
-	assert.Equal(t, report.SearchAmounts{}, result.Amounts)
-}
-
-func Test_search_names_every_account_when_none_is_given(t *testing.T) {
-	var got store.SearchParams
-	reads := 0
-	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got, accountsReads: &reads}))
-
-	result, err := srv.Search(t.Context(), report.SearchRequest{})
-
-	require.NoError(t, err)
-	assert.Empty(t, got.AccountIDs)
-	assert.Empty(t, result.Accounts)
-	assert.Zero(t, reads)
-}
-
 func Test_search_echoes_the_accounts_the_request_named_in_the_order_given(t *testing.T) {
 	srv := report.NewServer(report.WithStore(fakeStore{accounts: accountsOf(chqAccount, visaAccount)}))
 
@@ -116,38 +92,6 @@ func Test_search_refuses_an_account_it_cannot_pick_without_reading_matches(t *te
 	require.ErrorAs(t, err, &refusal)
 	assert.Equal(t, report.RefusalUnknownAccount, refusal.Kind)
 	assert.Equal(t, store.SearchParams{Limit: 99}, got)
-}
-
-func Test_search_refuses_a_store_fault_as_a_store_refusal(t *testing.T) {
-	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
-	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
-
-	_, err := srv.Search(t.Context(), report.SearchRequest{})
-
-	var refusal report.RefusalError
-	require.ErrorAs(t, err, &refusal)
-	assert.Equal(t, report.RefusalStore, refusal.Kind)
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
-}
-
-func Test_search_reports_an_interrupt_during_the_read(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
-
-	_, err := srv.Search(ctx, report.SearchRequest{})
-
-	assert.EqualError(t, err, "search interrupted")
-}
-
-func Test_search_reports_an_interrupt_during_the_accounts_read(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
-
-	_, err := srv.Search(ctx, report.SearchRequest{Accounts: []string{"Visa"}})
-
-	assert.EqualError(t, err, "search interrupted")
 }
 
 func Test_CheckSearchText_refuses_blank_text(t *testing.T) {
@@ -258,17 +202,6 @@ func Test_search_passes_the_text_untrimmed_and_echoes_it(t *testing.T) {
 	assert.Equal(t, new(" Costco "), result.Text)
 }
 
-func Test_search_without_text_passes_none_and_echoes_none(t *testing.T) {
-	var got store.SearchParams
-	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
-
-	result, err := srv.Search(t.Context(), report.SearchRequest{})
-
-	require.NoError(t, err)
-	assert.Empty(t, got.Text)
-	assert.Nil(t, result.Text)
-}
-
 func Test_search_passes_the_category_to_the_store_and_echoes_it(t *testing.T) {
 	var got store.SearchParams
 	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
@@ -278,17 +211,6 @@ func Test_search_passes_the_category_to_the_store_and_echoes_it(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, new("food:Groceries"), got.Category)
 	assert.Equal(t, new("food:Groceries"), result.Category)
-}
-
-func Test_search_without_a_category_passes_none_and_echoes_none(t *testing.T) {
-	var got store.SearchParams
-	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got}))
-
-	result, err := srv.Search(t.Context(), report.SearchRequest{})
-
-	require.NoError(t, err)
-	assert.Nil(t, got.Category)
-	assert.Nil(t, result.Category)
 }
 
 func Test_search_refuses_a_category_the_store_says_names_none(t *testing.T) {
@@ -313,13 +235,76 @@ func Test_search_refuses_an_account_it_cannot_pick_before_a_category_it_cannot_p
 	assert.Equal(t, report.RefusalUnknownAccount, refusal.Kind)
 }
 
-func Test_search_refuses_a_store_fault_as_a_store_refusal_whatever_the_category(t *testing.T) {
-	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
-	srv := report.NewServer(report.WithStore(fakeStore{err: openErr, search: store.Search{UnknownCategory: true}}), report.WithHome(refusalHome))
+func Test_search_with_an_empty_request_leaves_every_filter_open(t *testing.T) {
+	var got store.SearchParams
+	reads := 0
+	srv := report.NewServer(report.WithStore(fakeStore{gotSearch: &got, accountsReads: &reads}))
 
-	_, err := srv.Search(t.Context(), report.SearchRequest{Category: new("Fod")})
+	result, err := srv.Search(t.Context(), report.SearchRequest{})
 
-	var refusal report.RefusalError
-	require.ErrorAs(t, err, &refusal)
-	assert.Equal(t, report.RefusalStore, refusal.Kind)
+	require.NoError(t, err)
+	t.Run("both amount bounds are open", func(t *testing.T) {
+		assert.Equal(t, store.SearchParams{}, got)
+		assert.Equal(t, report.SearchAmounts{}, result.Amounts)
+	})
+	t.Run("every account is named", func(t *testing.T) {
+		assert.Empty(t, got.AccountIDs)
+		assert.Empty(t, result.Accounts)
+		assert.Zero(t, reads)
+	})
+	t.Run("no text is passed or echoed", func(t *testing.T) {
+		assert.Empty(t, got.Text)
+		assert.Nil(t, result.Text)
+	})
+	t.Run("no category is passed or echoed", func(t *testing.T) {
+		assert.Nil(t, got.Category)
+		assert.Nil(t, result.Category)
+	})
+}
+
+func Test_search_reports_an_interrupt_during_a_read(t *testing.T) {
+	cases := []struct {
+		name string
+		req  report.SearchRequest
+	}{
+		{name: "the search read", req: report.SearchRequest{}},
+		{name: "the accounts read", req: report.SearchRequest{Accounts: []string{"Visa"}}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
+
+			_, err := srv.Search(ctx, c.req)
+
+			assert.EqualError(t, err, "search interrupted")
+		})
+	}
+}
+
+func Test_search_refuses_a_store_fault_as_a_store_refusal(t *testing.T) {
+	cases := []struct {
+		name  string
+		found store.Search
+		req   report.SearchRequest
+	}{
+		{name: "for an empty request", req: report.SearchRequest{}},
+		{name: "whatever the category", found: store.Search{UnknownCategory: true}, req: report.SearchRequest{Category: new("Fod")}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
+			srv := report.NewServer(report.WithStore(fakeStore{err: openErr, search: c.found}), report.WithHome(refusalHome))
+
+			_, err := srv.Search(t.Context(), c.req)
+
+			var refusal report.RefusalError
+			require.ErrorAs(t, err, &refusal)
+			assert.Equal(t, report.RefusalStore, refusal.Kind)
+			assert.EqualError(t, err, missingStoreRefusal)
+		})
+	}
 }

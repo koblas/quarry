@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var holdingsDay = time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+var holdingsDay = utcDay(2026, time.March, 12)
 
 // heldRow is 10 shares of "Fund" in CAD priced 5.00 on 2026-03-05, worth 50.00 in CAD; tests change the field they pin.
 func heldRow() store.Holding {
 	return store.Holding{
 		Account: "Brokerage", Security: new("Fund"), Shares: 10_000_000,
-		Price: new(int64(5_000_000)), PriceDate: new(time.Date(2026, time.March, 5, 0, 0, 0, 0, time.UTC)),
+		Price: new(int64(5_000_000)), PriceDate: new(utcDay(2026, time.March, 5)),
 		Currency: new("CAD"), Value: big.NewInt(5_000), ValueCAD: big.NewInt(5_000), ValueUSD: big.NewInt(3_700),
 	}
 }
@@ -196,7 +196,7 @@ func Test_renderHoldings_the_total_row_holds_only_the_label_and_the_in_sum_for_r
 
 func Test_renderHoldings_shows_an_old_price_and_the_placeholder_price_date_as_recorded(t *testing.T) {
 	old := heldRow()
-	old.PriceDate = new(time.Date(1899, time.December, 29, 0, 0, 0, 0, time.UTC))
+	old.PriceDate = new(utcDay(1899, time.December, 29))
 
 	got := renderHoldings(holdingsIn(money.CAD, totalIn(money.CAD, 5_000), old))
 

@@ -13,35 +13,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// day is the given day of 2026.
-func day(month time.Month, d int) time.Time {
-	return time.Date(2026, month, d, 0, 0, 0, 0, time.UTC)
-}
-
 // recurringDocumentOf renders r with warnings and reads the document back as generic JSON.
-func recurringDocumentOf(t *testing.T, r report.Recurring, warnings ...string) map[string]any {
-	t.Helper()
-	out := indented(t, document.NewRecurring(r, warnings))
+func recurringDocumentOf(tb testing.TB, r report.Recurring, warnings ...string) map[string]any {
+	tb.Helper()
+	out := indented(tb, document.NewRecurring(r, warnings))
 	var doc map[string]any
-	require.NoError(t, json.Unmarshal([]byte(out), &doc), out)
+	require.NoError(tb, json.Unmarshal([]byte(out), &doc), out)
 	return doc
 }
 
 // seriesEntryAt is the i-th entry of doc's "series".
-func seriesEntryAt(t *testing.T, doc map[string]any, i int) map[string]any {
-	t.Helper()
+func seriesEntryAt(tb testing.TB, doc map[string]any, i int) map[string]any {
+	tb.Helper()
 	entries, ok := doc["series"].([]any)
-	require.True(t, ok)
-	require.Greater(t, len(entries), i)
+	require.True(tb, ok)
+	require.Greater(tb, len(entries), i)
 	entry, ok := entries[i].(map[string]any)
-	require.True(t, ok)
+	require.True(tb, ok)
 	return entry
 }
 
 // firstSeriesOf renders a document of the one series s and returns its entry.
-func firstSeriesOf(t *testing.T, s report.Series) map[string]any {
-	t.Helper()
-	return seriesEntryAt(t, recurringDocumentOf(t, report.Recurring{Window: window, Series: []report.Series{s}}), 0)
+func firstSeriesOf(tb testing.TB, s report.Series) map[string]any {
+	tb.Helper()
+	return seriesEntryAt(tb, recurringDocumentOf(tb, report.Recurring{Window: window, Series: []report.Series{s}}), 0)
 }
 
 func Test_NewRecurring_writes_empty_arrays_not_null_for_a_report_with_no_series(t *testing.T) {
@@ -256,16 +251,16 @@ func Test_NewRecurring_keeps_the_same_keys_in_every_reporting_currency(t *testin
 }
 
 // documentKeysIn is the "currency" value and the ordered keys of the one series of a document rendered in currency.
-func documentKeysIn(t *testing.T, currency money.Currency) (string, []string) {
-	t.Helper()
-	out := []byte(indented(t, document.NewRecurring(report.Recurring{Window: window, Currency: currency, Series: []report.Series{convertedUSDSeries()}}, []string{})))
+func documentKeysIn(tb testing.TB, currency money.Currency) (string, []string) {
+	tb.Helper()
+	out := []byte(indented(tb, document.NewRecurring(report.Recurring{Window: window, Currency: currency, Series: []report.Series{convertedUSDSeries()}}, []string{})))
 	var doc struct {
 		Currency string            `json:"currency"`
 		Series   []json.RawMessage `json:"series"`
 	}
-	require.NoError(t, json.Unmarshal(out, &doc))
-	require.Len(t, doc.Series, 1)
-	return doc.Currency, topLevelKeys(t, doc.Series[0])
+	require.NoError(tb, json.Unmarshal(out, &doc))
+	require.Len(tb, doc.Series, 1)
+	return doc.Currency, topLevelKeys(tb, doc.Series[0])
 }
 
 func Test_NewRecurring_reads_back_converted_native_ended_and_unchanged_series(t *testing.T) {

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -51,8 +50,7 @@ func storePathUnder(home string) string {
 }
 
 func Test_run_pairs_transfers_between_the_users_accounts(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -70,9 +68,8 @@ func Test_run_pairs_transfers_between_the_users_accounts(t *testing.T) {
 	paymentLeg := b.Entry(v9fixture.EntryRow{Parent: paymentTxn, Amount: "50.00", QuickenID: 4004, Transfer: "3003"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -111,8 +108,7 @@ func Test_run_pairs_transfers_between_the_users_accounts(t *testing.T) {
 }
 
 func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -125,9 +121,8 @@ func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T)
 	b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	require.Empty(t, stderr.String())
@@ -144,8 +139,7 @@ func Test_run_reports_no_transfers_for_a_file_with_no_transactions(t *testing.T)
 }
 
 func Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -167,9 +161,8 @@ func Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync(t 
 	missingLeg := b.Entry(v9fixture.EntryRow{Parent: missingTxn, Amount: "-1.00", QuickenID: 3001, Transfer: "999"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 0, exitCode)
 	storePath := storePathUnder(home)
@@ -196,8 +189,7 @@ func Test_run_lists_one_sided_transfers_only_as_findings_on_a_successful_sync(t 
 }
 
 func Test_run_lists_one_sided_transfers_without_warning_when_validation_fails(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := newHome(t)
 
 	b := v9fixture.NewBuilder()
 	chequingPK := b.Account(v9fixture.AccountRow{Name: "Chequing", Type: "CHECKING", Currency: "CAD", Active: true})
@@ -209,9 +201,8 @@ func Test_run_lists_one_sided_transfers_without_warning_when_validation_fails(t 
 	b.Entry(v9fixture.EntryRow{Parent: legTxn, Amount: "-5.00", QuickenID: 3001, Transfer: "Old Visa"})
 
 	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
-	var stdout, stderr bytes.Buffer
 
-	exitCode := run(context.Background(), []string{"sync", "--quicken", bundle.Dir}, &stdout, &stderr)
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
 
 	require.Equal(t, 1, exitCode)
 	storePath := storePathUnder(home)

@@ -12,7 +12,6 @@ import (
 	"github.com/koblas/quarry/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var errDriverInterrupt = errors.New("interrupt error: interrupted")
@@ -110,15 +109,8 @@ func serveStalling(t *testing.T, st *stallingStore, opts ...mcp.Option) (*sdk.Cl
 	factory := func(context.Context, string) (*report.Server, error) {
 		return report.NewServer(report.WithStore(st), report.WithHome(testHome)), nil
 	}
-	opts = append([]mcp.Option{mcp.WithReport(factory), mcp.WithConfig((&configStub{}).load)}, opts...)
+	opts = append([]mcp.Option{mcp.WithReport(factory), withDefaultConfig()}, opts...)
 	return startServerLogging(t, mcp.NewServer(opts...), stderr).session, stderr
-}
-
-func callTool(t *testing.T, session *sdk.ClientSession, name string, arguments any) *sdk.CallToolResult {
-	t.Helper()
-	result, err := session.CallTool(t.Context(), &sdk.CallToolParams{Name: name, Arguments: arguments})
-	require.NoError(t, err)
-	return result
 }
 
 func Test_each_tool_answers_its_deadline_with_its_ruled_line(t *testing.T) {

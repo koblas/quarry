@@ -101,56 +101,6 @@ func Test_cashflow_by_year_lists_one_row_per_calendar_year_the_window_touches(t 
 	assert.Equal(t, int64(0), result.Rows[1].Income)
 }
 
-func Test_cashflow_by_month_marks_the_first_period_partial_only_when_the_window_starts_after_its_first_day(t *testing.T) {
-	cases := []struct {
-		name  string
-		since time.Time
-		want  []bool
-	}{
-		{name: "since on the first day", since: day(2026, time.January, 1), want: []bool{false, false}},
-		{name: "since on the second day", since: day(2026, time.January, 2), want: []bool{true, false}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			result := cashFlowOf(t, cadTotal(), monthlyRequest(c.since, day(2026, time.February, 28)))
-
-			assert.Equal(t, c.want, cashFlowPartials(result))
-		})
-	}
-}
-
-func Test_cashflow_by_month_marks_the_last_period_partial_only_when_the_window_ends_before_its_last_day(t *testing.T) {
-	cases := []struct {
-		name  string
-		until time.Time
-		want  []bool
-	}{
-		{name: "until on the last day", until: day(2026, time.February, 28), want: []bool{false, false}},
-		{name: "until the day before the last", until: day(2026, time.February, 27), want: []bool{false, true}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			result := cashFlowOf(t, cadTotal(), monthlyRequest(day(2026, time.January, 1), c.until))
-
-			assert.Equal(t, c.want, cashFlowPartials(result))
-		})
-	}
-}
-
-func Test_cashflow_by_year_marks_only_the_first_and_last_year_partial(t *testing.T) {
-	result := cashFlowOf(t, cadTotal(), yearlyRequest(day(2020, time.March, 1), day(2022, time.June, 30)))
-
-	assert.Equal(t, []bool{true, false, true}, cashFlowPartials(result))
-}
-
-func Test_cashflow_by_year_treats_a_window_of_whole_years_as_not_partial(t *testing.T) {
-	result := cashFlowOf(t, cadTotal(), yearlyRequest(day(2020, time.January, 1), day(2021, time.December, 31)))
-
-	assert.Equal(t, []bool{false, false}, cashFlowPartials(result))
-}
-
 func Test_cashflow_by_month_runs_the_series_across_a_year_end(t *testing.T) {
 	result := cashFlowOf(t, cadTotal(), monthlyRequest(day(2025, time.November, 10), day(2026, time.February, 10)))
 
@@ -231,44 +181,6 @@ func Test_cashflow_refuses_an_ambiguous_account_name_listing_its_ids_sorted(t *t
 	assert.EqualError(t, err, `2 accounts are named "VISA"; pass one of their ids instead: acct-812, acct-977`)
 }
 
-func Test_cashflow_refuses_when_the_accounts_read_fails_to_open_the_store(t *testing.T) {
-	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
-	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
-
-	_, err := srv.CashFlow(t.Context(), report.CashFlowRequest{Accounts: []string{"Chequing"}})
-
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
-}
-
-func Test_cashflow_refuses_when_the_cash_flow_read_fails_to_open_the_store(t *testing.T) {
-	openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
-	srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
-
-	_, err := srv.CashFlow(t.Context(), report.CashFlowRequest{})
-
-	assert.EqualError(t, err, "no store at ~/Library/Application Support/quarry/quarry.duckdb yet; run quarry sync to build it")
-}
-
-func Test_cashflow_reports_an_interrupt_during_the_cash_flow_read(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
-
-	_, err := srv.CashFlow(ctx, report.CashFlowRequest{})
-
-	assert.EqualError(t, err, "cashflow interrupted")
-}
-
-func Test_cashflow_reports_an_interrupt_during_the_accounts_read(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
-
-	_, err := srv.CashFlow(ctx, report.CashFlowRequest{Accounts: []string{"Chequing"}})
-
-	assert.EqualError(t, err, "cashflow interrupted")
-}
-
 func Test_cashflow_reads_the_requested_currency_and_returns_it_with_the_result(t *testing.T) {
 	var got store.CashFlowParams
 	srv := report.NewServer(report.WithStore(fakeStore{gotCashFlow: &got}))
@@ -278,4 +190,69 @@ func Test_cashflow_reads_the_requested_currency_and_returns_it_with_the_result(t
 	require.NoError(t, err)
 	assert.Equal(t, money.USD, got.Currency)
 	assert.Equal(t, money.USD, result.Currency)
+}
+
+func Test_cashflow_marks_a_period_partial_only_when_the_window_cuts_it(t *testing.T) {
+	cases := []struct {
+		name string
+		req  report.CashFlowRequest
+		want []bool
+	}{
+		{name: "by month since on the first day", req: monthlyRequest(day(2026, time.January, 1), day(2026, time.February, 28)), want: []bool{false, false}},
+		{name: "by month since on the second day", req: monthlyRequest(day(2026, time.January, 2), day(2026, time.February, 28)), want: []bool{true, false}},
+		{name: "by month until the day before the last", req: monthlyRequest(day(2026, time.January, 1), day(2026, time.February, 27)), want: []bool{false, true}},
+		{name: "by year the first and last year only", req: yearlyRequest(day(2020, time.March, 1), day(2022, time.June, 30)), want: []bool{true, false, true}},
+		{name: "by year a window of whole years", req: yearlyRequest(day(2020, time.January, 1), day(2021, time.December, 31)), want: []bool{false, false}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			result := cashFlowOf(t, cadTotal(), c.req)
+
+			assert.Equal(t, c.want, cashFlowPartials(result))
+		})
+	}
+}
+
+func Test_cashflow_refuses_when_a_read_fails_to_open_the_store(t *testing.T) {
+	cases := []struct {
+		name string
+		req  report.CashFlowRequest
+	}{
+		{name: "the accounts read", req: report.CashFlowRequest{Accounts: []string{"Chequing"}}},
+		{name: "the cash flow read", req: report.CashFlowRequest{}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			openErr := &store.OpenError{Fault: store.OpenFaultMissing, Path: storePath}
+			srv := report.NewServer(report.WithStore(fakeStore{err: openErr}), report.WithHome(refusalHome))
+
+			_, err := srv.CashFlow(t.Context(), c.req)
+
+			assert.EqualError(t, err, missingStoreRefusal)
+		})
+	}
+}
+
+func Test_cashflow_reports_an_interrupt_during_a_read(t *testing.T) {
+	cases := []struct {
+		name string
+		req  report.CashFlowRequest
+	}{
+		{name: "the cash flow read", req: report.CashFlowRequest{}},
+		{name: "the accounts read", req: report.CashFlowRequest{Accounts: []string{"Chequing"}}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			srv := report.NewServer(report.WithStore(fakeStore{err: errDiskRead}))
+
+			_, err := srv.CashFlow(ctx, c.req)
+
+			assert.EqualError(t, err, "cashflow interrupted")
+		})
+	}
 }

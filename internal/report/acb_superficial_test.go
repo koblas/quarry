@@ -33,17 +33,6 @@ func acbKept(t *testing.T) store.InvestmentTransaction {
 	return acbTx(t, 90, "acct-9", "sec-1", "2023-01-01", store.ActionBuy, "CAD", acbMillion, -10_000)
 }
 
-// acbFlags is each sale's possible-superficial-loss mark, in the order the years list the sales.
-func acbFlags(result report.ACB) []bool {
-	var flags []bool
-	for _, year := range result.Years {
-		for _, sale := range year.Sales {
-			flags = append(flags, sale.PossibleSuperficialLoss)
-		}
-	}
-	return flags
-}
-
 func acbSecurityTicker(id string, ticker *string) store.Security {
 	return store.Security{ID: id, Name: "Security " + id, Ticker: ticker}
 }
@@ -62,6 +51,8 @@ func Test_acb_marks_a_loss_sale_with_an_acquisition_in_the_window(t *testing.T) 
 		{name: "a re-buy the same day", account: "acct-9", action: store.ActionBuy, offset: 0},
 		{name: "a reinvested dividend", account: "acct-9", action: store.ActionReinvestDividend, offset: 3},
 		{name: "added shares", account: "acct-9", action: store.ActionAddShares, offset: 5},
+		{name: "a re-buy 30 days before", account: "acct-9", action: store.ActionBuy, offset: -30},
+		{name: "a re-buy 30 days after", account: "acct-9", action: store.ActionBuy, offset: 30},
 	}
 
 	for _, c := range cases {
@@ -73,22 +64,6 @@ func Test_acb_marks_a_loss_sale_with_an_acquisition_in_the_window(t *testing.T) 
 			assert.Equal(t, []bool{true}, acbFlags(got))
 		})
 	}
-}
-
-func Test_acb_marks_a_loss_sale_with_an_acquisition_30_days_before(t *testing.T) {
-	rebuy := acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, -30), store.ActionBuy, "CAD", 5*acbMillion, -30_000)
-
-	got := acbWalkOf(t, append(acbLossRows(t, acbLossDay, 50_000), rebuy)...)
-
-	assert.Equal(t, []bool{true}, acbFlags(got))
-}
-
-func Test_acb_marks_a_loss_sale_with_an_acquisition_30_days_after(t *testing.T) {
-	rebuy := acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 30), store.ActionBuy, "CAD", 5*acbMillion, -30_000)
-
-	got := acbWalkOf(t, append(acbLossRows(t, acbLossDay, 50_000), rebuy)...)
-
-	assert.Equal(t, []bool{true}, acbFlags(got))
 }
 
 func Test_acb_does_not_mark_a_loss_sale_with_an_acquisition_31_days_away(t *testing.T) {
@@ -246,15 +221,6 @@ func Test_acb_does_not_mark_a_loss_bought_and_sold_the_same_day_when_nothing_is_
 	assert.Equal(t, []bool{false}, acbFlags(got))
 }
 
-// acbSplit is a split of sec-1 recorded in account, newShares for every oldShares held.
-func acbSplit(t *testing.T, sourceID int64, account, date string, newShares, oldShares int64) store.InvestmentTransaction {
-	t.Helper()
-	tx := acbTx(t, sourceID, account, "sec-1", date, store.ActionSplit, "CAD", 0, 0)
-	tx.Shares = nil
-	tx.SplitNewShares, tx.SplitOldShares = &newShares, &oldShares
-	return tx
-}
-
 func Test_acb_does_not_mark_a_loss_sale_when_nothing_is_held_30_days_after(t *testing.T) {
 	rows := append(acbLossRows(t, acbLossDay, 50_000),
 		acbTx(t, 3, "acct-9", "sec-1", acbShift(t, acbLossDay, 10), store.ActionBuy, "CAD", 5*acbMillion, -30_000),
@@ -340,13 +306,13 @@ func Test_acb_counts_a_holding_after_the_splits_of_its_own_account(t *testing.T)
 		want   bool
 	}{
 		{name: "no split", want: true},
-		{name: "a split that takes the holding below a millionth", splits: []store.InvestmentTransaction{acbSplit(t, 4, "acct-9", acbShift(t, acbLossDay, 10), 1, 3)}, want: false},
-		{name: "a split that leaves a millionth", splits: []store.InvestmentTransaction{acbSplit(t, 4, "acct-9", acbShift(t, acbLossDay, 10), 7, 10)}, want: true},
+		{name: "a split that takes the holding below a millionth", splits: []store.InvestmentTransaction{acbSplitTx(t, 4, "acct-9", acbShift(t, acbLossDay, 10), 1, 3)}, want: false},
+		{name: "a split that leaves a millionth", splits: []store.InvestmentTransaction{acbSplitTx(t, 4, "acct-9", acbShift(t, acbLossDay, 10), 7, 10)}, want: true},
 		{
 			name: "the same split recorded in another account too",
 			splits: []store.InvestmentTransaction{
-				acbSplit(t, 4, "acct-9", acbShift(t, acbLossDay, 10), 7, 10),
-				acbSplit(t, 5, "acct-3", acbShift(t, acbLossDay, 10), 7, 10),
+				acbSplitTx(t, 4, "acct-9", acbShift(t, acbLossDay, 10), 7, 10),
+				acbSplitTx(t, 5, "acct-3", acbShift(t, acbLossDay, 10), 7, 10),
 			},
 			want: true,
 		},
