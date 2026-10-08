@@ -31,14 +31,19 @@ const (
 
 	installAddedLead = "added the quarry marketplace, but "
 
-	desktopQuitLine = "Quit and reopen Claude Desktop to load it.\n"
-	desktopNoHome   = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
+	desktopQuitLine   = "Quit and reopen Claude Desktop to load it.\n"
+	desktopAddedFmt   = "Added the quarry MCP server to Claude Desktop; it starts %q.\n"
+	desktopKeptFmt    = "The quarry MCP server is already in Claude Desktop; it starts %q.\n"
+	desktopUpdatedFmt = "Updated the quarry MCP server in Claude Desktop to start %q instead of %q.\n"
+	desktopNoHome     = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
 		"set HOME, then run quarry claude install again"
 
 	// The backup and write refusals share their fix clause: the config folder, then the verb.
-	desktopBackupRefusal = "cannot save %q (%s), so %q is unchanged" + desktopFixFolder
-	desktopWriteRefusal  = "cannot write %q (%s), so it is unchanged" + desktopFixFolder
-	desktopFixFolder     = "; check the permissions of %q, then run quarry claude %s again"
+	desktopBackupRefusal  = "cannot save %q (%s), so %q is unchanged" + desktopFixFolder
+	desktopWriteRefusal   = "cannot write %q (%s), so it is unchanged" + desktopFixFolder
+	desktopFixFolder      = "; check the permissions of %q, then run quarry claude %s again"
+	desktopForeignRefusal = `Claude Desktop has an MCP server named "quarry" that does not run quarry mcp, ` +
+		"so quarry leaves it alone; rename or remove it in %q, then run quarry claude %s again"
 
 	pluginUninstalledLine  = "Uninstalled the quarry plugin from Claude Code.\n"
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
@@ -163,12 +168,21 @@ func uninstallDoneLead(res claudeplugin.UninstallResult) string {
 }
 
 // renderDesktopInstalled returns the stdout of a Claude Desktop install: the skip line when Desktop
-// is not on this Mac, else the added line and the quit line.
+// is not on this Mac, else the line for what happened to the entry, then the quit line when the
+// config changed.
 func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 	if res.Skipped {
 		return fmt.Sprintf("Skipped Claude Desktop: %q does not exist.\n", claudePath(home, res.Folder))
 	}
-	return fmt.Sprintf("Added the quarry MCP server to Claude Desktop; it starts %q.\n", claudePath(home, res.Command)) + desktopQuitLine
+	started := claudePath(home, res.Command)
+	switch res.Outcome {
+	case claudedesktop.Updated:
+		return fmt.Sprintf(desktopUpdatedFmt, started, claudePath(home, res.Previous)) + desktopQuitLine
+	case claudedesktop.Unchanged:
+		return fmt.Sprintf(desktopKeptFmt, started)
+	case claudedesktop.Added:
+	}
+	return fmt.Sprintf(desktopAddedFmt, started) + desktopQuitLine
 }
 
 // reportDesktopFailure writes err's report for a failed Claude Desktop step and returns
@@ -186,6 +200,10 @@ func reportDesktopFailure(cmd *cobra.Command, verb, home string, err error) erro
 	if write, ok := errors.AsType[*claudedesktop.WriteError](err); ok {
 		writeClaudeLine(cmd, verb, fmt.Sprintf(desktopWriteRefusal, claudePath(home, write.Path), osreason.Reason(write.Err),
 			claudePath(home, filepath.Dir(write.Path)), verb))
+		return ReportedError{}
+	}
+	if foreign, ok := errors.AsType[*claudedesktop.ForeignEntryError](err); ok {
+		writeClaudeLine(cmd, verb, fmt.Sprintf(desktopForeignRefusal, claudePath(home, foreign.Path), verb))
 		return ReportedError{}
 	}
 	return &runtimeError{err: err}
