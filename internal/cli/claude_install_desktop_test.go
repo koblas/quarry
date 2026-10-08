@@ -175,10 +175,10 @@ func Test_claude_install_reports_a_missing_home_after_the_claude_code_lines(t *t
 	assert.Equal(t, desktopNoHomeLine, errOut.String())
 }
 
-func Test_claude_install_returns_the_desktop_error_unreported_when_a_config_is_already_present(t *testing.T) {
+func Test_claude_install_returns_the_desktop_error_unreported_when_the_config_is_not_a_regular_file(t *testing.T) {
 	home, folder := desktopHome(t)
 	config := filepath.Join(folder, desktopConfigName)
-	require.NoError(t, os.WriteFile(config, []byte(`{"mcpServers":{}}`), 0o600))
+	require.NoError(t, os.Symlink(filepath.Join(folder, "elsewhere.json"), config))
 	var out, errOut bytes.Buffer
 
 	err := installDesktop(t, &toolCalls{}, home, &out, &errOut)

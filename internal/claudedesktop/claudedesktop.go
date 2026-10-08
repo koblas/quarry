@@ -19,6 +19,12 @@ const configName = "claude_desktop_config.json"
 // configMode is the mode of a config file quarry creates.
 const configMode fs.FileMode = 0o600
 
+// backupSuffix names the backup of a config next to it, and backupMode is the backup's mode.
+const (
+	backupSuffix = ".before-quarry"
+	backupMode   = fs.FileMode(0o600)
+)
+
 // ErrNoHome is returned by Install when the Server has no home directory to look in.
 var ErrNoHome = errors.New("home directory is not set")
 
@@ -27,6 +33,27 @@ var errNotObject = errors.New("not a JSON object")
 
 // ErrEntryPresent is returned by Install when the config already holds a quarry entry.
 var ErrEntryPresent = errors.New("the config already has a quarry entry")
+
+// BackupError is returned by Install when the backup of the existing config cannot be saved;
+// the config is untouched.
+type BackupError struct {
+	Path   string // the backup file
+	Config string // the config it backs up
+	Err    error
+}
+
+func (e *BackupError) Error() string { return fmt.Sprintf("save %s: %v", e.Path, e.Err) }
+func (e *BackupError) Unwrap() error { return e.Err }
+
+// WriteError is returned by Install when the config cannot be written; the backup written just
+// before stays.
+type WriteError struct {
+	Path string // the config file
+	Err  error
+}
+
+func (e *WriteError) Error() string { return fmt.Sprintf("write %s: %v", e.Path, e.Err) }
+func (e *WriteError) Unwrap() error { return e.Err }
 
 // Executable reports the absolute path of the running quarry binary, as os.Executable does.
 type Executable func() (string, error)
@@ -69,10 +96,11 @@ type Result struct {
 }
 
 // Install adds the quarry entry to Claude Desktop's config file, creating the file when
-// there is none. It returns a Skipped Result when Desktop's folder does not exist, ErrNoHome
-// when the Server has no home, an error wrapping fs.ErrExist when the config path is not a
-// regular file, and ErrEntryPresent when the config already has a quarry entry. A config it
-// cannot read or merge into is left as it was, and a replaced config keeps its mode.
+// there is none and otherwise merging into it after saving a backup beside it. It returns a
+// Skipped Result when Desktop's folder does not exist, ErrNoHome when the Server has no home,
+// an error wrapping fs.ErrExist when the config path is not a regular file, ErrEntryPresent
+// when the config already has a quarry entry, and *BackupError or *WriteError when a write
+// fails. A config it cannot read or merge into is left as it was, and a replaced config keeps its mode.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	if s.home == "" {
 		return Result{}, ErrNoHome
@@ -98,18 +126,26 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	if err != nil {
 		return res, fmt.Errorf("merge into %s: %w", res.Config, err)
 	}
+	// The backup goes first: a config that could not be saved must not be replaced.
+	if current.present {
+		backup := res.Config + backupSuffix
+		if err := replacefile.Write(backup, current.data, backupMode); err != nil {
+			return res, &BackupError{Path: backup, Config: res.Config, Err: err}
+		}
+	}
 	if err := replacefile.Write(res.Config, doc, current.mode); err != nil {
-		return res, fmt.Errorf("write %s: %w", res.Config, err)
+		return res, &WriteError{Path: res.Config, Err: err}
 	}
 	res.Command = command
 	return res, nil
 }
 
-// existing is what Install found at the config path: the bytes to merge into and the mode
-// the written config takes.
+// existing is what Install found at the config path: whether a config was there, the bytes to
+// merge into and the mode the written config takes.
 type existing struct {
-	data []byte
-	mode fs.FileMode
+	present bool
+	data    []byte
+	mode    fs.FileMode
 }
 
 // readConfig reads the config at path. A missing config yields no data and configMode; a
@@ -130,7 +166,7 @@ func readConfig(path string) (existing, error) {
 	if err != nil {
 		return existing{}, fmt.Errorf("read %s: %w", path, err)
 	}
-	return existing{data: data, mode: info.Mode().Perm()}, nil
+	return existing{present: true, data: data, mode: info.Mode().Perm()}, nil
 }
 
 // serversKey and entryKey are the config keys the quarry entry lives under.

@@ -55,7 +55,7 @@ func installDesktop(cmd *cobra.Command, home string, executable claudedesktop.Ex
 	srv := claudedesktop.NewServer(claudedesktop.WithHome(home), claudedesktop.WithExecutable(executable))
 	res, err := srv.Install(cmd.Context())
 	if err != nil {
-		return reportDesktopFailure(cmd, installCommand, err)
+		return reportDesktopFailure(cmd, installCommand, home, err)
 	}
 	return writeResult(cmd, []byte(renderDesktopInstalled(home, res)))
 }

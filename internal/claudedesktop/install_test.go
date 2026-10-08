@@ -440,3 +440,113 @@ func Test_install_fails_without_leaving_a_file_when_the_folder_is_read_only(t *t
 	require.NoError(t, os.Chmod(folder, 0o755))
 	assert.Empty(t, snapshot(t, folder))
 }
+
+const (
+	backupSuffix = ".before-quarry"
+
+	// userImmutableFlag is the BSD UF_IMMUTABLE file flag, which package syscall does not define.
+	userImmutableFlag = 0x2
+)
+
+func Test_install_leaves_the_config_unchanged_when_the_backup_cannot_be_saved(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	config := writeConfig(t, folder, `{"globalShortcut": "Cmd+Shift+Space"}`, 0o644)
+	backup := config + backupSuffix
+	require.NoError(t, os.MkdirAll(filepath.Join(backup, "kept"), 0o755))
+	before := snapshot(t, folder)
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	var backupErr *claudedesktop.BackupError
+	require.ErrorAs(t, err, &backupErr)
+	assert.Equal(t, backup, backupErr.Path)
+	require.ErrorContains(t, err, backup)
+	require.ErrorIs(t, err, fs.ErrExist)
+	assert.Equal(t, before, snapshot(t, folder))
+}
+
+func Test_install_reports_a_failed_config_write_and_leaves_no_temp(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	const original = `{"globalShortcut": "Cmd+Shift+Space"}`
+	config := writeConfig(t, folder, original, 0o644)
+	require.NoError(t, syscall.Chflags(config, userImmutableFlag))
+	t.Cleanup(func() { _ = syscall.Chflags(config, 0) })
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	var writeErr *claudedesktop.WriteError
+	require.ErrorAs(t, err, &writeErr)
+	assert.Equal(t, config, writeErr.Path)
+	require.ErrorContains(t, err, config)
+	require.ErrorIs(t, err, fs.ErrPermission)
+	assert.JSONEq(t, original, readConfig(t, folder))
+	backup, readErr := os.ReadFile(config + backupSuffix)
+	require.NoError(t, readErr)
+	assert.JSONEq(t, original, string(backup))
+	assert.Equal(t, []string{configName, configName + backupSuffix}, entryNames(t, folder))
+}
+
+func Test_install_replaces_a_symlink_at_the_backup_name_without_following_it(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	const original = `{"globalShortcut": "Cmd+Shift+Space"}`
+	config := writeConfig(t, folder, original, 0o644)
+	target := filepath.Join(folder, "precious.txt")
+	require.NoError(t, os.WriteFile(target, []byte("precious"), 0o600))
+	require.NoError(t, os.Symlink(target, config+backupSuffix))
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	require.NoError(t, err)
+	kept, readErr := os.ReadFile(target)
+	require.NoError(t, readErr)
+	assert.Equal(t, "precious", string(kept))
+	info, statErr := os.Lstat(config + backupSuffix)
+	require.NoError(t, statErr)
+	assert.True(t, info.Mode().IsRegular())
+	assert.Equal(t, fs.FileMode(0o600), info.Mode().Perm())
+	backup, readErr := os.ReadFile(config + backupSuffix)
+	require.NoError(t, readErr)
+	assert.JSONEq(t, original, string(backup))
+}
+
+func Test_install_overwrites_the_backup_of_an_earlier_write(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	config := writeConfig(t, folder, `{"second": true}`, 0o644)
+	require.NoError(t, os.WriteFile(config+backupSuffix, []byte(`{"first": true}`), 0o600))
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	require.NoError(t, err)
+	backup, readErr := os.ReadFile(config + backupSuffix)
+	require.NoError(t, readErr)
+	assert.JSONEq(t, `{"second": true}`, string(backup))
+}
+
+func Test_install_writes_a_backup_of_an_empty_config(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	config := writeConfig(t, folder, "", 0o644)
+
+	_, err := install(t, home, &fakeExecutable{path: quarryBinary})
+
+	require.NoError(t, err)
+	info, statErr := os.Stat(config + backupSuffix)
+	require.NoError(t, statErr)
+	assert.Zero(t, info.Size())
+	assert.Equal(t, fs.FileMode(0o600), info.Mode().Perm())
+}
+
+func entryNames(t *testing.T, folder string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(folder)
+	require.NoError(t, err)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
+}

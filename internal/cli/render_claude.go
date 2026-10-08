@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 
 	"github.com/koblas/quarry/internal/claudedesktop"
@@ -33,6 +34,11 @@ const (
 	desktopQuitLine = "Quit and reopen Claude Desktop to load it.\n"
 	desktopNoHome   = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
 		"set HOME, then run quarry claude install again"
+
+	// The backup and write refusals share their fix clause: the config folder, then the verb.
+	desktopBackupRefusal = "cannot save %q (%s), so %q is unchanged" + desktopFixFolder
+	desktopWriteRefusal  = "cannot write %q (%s), so it is unchanged" + desktopFixFolder
+	desktopFixFolder     = "; check the permissions of %q, then run quarry claude %s again"
 
 	pluginUninstalledLine  = "Uninstalled the quarry plugin from Claude Code.\n"
 	pluginAbsentLine       = "The quarry plugin is not installed for all your projects.\n"
@@ -167,9 +173,19 @@ func renderDesktopInstalled(home string, res claudedesktop.Result) string {
 
 // reportDesktopFailure writes err's report for a failed Claude Desktop step and returns
 // ReportedError; an unclassified error is a runtime error.
-func reportDesktopFailure(cmd *cobra.Command, verb string, err error) error {
+func reportDesktopFailure(cmd *cobra.Command, verb, home string, err error) error {
 	if errors.Is(err, claudedesktop.ErrNoHome) {
 		writeClaudeLine(cmd, verb, desktopNoHome)
+		return ReportedError{}
+	}
+	if backup, ok := errors.AsType[*claudedesktop.BackupError](err); ok {
+		writeClaudeLine(cmd, verb, fmt.Sprintf(desktopBackupRefusal, claudePath(home, backup.Path), osreason.Reason(backup.Err),
+			claudePath(home, backup.Config), claudePath(home, filepath.Dir(backup.Path)), verb))
+		return ReportedError{}
+	}
+	if write, ok := errors.AsType[*claudedesktop.WriteError](err); ok {
+		writeClaudeLine(cmd, verb, fmt.Sprintf(desktopWriteRefusal, claudePath(home, write.Path), osreason.Reason(write.Err),
+			claudePath(home, filepath.Dir(write.Path)), verb))
 		return ReportedError{}
 	}
 	return &runtimeError{err: err}
