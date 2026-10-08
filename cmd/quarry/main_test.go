@@ -28,6 +28,12 @@ func fixedRates() duckstore.Option {
 // errNoChildren is what testEnv's RunTool returns: no test may start a child process.
 var errNoChildren = errors.New("test wiring starts no child process")
 
+// testHome is testEnv's home directory: absolute and absent, so no test reaches a real Claude Desktop folder.
+const testHome = "/quarry-test-home-that-does-not-exist"
+
+// testQuarryBinary is the path testEnv reports for the running quarry, outside $TMPDIR.
+const testQuarryBinary = "/opt/quarry-test/bin/quarry"
+
 // testEnv is defaultEnv with its sync fetching through fixedRates and no way to find or start a child.
 func testEnv(stdout, stderr io.Writer) cli.Env {
 	env := defaultEnv(stdout, stderr)
@@ -36,6 +42,8 @@ func testEnv(stdout, stderr io.Writer) cli.Env {
 		return nil, nil, -1, errNoChildren
 	}
 	env.LookPath = func(file string) (string, error) { return "", &exec.Error{Name: file, Err: exec.ErrNotFound} }
+	env.Home = testHome
+	env.Executable = func() (string, error) { return testQuarryBinary, nil }
 	return env
 }
 

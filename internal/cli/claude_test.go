@@ -8,16 +8,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const claudeGroupHelp = `Install quarry's plugin in Claude Code, or remove it. quarry does this by
-running the claude command, so claude must be on your PATH.
+const claudeGroupHelp = `Install quarry in Claude Code and Claude Desktop, or remove it. Each
+command acts on whichever of the two is on this Mac and skips the other.
 
 Usage:
   quarry claude [flags]
   quarry claude [command]
 
 Available Commands:
-  install     Install quarry's plugin (skill and MCP server) in Claude Code
-  uninstall   Uninstall quarry's plugin from Claude Code
+  install     Install quarry in Claude Code and Claude Desktop
+  uninstall   Uninstall quarry from Claude Code and Claude Desktop
 `
 
 func Test_claude_refuses_an_unknown_subcommand(t *testing.T) {

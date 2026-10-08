@@ -25,11 +25,12 @@ func newMCPCommand(serve MCPServeFunc, isTerminal TerminalProbe, jsonOut *bool) 
 client starts it and talks to it over stdin and stdout; quarry opens no
 network port.
 
-In Claude Code, run quarry claude install: it installs quarry's plugin,
-which adds this server and the quarry skill. In other MCP clients, add a
-server with the command "quarry" and the argument "mcp". An app started
-outside a terminal may not find quarry on your PATH; give it the full
-path that "command -v quarry" prints.
+In Claude Code or Claude Desktop, run quarry claude install: in Claude
+Code it installs quarry's plugin, which adds this server and the quarry
+skill; in Claude Desktop it adds this server with quarry's full path. In
+other MCP clients, add a server with the command "quarry" and the
+argument "mcp". An app started outside a terminal may not find quarry on
+your PATH; give it the full path that "command -v quarry" prints.
 
 The server reads quarry's store; it never runs quarry sync, never prunes
 snapshots and never touches Quicken. Each request reads the store as it

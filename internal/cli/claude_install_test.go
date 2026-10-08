@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -32,13 +33,18 @@ const (
 	foreignMarketplace = `[{"name":"quarry","source":"github","repo":"someone/quarry"}]`
 	userPluginOn       = `[{"id":"quarry@quarry","scope":"user","enabled":true}]`
 	userPluginOff      = `[{"id":"quarry@quarry","scope":"user","enabled":false}]`
-	projectPlugin      = `{"id":"quarry@quarry","scope":"project","enabled":true,"projectPath":"/home/ada/repos/foo"}`
 
 	marketplaceAddedLine   = "Added the quarry marketplace to Claude Code.\n"
 	marketplacePresentLine = "The quarry marketplace is already in Claude Code.\n"
 	pluginInstalledLine    = "Installed the quarry plugin (skill and MCP server) for all your projects.\n"
 	installRestartLine     = "Restart Claude Code to load it.\n"
+	desktopSkippedLine     = "Skipped Claude Desktop: \"~/Library/Application Support/Claude\" does not exist.\n"
 )
+
+// projectPluginUnder is the plugin-list entry of a project copy at repos/foo under home.
+func projectPluginUnder(home string) string {
+	return `{"id":"quarry@quarry","scope":"project","enabled":true,"projectPath":"` + home + `/repos/foo"}`
+}
 
 var errNoStart = errors.New("fork/exec /opt/claude: permission denied")
 
@@ -105,10 +111,11 @@ func runClaude(t *testing.T, tool *toolCalls, args ...string) (string, string, e
 	return runClaudeFinding(t, tool, nil, args...)
 }
 
-// runClaudeFinding is runClaude with lookPath as the process's command lookup.
+// runClaudeFinding is runClaude with lookPath as the process's command lookup, over a home
+// directory that holds no Claude Desktop folder.
 func runClaudeFinding(t *testing.T, tool *toolCalls, lookPath claudeplugin.LookPath, args ...string) (string, string, error) {
 	t.Helper()
-	return runClaudeAt(t, tool, lookPath, "", args...)
+	return runClaudeAt(t, tool, lookPath, t.TempDir(), args...)
 }
 
 // ctxMarker keys the value runClaudeAt puts on the command's context.
@@ -152,7 +159,7 @@ func Test_claude_install_warns_when_quarry_is_not_on_the_path(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"Installed the quarry plugin (skill and MCP server) for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
 		"add the directory holding quarry to your PATH\n", stderr)
 }
@@ -174,7 +181,7 @@ func Test_claude_install_warns_after_the_turned_off_hint(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: the quarry plugin is installed but turned off; "+
 		"to turn it on, run claude plugin enable quarry@quarry\n"+
 		`quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
@@ -188,7 +195,7 @@ func Test_claude_install_warns_when_quarry_is_not_on_the_path_and_nothing_ran(t 
 
 	require.NoError(t, err)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: warning: the plugin starts "quarry" from your PATH, and your PATH has none; `+
 		"add the directory holding quarry to your PATH\n", stderr)
 }
@@ -215,6 +222,7 @@ func Test_claude_install_runs_claude_at_the_path_it_was_found(t *testing.T) {
 	}
 }
 
+// The helper's home has no Desktop folder, so neither target is present.
 func Test_claude_install_refuses_when_claude_is_not_on_the_path(t *testing.T) {
 	cases := []struct {
 		name string
@@ -236,52 +244,58 @@ func Test_claude_install_refuses_when_claude_is_not_on_the_path(t *testing.T) {
 			require.ErrorIs(t, err, cli.ReportedError{})
 			assert.Empty(t, tool.argv)
 			assert.Empty(t, stdout)
-			assert.Equal(t, "quarry: claude install: cannot find the claude command on your PATH; "+
-				"install Claude Code, then run quarry claude install again\n", stderr)
+			assert.Equal(t, "quarry: claude install: "+neitherPresentHead+desktopFolderShown+" does not exist"+neitherInstallTail, stderr)
 		})
 	}
 }
 
 func Test_claude_install_reports_a_claude_it_cannot_run(t *testing.T) {
-	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart("/home/ada/bin/claude")})
+	home := t.TempDir()
+	claude := filepath.Join(home, "bin", "claude")
+	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart(claude)})
 
-	stdout, stderr, err := runClaudeAt(t, tool, findsAt("/home/ada/bin/claude"), "/home/ada", "claude", "install")
+	stdout, stderr, err := runClaudeAt(t, tool, findsAt(claude), home, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: cannot run claude at "~/bin/claude" (permission denied); `+
 		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
 }
 
 func Test_claude_install_reports_a_claude_it_cannot_run_after_adding_the_marketplace(t *testing.T) {
-	tool := (&toolCalls{}).reply(installPluginArgv, toolReply{err: cannotStart("/home/ada/bin/claude")})
+	home := t.TempDir()
+	claude := filepath.Join(home, "bin", "claude")
+	tool := (&toolCalls{}).reply(installPluginArgv, toolReply{err: cannotStart(claude)})
 
-	stdout, stderr, err := runClaudeAt(t, tool, findsAt("/home/ada/bin/claude"), "/home/ada", "claude", "install")
+	stdout, stderr, err := runClaudeAt(t, tool, findsAt(claude), home, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n", stdout)
+	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: added the quarry marketplace, but cannot run claude at "~/bin/claude" (permission denied); `+
 		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
 }
 
 func Test_claude_install_reports_a_claude_it_cannot_run_at_a_path_outside_home(t *testing.T) {
 	cases := []struct {
-		name string
-		home string
+		name       string
+		home       func(t *testing.T) string
+		wantStdout string
+		wantAfter  string
 	}{
-		{name: "home is unset", home: ""},
-		{name: "the path is not under home", home: "/home/ada"},
+		{name: "home is unset", home: unsetHome, wantAfter: desktopNoHomeLine},
+		{name: "the path is not under home", home: tempHome, wantStdout: desktopSkippedLine},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart("/opt/claude")})
 
-			_, stderr, err := runClaudeAt(t, tool, findsAt("/opt/claude"), c.home, "claude", "install")
+			stdout, stderr, err := runClaudeAt(t, tool, findsAt("/opt/claude"), c.home(t), "claude", "install")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantStdout, stdout)
 			assert.Equal(t, `quarry: claude install: cannot run claude at "/opt/claude" (permission denied); `+
-				"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
+				"check that it is Claude Code and that you can run it, then run quarry claude install again\n"+c.wantAfter, stderr)
 		})
 	}
 }
@@ -289,7 +303,7 @@ func Test_claude_install_reports_a_claude_it_cannot_run_at_a_path_outside_home(t
 func Test_claude_install_runs_both_steps_when_nothing_is_installed(t *testing.T) {
 	tool := &toolCalls{}
 	var stdout, stderr bytes.Buffer
-	env := cli.Env{Stdout: &stdout, Stderr: &stderr, RunTool: tool.run}
+	env := cli.Env{Stdout: &stdout, Stderr: &stderr, RunTool: tool.run, Home: t.TempDir()}
 
 	err := cli.Execute(t.Context(), []string{"claude", "install"}, env)
 
@@ -302,7 +316,7 @@ func Test_claude_install_runs_both_steps_when_nothing_is_installed(t *testing.T)
 	}, tool.argv)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"Installed the quarry plugin (skill and MCP server) for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout.String())
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout.String())
 	assert.Empty(t, stderr.String())
 }
 
@@ -314,7 +328,7 @@ func Test_claude_install_skips_both_steps_when_both_are_present(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -327,7 +341,7 @@ func Test_claude_install_installs_only_the_plugin_when_the_marketplace_is_presen
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, installPluginArgv}, tool.argv)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
 		"Installed the quarry plugin (skill and MCP server) for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -338,7 +352,7 @@ func Test_claude_install_hints_when_the_user_copy_is_turned_off(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "The quarry marketplace is already in Claude Code.\n"+
-		"The quarry plugin is already installed for all your projects.\n", stdout)
+		"The quarry plugin is already installed for all your projects.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: the quarry plugin is installed but turned off; "+
 		"to turn it on, run claude plugin enable quarry@quarry\n", stderr)
 }
@@ -350,7 +364,7 @@ func Test_claude_install_refuses_a_plugin_list_that_is_not_json(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: cannot read what claude plugin list --json printed; "+
 		"update Claude Code, or run the two commands in quarry claude install --help yourself\n", stderr)
 }
@@ -362,7 +376,7 @@ func Test_claude_install_refuses_a_plugin_list_entry_without_an_id(t *testing.T)
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: cannot read what claude plugin list --json printed; "+
 		"update Claude Code, or run the two commands in quarry claude install --help yourself\n", stderr)
 }
@@ -374,7 +388,7 @@ func Test_claude_install_replays_a_failed_marketplace_list(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "Error: An unknown error occurred (Unexpected)\n"+
 		"quarry: claude install: claude plugin marketplace list --json exited with status 1; see its message above\n", stderr)
 }
@@ -386,7 +400,7 @@ func Test_claude_install_refuses_a_foreign_quarry_marketplace(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub; `+
 		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again\n", stderr)
 }
@@ -416,7 +430,7 @@ func Test_claude_install_reports_each_list_failure(t *testing.T) {
 			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
-			assert.Empty(t, stdout)
+			assert.Equal(t, desktopSkippedLine, stdout)
 			assert.Equal(t, c.wantStderr, stderr)
 		})
 	}
@@ -484,7 +498,7 @@ func Test_claude_install_reports_each_step_failure(t *testing.T) {
 			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
-			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStdout+desktopSkippedLine, stdout)
 			assert.Equal(t, c.wantStderr, stderr)
 		})
 	}
@@ -497,7 +511,7 @@ func Test_claude_install_reports_a_failed_first_step(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, addMarketplaceArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "denied\n"+
 		"quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1; see its message above\n", stderr)
 }
@@ -508,7 +522,7 @@ func Test_claude_install_drops_see_above_when_the_failed_step_printed_nothing(t 
 	stdout, stderr, err := runClaude(t, tool, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1\n", stderr)
 }
 
@@ -519,7 +533,7 @@ func Test_claude_install_reports_a_step_stopped_by_a_signal(t *testing.T) {
 	stdout, stderr, err := runClaude(t, tool, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "Killed\n"+
 		"quarry: claude install: claude plugin install --scope user quarry@quarry was stopped by signal killed; see its message above\n", stderr)
 }
@@ -601,7 +615,7 @@ func Test_claude_install_finishes_on_a_rerun_after_a_partial_install(t *testing.
 	require.ErrorIs(t, firstErr, cli.ReportedError{})
 	require.NoError(t, secondErr)
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, installPluginArgv}, tool.argv[callsAfterFirst:])
-	assert.Equal(t, marketplacePresentLine+pluginInstalledLine+installRestartLine, stdout)
+	assert.Equal(t, marketplacePresentLine+pluginInstalledLine+installRestartLine+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -611,7 +625,7 @@ func Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails(t 
 	stdout, stderr, err := runClaude(t, tool, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n", stdout)
+	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "denied\n"+
 		"quarry: claude install: added the quarry marketplace, but claude plugin install --scope user quarry@quarry "+
 		"exited with status 1; see its message above, then run quarry claude install again\n", stderr)
@@ -625,7 +639,7 @@ func Test_claude_install_reports_when_the_user_copy_is_on_but_the_marketplace_is
 	require.NoError(t, err)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"The quarry plugin is already installed for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Empty(t, stderr)
 }
 
@@ -637,7 +651,7 @@ func Test_claude_install_hints_after_adding_the_marketplace_when_the_user_copy_i
 	require.NoError(t, err)
 	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+
 		"The quarry plugin is already installed for all your projects.\n"+
-		"Restart Claude Code to load it.\n", stdout)
+		"Restart Claude Code to load it.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: the quarry plugin is installed but turned off; "+
 		"to turn it on, run claude plugin enable quarry@quarry\n", stderr)
 }
@@ -660,7 +674,7 @@ func Test_claude_install_reports_a_refusal_when_stdout_cannot_be_written(t *test
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, `quarry: claude install: Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub; `+
-		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again\n", stderr.String())
+		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again\n"+desktopNoHomeLine, stderr.String())
 }
 
 func Test_claude_install_returns_the_stdout_write_error_when_a_step_line_cannot_be_printed(t *testing.T) {
@@ -673,13 +687,36 @@ func Test_claude_install_returns_the_stdout_write_error_when_a_step_line_cannot_
 	assert.NotErrorIs(t, err, cli.ReportedError{})
 }
 
-func Test_claude_install_returns_the_runners_own_error_as_a_runtime_failure(t *testing.T) {
-	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: errNoStart})
+func Test_claude_install_prints_an_unclassified_claude_failure_in_place(t *testing.T) {
+	cases := []struct {
+		name       string
+		tool       *toolCalls
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:       "before any step ran",
+			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: errNoStart}),
+			wantStdout: desktopSkippedLine,
+			wantStderr: "quarry: claude install: fork/exec /opt/claude: permission denied\n",
+		},
+		{
+			name:       "after the marketplace add",
+			tool:       (&toolCalls{}).reply(installPluginArgv, toolReply{err: errNoStart}),
+			wantStdout: marketplaceAddedLine + desktopSkippedLine,
+			wantStderr: "quarry: claude install: added the quarry marketplace, but fork/exec /opt/claude: permission denied\n",
+		},
+	}
 
-	_, _, err := runClaude(t, tool, "claude", "install")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
 
-	require.ErrorIs(t, err, errNoStart)
-	assert.NotErrorAs(t, err, new(cli.UsageError))
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
 }
 
 func Test_claude_install_refuses_json(t *testing.T) {
@@ -702,27 +739,5 @@ func Test_claude_install_refuses_arguments(t *testing.T) {
 	var usage cli.UsageError
 	require.ErrorAs(t, err, &usage)
 	assert.Equal(t, "install takes no arguments; Run 'quarry claude install --help' for usage.", usage.Error())
-	assert.Empty(t, tool.argv)
-}
-
-func Test_claude_install_help_prints_the_ruled_text(t *testing.T) {
-	const long = `Install quarry's Claude Code plugin for all your projects. The plugin adds
-the quarry skill, which teaches Claude to answer from quarry, and quarry's
-MCP server. install runs:
-
-  claude plugin marketplace add --scope user koblas/quarry
-  claude plugin install --scope user quarry@quarry
-
-skipping each step that is already done, so running it again is safe.
-Claude Code downloads the plugin from github.com/koblas/quarry; quarry
-itself sends nothing and opens none of Claude Code's files. The plugin
-starts "quarry" from your PATH. Restart Claude Code to load it.
-`
-	tool := &toolCalls{}
-
-	stdout, _, err := runClaude(t, tool, "claude", "install", "--help")
-
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(stdout, long), stdout)
 	assert.Empty(t, tool.argv)
 }

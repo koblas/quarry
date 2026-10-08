@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +26,7 @@ func Test_the_shipped_claude_install_reports_a_claude_it_cannot_run(t *testing.T
 	exitCode := runProcess(t.Context(), []string{"claude", "install"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
+	assert.Equal(t, "Skipped Claude Desktop: \"~/Library/Application Support/Claude\" does not exist.\n", stdout.String())
 	assert.Equal(t, `quarry: claude install: cannot run claude at "~/bin/claude" (exec format error); `+
 		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr.String())
 }
@@ -55,7 +57,33 @@ exit 1
 	exitCode := runProcess(t.Context(), []string{"claude", "install"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
+	assert.Equal(t, "Skipped Claude Desktop: \"~/Library/Application Support/Claude\" does not exist.\n", stdout.String())
 	assert.Equal(t, "fake claude refuses plugin marketplace add --scope user koblas/quarry\n"+
 		"quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1; see its message above\n", stderr.String())
+}
+
+func Test_default_env_reports_this_binary_as_quarrys_path(t *testing.T) {
+	want, err := os.Executable()
+	require.NoError(t, err)
+
+	env := defaultEnv(io.Discard, io.Discard)
+
+	require.NotNil(t, env.Executable)
+	got, err := env.Executable()
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func Test_test_env_points_claude_at_no_real_desktop(t *testing.T) {
+	realHome, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	env := testEnv(io.Discard, io.Discard)
+
+	assert.NotEqual(t, realHome, env.Home)
+	_, err = os.Stat(filepath.Join(env.Home, "Library", "Application Support", "Claude"))
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	exe, err := env.Executable()
+	require.NoError(t, err)
+	assert.Equal(t, testQuarryBinary, exe)
 }

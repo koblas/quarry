@@ -30,6 +30,12 @@ func Test_reason_is_the_cause_of_a_syscall_error_without_the_syscall_name(t *tes
 	assert.Equal(t, "no such file or directory", osreason.Reason(err))
 }
 
+func Test_reason_is_the_cause_of_a_link_error_without_the_operation_and_paths(t *testing.T) {
+	err := fmt.Errorf("replace /x: %w", &os.LinkError{Op: "rename", Old: "/x/.replace-1", New: "/x/config.json", Err: syscall.EEXIST})
+
+	assert.Equal(t, "file exists", osreason.Reason(err))
+}
+
 var (
 	errTwoLines = errors.New("disk on fire\nsecond line")
 	errBlank    = errors.New("")

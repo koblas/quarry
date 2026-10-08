@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/koblas/quarry/internal/config"
 	"github.com/koblas/quarry/internal/report"
@@ -55,6 +56,7 @@ type Env struct {
 	RunTool        claudeplugin.Runner
 	LookPath       claudeplugin.LookPath
 	Home           string // the user's home directory, "" when unknown
+	Executable     claudedesktop.Executable
 	IsTerminal     TerminalProbe
 	Now            func() time.Time
 }

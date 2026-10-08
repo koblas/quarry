@@ -129,6 +129,22 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 				"cash in investment accounts not included |",
 		},
 		{
+			"prd describes the Claude install on both targets",
+			"docs/initial-prd.md",
+			"- Claude install: quarry claude install / uninstall act on Claude Code and Claude Desktop, " +
+				"whichever is on the Mac. Claude Code gets the plugin by running the claude command (user scope); " +
+				"quarry never edits Claude Code's files, and the download is Claude Code's, not quarry's. " +
+				"Claude Desktop gets only the MCP server, as the mcpServers.quarry entry in its config file " +
+				"with quarry's full path; quarry changes only that entry, keeps a backup of the file it replaces, " +
+				"and refuses a file it cannot parse or an entry it does not own.",
+		},
+		{
+			"prd security bullet limits the Claude Desktop change to the quarry entry",
+			"docs/initial-prd.md",
+			"- **Claude Desktop config.** quarry claude install and uninstall change only the quarry entry " +
+				"in Claude Desktop's config file, never another key, and save the file they replace beside it.",
+		},
+		{
 			"prd names the investment transactions table and its cash side in transactions",
 			"docs/initial-prd.md",
 			"| `investment_transactions` (commission DECIMAL(18,4)) | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount " +
@@ -149,8 +165,8 @@ func collapseWhitespace(s string) string {
 }
 
 const (
-	readmeClaudeCodeHeading = "## Use quarry with Claude Code"
-	readmeInstallHeading    = "## Install or remove the plugin"
+	readmeClaudeCodeHeading = "## Use quarry with Claude Code or Claude Desktop"
+	readmeInstallHeading    = "## Install or remove quarry"
 	readmeMonthlyHeading    = "## Run a monthly summary"
 	readmeCreditsHeading    = "## Credits"
 )
@@ -191,7 +207,7 @@ func readmeSection(t *testing.T, heading string) string {
 //
 //nolint:lll // ruled copy is pinned byte-equal, so its lines cannot wrap
 const (
-	readmeClaudeCodeSection = `## Use quarry with Claude Code
+	readmeClaudeCodeSection = `## Use quarry with Claude Code or Claude Desktop
 
 quarry ships a Claude Code plugin: a skill that teaches Claude to answer questions from your Quicken data with quarry, and the config for quarry's MCP server. The plugin runs the ¤quarry¤ binary from your PATH, so install quarry first and check it works in a terminal:
 
@@ -200,13 +216,13 @@ command -v quarry      # prints the path; if empty, add $(go env GOPATH)/bin to 
 quarry status          # if there is no store yet, open your Quicken file and run: quarry sync
 ¤¤¤
 
-Then install the plugin:
+Then add quarry to Claude Code and Claude Desktop, whichever you have:
 
 ¤¤¤
 quarry claude install
 ¤¤¤
 
-This runs ¤claude plugin marketplace add koblas/quarry¤ and ¤claude plugin install quarry@quarry¤ for you; you can run those two yourself instead.
+In Claude Code this runs ¤claude plugin marketplace add koblas/quarry¤ and ¤claude plugin install quarry@quarry¤ for you; you can run those two yourself instead. In Claude Desktop it adds quarry's MCP server; see below.
 
 Ask Claude a question such as "How did our grocery spending change since 2022?" or "Which subscriptions started this year?", or type ¤/quarry:quarry¤ to load the skill yourself. Claude checks how fresh the data is with ¤quarry status¤, answers from quarry's output, and runs ¤quarry sync¤ only when you ask.
 
@@ -214,9 +230,9 @@ quarry's only network request is the exchange-rate fetch during ¤quarry sync¤,
 
 To update the plugin: ¤claude plugin marketplace update quarry¤. Update the quarry binary at the same time; if Claude reports that quarry is older than the skill, update quarry.`
 
-	readmeInstallSection = `## Install or remove the plugin
+	readmeInstallSection = `## Install or remove quarry
 
-¤quarry claude install¤ runs two commands for you, skipping each one that is already done, so running it again is safe:
+In Claude Code, ¤quarry claude install¤ runs two commands for you, skipping each one that is already done, so running it again is safe:
 
 ¤¤¤
 claude plugin marketplace add --scope user koblas/quarry
@@ -230,9 +246,11 @@ claude plugin uninstall --scope user quarry@quarry
 claude plugin marketplace remove --scope user quarry
 ¤¤¤
 
-If you installed the plugin in a project, that copy and the quarry marketplace stay, and ¤quarry claude uninstall¤ names each copy so you can remove it yourself.
+A copy of the plugin installed only for a project, or by your organization, stays; ¤quarry claude uninstall¤ names each one, and does not remove the quarry marketplace while any remains.
 
-To add only the MCP server, without the skill, run:
+In Claude Desktop, ¤quarry claude install¤ adds quarry's MCP server, not the skill, as the ¤quarry¤ entry under ¤mcpServers¤ in ¤~/Library/Application Support/Claude/claude_desktop_config.json¤, with the full path to quarry; ¤quarry claude uninstall¤ removes that entry and nothing else. Every other setting stays as it was, and whenever either command changes the file it saves the file it replaces as ¤claude_desktop_config.json.before-quarry¤ beside it. Quit Claude Desktop before you run either command, since Desktop can rewrite that file while it runs, then reopen Desktop. If Claude Code or Claude Desktop is not on this Mac, both commands skip it and say so.
+
+To add only the MCP server to Claude Code, without the skill, run:
 
 ¤¤¤
 claude mcp add --scope user quarry -- quarry mcp

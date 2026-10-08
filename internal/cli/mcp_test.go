@@ -26,35 +26,12 @@ type serveCall struct {
 }
 
 func Test_mcp_help_prints_the_ruled_long_text(t *testing.T) {
-	const long = `Run quarry as a local MCP server for Claude and other MCP clients. The
-client starts it and talks to it over stdin and stdout; quarry opens no
-network port.
-
-In Claude Code, run quarry claude install: it installs quarry's plugin,
-which adds this server and the quarry skill. In other MCP clients, add a
-server with the command "quarry" and the argument "mcp". An app started
-outside a terminal may not find quarry on your PATH; give it the full
-path that "command -v quarry" prints.
-
-The server reads quarry's store; it never runs quarry sync, never prunes
-snapshots and never touches Quicken. Each request reads the store as it
-is then, so after you run quarry sync the client sees the new data
-without a restart. SQL runs read-only, and every list a tool returns
-stops at 500 entries.
-
-Payee names, memos, account names and category names reach the client
-as Quicken holds them; quarry does not rewrite or mask them.
-
-Tools: describe_schema, query, sync_status, data_quality, spending,
-cash_flow, recurring_charges, anomalies, search_transactions, holdings,
-net_worth, acb, monthly_summary.
-`
 	var stdout bytes.Buffer
 
 	err := cli.Execute(t.Context(), []string{"mcp", "--help"}, cli.Env{Stdout: &stdout, Stderr: io.Discard})
 
 	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(stdout.String(), long), stdout.String())
+	assert.True(t, strings.HasPrefix(stdout.String(), mcpHelpLong), stdout.String())
 }
 
 func Test_root_help_lists_mcp_with_its_short_line(t *testing.T) {
