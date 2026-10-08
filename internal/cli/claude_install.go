@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/koblas/quarry/internal/claudedesktop"
 	"github.com/koblas/quarry/internal/claudeplugin"
 	"github.com/spf13/cobra"
@@ -45,17 +47,25 @@ starts "quarry" from your PATH. Restart Claude Code to load it.`,
 			if res.QuarryNotOnPath {
 				writeClaudeLine(cmd, installCommand, installQuarryNotOnPathWarning)
 			}
-			return installDesktop(cmd, home, executable)
+			return installDesktop(cmd, home, executable, lookPath)
 		},
 	}
 }
 
-// installDesktop adds quarry's MCP server to Claude Desktop and reports the outcome on stdout.
-func installDesktop(cmd *cobra.Command, home string, executable claudedesktop.Executable) error {
-	srv := claudedesktop.NewServer(claudedesktop.WithHome(home), claudedesktop.WithExecutable(executable))
+// installDesktop adds quarry's MCP server to Claude Desktop and reports the outcome on stdout, then
+// warns on stderr when the quarry on PATH is not the one Desktop will start.
+func installDesktop(cmd *cobra.Command, home string, executable claudedesktop.Executable, lookPath claudeplugin.LookPath) error {
+	srv := claudedesktop.NewServer(claudedesktop.WithHome(home), claudedesktop.WithExecutable(executable),
+		claudedesktop.WithLookPath(claudedesktop.LookPath(lookPath)))
 	res, err := srv.Install(cmd.Context())
 	if err != nil {
 		return reportDesktopFailure(cmd, installCommand, home, err)
 	}
-	return writeResult(cmd, []byte(renderDesktopInstalled(home, res)))
+	if err := writeResult(cmd, []byte(renderDesktopInstalled(home, res))); err != nil {
+		return err
+	}
+	if res.PathQuarry != "" {
+		writeClaudeLine(cmd, installCommand, fmt.Sprintf(desktopPathQuarryWarning, claudePath(home, res.Command), claudePath(home, res.PathQuarry)))
+	}
+	return nil
 }

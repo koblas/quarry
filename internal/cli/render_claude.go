@@ -40,6 +40,14 @@ const (
 	desktopNoHome     = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
 		"set HOME, then run quarry claude install again"
 
+	desktopPathQuarryWarning = `warning: Claude Desktop starts %q, but the quarry on your PATH is %q; ` +
+		"run quarry claude install with the quarry you want Claude Desktop to start"
+	desktopTempRefusal = "this quarry runs from a temporary build (%q), which will be gone when Claude Desktop starts it; " +
+		"run quarry claude install from an installed quarry, not go run"
+	desktopNoBinaryRefusal = "cannot tell where this quarry binary is (%s), so quarry cannot add it to Claude Desktop; " +
+		"add %s under mcpServers in %q yourself"
+	desktopPathQuarryPlaceholder = "<the path command -v quarry prints>"
+
 	// The backup and write refusals share their fix clause: the config folder, then the verb.
 	desktopBackupRefusal  = "cannot save %q (%s), so %q is unchanged" + desktopFixFolder
 	desktopWriteRefusal   = "cannot write %q (%s), so it is unchanged" + desktopFixFolder
@@ -212,10 +220,25 @@ func desktopFailureLine(verb, home string, err error) (string, bool) {
 	if errors.Is(err, claudedesktop.ErrNoHome) {
 		return desktopNoHome, true
 	}
+	if line, ok := desktopBinaryFailureLine(home, err); ok {
+		return line, true
+	}
 	if line, ok := desktopWriteFailureLine(verb, home, err); ok {
 		return line, true
 	}
 	return desktopConfigFailureLine(verb, home, err)
+}
+
+// desktopBinaryFailureLine classifies the failures of learning which quarry binary Desktop would start.
+func desktopBinaryFailureLine(home string, err error) (string, bool) {
+	if temp, ok := errors.AsType[*claudedesktop.TempBuildError](err); ok {
+		return fmt.Sprintf(desktopTempRefusal, claudePath(home, temp.Path)), true
+	}
+	if exe, ok := errors.AsType[*claudedesktop.ExecutableError](err); ok {
+		return fmt.Sprintf(desktopNoBinaryRefusal, osreason.Reason(exe.Err),
+			desktopEntryJSON(desktopPathQuarryPlaceholder), claudePath(home, exe.Config)), true
+	}
+	return "", false
 }
 
 // desktopWriteFailureLine classifies the failures of saving the backup and writing the config.

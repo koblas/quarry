@@ -143,6 +143,7 @@ func Test_claude_install_adds_quarry_to_claude_desktop_after_claude_code(t *test
 
 func Test_claude_install_prints_a_binary_under_home_as_tilde_and_writes_its_absolute_path(t *testing.T) {
 	home, folder := desktopHome(t)
+	outsideTemp(t)
 	binary := filepath.Join(home, "bin", "quarry")
 	var out, errOut bytes.Buffer
 
@@ -765,6 +766,7 @@ func Test_claude_install_escapes_control_characters_in_the_symbolic_link_refusal
 
 func Test_claude_install_prints_the_absolute_path_in_the_symbolic_link_refusal_for_a_binary_under_home(t *testing.T) {
 	home, folder := desktopHome(t)
+	outsideTemp(t)
 	exe := filepath.Join(home, "bin", "quarry")
 	require.NoError(t, os.Symlink(filepath.Join(folder, "elsewhere.json"), filepath.Join(folder, desktopConfigName)))
 	var out, errOut bytes.Buffer
