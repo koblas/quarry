@@ -1,6 +1,26 @@
 package claudedesktop
 
-import "context"
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+
+	"github.com/koblas/quarry/internal/platform/replacefile"
+)
+
+// configName is Claude Desktop's config file inside its folder.
+const configName = "claude_desktop_config.json"
+
+// configMode is the mode of a config file quarry creates.
+const configMode fs.FileMode = 0o600
+
+// ErrNoHome is returned by Install when the Server has no home directory to look in.
+var ErrNoHome = errors.New("home directory is not set")
 
 // Executable reports the absolute path of the running quarry binary, as os.Executable does.
 type Executable func() (string, error)
@@ -42,7 +62,62 @@ type Result struct {
 	Command string // the quarry path the entry starts
 }
 
-// Install adds the quarry entry to Claude Desktop's config file.
-func (s *Server) Install(ctx context.Context) (Result, error) {
-	return Result{}, nil
+// Install adds the quarry entry to Claude Desktop's config file, creating the file.
+// It returns a Skipped Result when Desktop's folder does not exist, ErrNoHome when the
+// Server has no home, and an error wrapping fs.ErrExist when anything is already at the
+// config path. Any other failure leaves the folder as it was.
+func (s *Server) Install(_ context.Context) (Result, error) {
+	if s.home == "" {
+		return Result{}, ErrNoHome
+	}
+	folder := filepath.Join(s.home, "Library", "Application Support", "Claude")
+	res := Result{Folder: folder, Config: filepath.Join(folder, configName)}
+	if _, err := os.Stat(folder); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			res.Skipped = true
+			return res, nil
+		}
+		return res, fmt.Errorf("check %s: %w", folder, err)
+	}
+	command, err := s.executable()
+	if err != nil {
+		return res, fmt.Errorf("find the quarry binary: %w", err)
+	}
+	// Lstat, not Stat: a dangling symlink looks missing to Stat, and the rename would replace it.
+	if _, err := os.Lstat(res.Config); err == nil {
+		return res, fmt.Errorf("%s already exists: %w", res.Config, fs.ErrExist)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return res, fmt.Errorf("check %s: %w", res.Config, err)
+	}
+	doc, err := encode(command)
+	if err != nil {
+		return res, err // unreachable: encode fails only when json cannot encode a value, and every value is a string or string slice built here
+	}
+	if err := replacefile.Write(res.Config, doc, configMode); err != nil {
+		return res, fmt.Errorf("write %s: %w", res.Config, err)
+	}
+	res.Command = command
+	return res, nil
+}
+
+// entry is the value of mcpServers.quarry: how Desktop starts the quarry MCP server.
+type entry struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+}
+
+// encode returns a config document holding only the quarry entry, indented by two spaces
+// with a trailing newline and no HTML escaping, so "<>&" in the path stays literal.
+func encode(command string) ([]byte, error) {
+	doc := map[string]map[string]entry{
+		"mcpServers": {"quarry": {Command: command, Args: []string{"mcp"}}},
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(doc); err != nil {
+		return nil, fmt.Errorf("encode the config: %w", err) // unreachable: json fails only on unsupported types or marshalers, and doc holds only strings
+	}
+	return buf.Bytes(), nil
 }
