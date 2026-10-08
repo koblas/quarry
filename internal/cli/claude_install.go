@@ -40,7 +40,10 @@ starts "quarry" from your PATH. Restart Claude Code to load it.`,
 				return installDesktop(cmd, home, executable, lookPath, true)
 			}
 			if err != nil {
-				return reportClaudeFailure(cmd, installCommand, home, installDoneLead(res), renderInstallDone(res), err)
+				reported := reportClaudeFailure(cmd, installCommand, home, installDoneLead(res), renderInstallDone(res), err)
+				return continueAfterCodeFailure(err, reported, func() error {
+					return installDesktop(cmd, home, executable, lookPath, false)
+				})
 			}
 			if err := writeResult(cmd, []byte(renderInstalled(res))); err != nil {
 				return err

@@ -26,7 +26,7 @@ func Test_the_shipped_claude_install_reports_a_claude_it_cannot_run(t *testing.T
 	exitCode := runProcess(t.Context(), []string{"claude", "install"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
+	assert.Equal(t, "Skipped Claude Desktop: \"~/Library/Application Support/Claude\" does not exist.\n", stdout.String())
 	assert.Equal(t, `quarry: claude install: cannot run claude at "~/bin/claude" (exec format error); `+
 		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr.String())
 }
@@ -57,7 +57,7 @@ exit 1
 	exitCode := runProcess(t.Context(), []string{"claude", "install"}, &stdout, &stderr)
 
 	assert.Equal(t, 1, exitCode)
-	assert.Empty(t, stdout.String())
+	assert.Equal(t, "Skipped Claude Desktop: \"~/Library/Application Support/Claude\" does not exist.\n", stdout.String())
 	assert.Equal(t, "fake claude refuses plugin marketplace add --scope user koblas/quarry\n"+
 		"quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1; see its message above\n", stderr.String())
 }

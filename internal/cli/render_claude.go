@@ -36,6 +36,7 @@ const (
 	desktopAddedFmt   = "Added the quarry MCP server to Claude Desktop; it starts %q.\n"
 	desktopKeptFmt    = "The quarry MCP server is already in Claude Desktop; it starts %q.\n"
 	desktopUpdatedFmt = "Updated the quarry MCP server in Claude Desktop to start %q instead of %q.\n"
+	desktopStoppedFmt = "stopped before quarry changed Claude Desktop; run quarry claude %s again"
 	desktopSkippedFmt = "Skipped Claude Desktop: %q does not exist.\n"
 	desktopNotFolder  = "Skipped Claude Desktop: %q is not a folder.\n"
 	desktopNoHome     = "cannot find your home directory ($HOME is not set), so quarry cannot look for Claude Desktop; " +
@@ -313,8 +314,12 @@ func desktopBinaryFailureLine(home string, err error) (string, bool) {
 	return "", false
 }
 
-// desktopWriteFailureLine classifies the failures of saving the backup and writing the config.
+// desktopWriteFailureLine classifies the failures of saving the backup and writing the config, and
+// the interrupt that stops before them.
 func desktopWriteFailureLine(verb, home string, err error) (string, bool) {
+	if errors.Is(err, claudedesktop.ErrInterrupted) {
+		return fmt.Sprintf(desktopStoppedFmt, verb), true
+	}
 	if backup, ok := errors.AsType[*claudedesktop.BackupError](err); ok {
 		return fmt.Sprintf(desktopBackupRefusal, claudePath(home, backup.Path), osreason.Reason(backup.Err),
 			claudePath(home, backup.Config), claudePath(home, filepath.Dir(backup.Path)), verb), true
@@ -412,7 +417,7 @@ func writeClaudeLine(cmd *cobra.Command, verb, text string) {
 }
 
 // reportClaudeFailure writes the steps already done, then err's report, and returns ReportedError;
-// lead prefixes a line that follows a step that ran, and an unclassified error is a runtime error.
+// lead prefixes a line that follows a step that ran. An unclassified error prints as its own text.
 func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err error) error {
 	if done != "" {
 		if werr := writeResult(cmd, []byte(done)); werr != nil {
@@ -441,7 +446,24 @@ func reportClaudeFailure(cmd *cobra.Command, verb, home, lead, done string, err 
 		writeClaudeLine(cmd, verb, claudeCannotRunLine(verb, home, lead, start))
 		return ReportedError{}
 	}
-	return &runtimeError{err: err}
+	writeClaudeLine(cmd, verb, lead+err.Error())
+	return ReportedError{}
+}
+
+// continueAfterCodeFailure runs desktop after a Claude Code failure that reportClaudeFailure turned into
+// reported, and returns desktop's error if it has one, else reported. It returns reported untouched,
+// without running desktop, when it is not ReportedError (stdout could not be written) or codeErr is an interrupt.
+func continueAfterCodeFailure(codeErr, reported error, desktop func() error) error {
+	if !errors.Is(reported, ReportedError{}) {
+		return reported
+	}
+	if _, interrupted := errors.AsType[*claudeplugin.InterruptedError](codeErr); interrupted {
+		return reported
+	}
+	if err := desktop(); err != nil {
+		return err
+	}
+	return reported
 }
 
 // claudeStepFailureLine returns the line for a claude child that did not exit zero, led by lead:

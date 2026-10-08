@@ -29,6 +29,17 @@ const (
 // ErrNoHome is returned by Install when the Server has no home directory to look in.
 var ErrNoHome = errors.New("home directory is not set")
 
+// ErrInterrupted is returned, wrapping the context's error, when the context ended before a write.
+var ErrInterrupted = errors.New("interrupted before the config was changed")
+
+// stopped returns ErrInterrupted wrapping ctx's error once ctx has ended, else nil.
+func stopped(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInterrupted, err)
+	}
+	return nil
+}
+
 // notObjectError is why a value cannot be merged into: it is valid JSON, but of another kind.
 type notObjectError struct{ kind string }
 
@@ -233,8 +244,9 @@ type Result struct {
 // Install adds the quarry entry to Claude Desktop's config, backing up an existing file first, or
 // repoints or leaves alone an entry of ours. A Desktop folder that is missing or not a folder is
 // skipped (Result.Skipped); anything it cannot safely read or write is refused with a typed error.
-// Result.PathQuarry names a different quarry on PATH.
-func (s *Server) Install(_ context.Context) (Result, error) {
+// Result.PathQuarry names a different quarry on PATH. A context that ended before the write is
+// ErrInterrupted, and nothing is written.
+func (s *Server) Install(ctx context.Context) (Result, error) {
 	loc, err := s.locate()
 	res := Result{Folder: loc.folder, Config: loc.config}
 	if err != nil {
@@ -271,6 +283,9 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	if plan.outcome == Unchanged {
 		res.Outcome, res.Command, res.PathQuarry = Unchanged, command, pathQuarry
 		return res, nil
+	}
+	if err := stopped(ctx); err != nil {
+		return res, err
 	}
 	// The backup goes first: a config that could not be saved must not be replaced.
 	if current.present {
@@ -325,8 +340,9 @@ type UninstallResult struct {
 // Uninstall removes the quarry entry from Claude Desktop's config, backing up the file first, but
 // only an entry that starts `quarry mcp` (*ForeignEntryError otherwise). A config that cannot hold
 // our entry is left alone, and a Desktop folder that is missing or not a folder is skipped
-// (UninstallResult.Skipped).
-func (s *Server) Uninstall(_ context.Context) (UninstallResult, error) {
+// (UninstallResult.Skipped). A context that ended before the removal is ErrInterrupted, and nothing
+// is written.
+func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 	loc, err := s.locate()
 	config := loc.config
 	res := UninstallResult{Folder: loc.folder, Config: config}
@@ -363,6 +379,9 @@ func (s *Server) Uninstall(_ context.Context) (UninstallResult, error) {
 	doc, err := encodeConfig(top, serverValues(servers))
 	if err != nil {
 		return res, err // unreachable: encodeConfig only fails on a value json cannot encode, and every value is a RawMessage from a successful decode
+	}
+	if err := stopped(ctx); err != nil {
+		return res, err
 	}
 	// The backup goes first: a config that could not be saved must not be replaced.
 	backup := config + backupSuffix

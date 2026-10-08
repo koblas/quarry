@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -249,45 +250,52 @@ func Test_claude_install_refuses_when_claude_is_not_on_the_path(t *testing.T) {
 }
 
 func Test_claude_install_reports_a_claude_it_cannot_run(t *testing.T) {
-	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart("/home/ada/bin/claude")})
+	home := t.TempDir()
+	claude := filepath.Join(home, "bin", "claude")
+	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart(claude)})
 
-	stdout, stderr, err := runClaudeAt(t, tool, findsAt("/home/ada/bin/claude"), "/home/ada", "claude", "install")
+	stdout, stderr, err := runClaudeAt(t, tool, findsAt(claude), home, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: cannot run claude at "~/bin/claude" (permission denied); `+
 		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
 }
 
 func Test_claude_install_reports_a_claude_it_cannot_run_after_adding_the_marketplace(t *testing.T) {
-	tool := (&toolCalls{}).reply(installPluginArgv, toolReply{err: cannotStart("/home/ada/bin/claude")})
+	home := t.TempDir()
+	claude := filepath.Join(home, "bin", "claude")
+	tool := (&toolCalls{}).reply(installPluginArgv, toolReply{err: cannotStart(claude)})
 
-	stdout, stderr, err := runClaudeAt(t, tool, findsAt("/home/ada/bin/claude"), "/home/ada", "claude", "install")
+	stdout, stderr, err := runClaudeAt(t, tool, findsAt(claude), home, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n", stdout)
+	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: added the quarry marketplace, but cannot run claude at "~/bin/claude" (permission denied); `+
 		"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
 }
 
 func Test_claude_install_reports_a_claude_it_cannot_run_at_a_path_outside_home(t *testing.T) {
 	cases := []struct {
-		name string
-		home string
+		name       string
+		home       func(t *testing.T) string
+		wantStdout string
+		wantAfter  string
 	}{
-		{name: "home is unset", home: ""},
-		{name: "the path is not under home", home: "/home/ada"},
+		{name: "home is unset", home: unsetHome, wantAfter: desktopNoHomeLine},
+		{name: "the path is not under home", home: tempHome, wantStdout: desktopSkippedLine},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: cannotStart("/opt/claude")})
 
-			_, stderr, err := runClaudeAt(t, tool, findsAt("/opt/claude"), c.home, "claude", "install")
+			stdout, stderr, err := runClaudeAt(t, tool, findsAt("/opt/claude"), c.home(t), "claude", "install")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantStdout, stdout)
 			assert.Equal(t, `quarry: claude install: cannot run claude at "/opt/claude" (permission denied); `+
-				"check that it is Claude Code and that you can run it, then run quarry claude install again\n", stderr)
+				"check that it is Claude Code and that you can run it, then run quarry claude install again\n"+c.wantAfter, stderr)
 		})
 	}
 }
@@ -356,7 +364,7 @@ func Test_claude_install_refuses_a_plugin_list_that_is_not_json(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: cannot read what claude plugin list --json printed; "+
 		"update Claude Code, or run the two commands in quarry claude install --help yourself\n", stderr)
 }
@@ -368,7 +376,7 @@ func Test_claude_install_refuses_a_plugin_list_entry_without_an_id(t *testing.T)
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: cannot read what claude plugin list --json printed; "+
 		"update Claude Code, or run the two commands in quarry claude install --help yourself\n", stderr)
 }
@@ -380,7 +388,7 @@ func Test_claude_install_replays_a_failed_marketplace_list(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "Error: An unknown error occurred (Unexpected)\n"+
 		"quarry: claude install: claude plugin marketplace list --json exited with status 1; see its message above\n", stderr)
 }
@@ -392,7 +400,7 @@ func Test_claude_install_refuses_a_foreign_quarry_marketplace(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, `quarry: claude install: Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub; `+
 		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again\n", stderr)
 }
@@ -422,7 +430,7 @@ func Test_claude_install_reports_each_list_failure(t *testing.T) {
 			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
-			assert.Empty(t, stdout)
+			assert.Equal(t, desktopSkippedLine, stdout)
 			assert.Equal(t, c.wantStderr, stderr)
 		})
 	}
@@ -490,7 +498,7 @@ func Test_claude_install_reports_each_step_failure(t *testing.T) {
 			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
 
 			require.ErrorIs(t, err, cli.ReportedError{})
-			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStdout+desktopSkippedLine, stdout)
 			assert.Equal(t, c.wantStderr, stderr)
 		})
 	}
@@ -503,7 +511,7 @@ func Test_claude_install_reports_a_failed_first_step(t *testing.T) {
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, []string{marketplaceListArgv, pluginListArgv, addMarketplaceArgv}, tool.argv)
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "denied\n"+
 		"quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1; see its message above\n", stderr)
 }
@@ -514,7 +522,7 @@ func Test_claude_install_drops_see_above_when_the_failed_step_printed_nothing(t 
 	stdout, stderr, err := runClaude(t, tool, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "quarry: claude install: claude plugin marketplace add --scope user koblas/quarry exited with status 1\n", stderr)
 }
 
@@ -525,7 +533,7 @@ func Test_claude_install_reports_a_step_stopped_by_a_signal(t *testing.T) {
 	stdout, stderr, err := runClaude(t, tool, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Empty(t, stdout)
+	assert.Equal(t, desktopSkippedLine, stdout)
 	assert.Equal(t, "Killed\n"+
 		"quarry: claude install: claude plugin install --scope user quarry@quarry was stopped by signal killed; see its message above\n", stderr)
 }
@@ -617,7 +625,7 @@ func Test_claude_install_reports_a_partial_install_when_the_plugin_step_fails(t 
 	stdout, stderr, err := runClaude(t, tool, "claude", "install")
 
 	require.ErrorIs(t, err, cli.ReportedError{})
-	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n", stdout)
+	assert.Equal(t, "Added the quarry marketplace to Claude Code.\n"+desktopSkippedLine, stdout)
 	assert.Equal(t, "denied\n"+
 		"quarry: claude install: added the quarry marketplace, but claude plugin install --scope user quarry@quarry "+
 		"exited with status 1; see its message above, then run quarry claude install again\n", stderr)
@@ -666,7 +674,7 @@ func Test_claude_install_reports_a_refusal_when_stdout_cannot_be_written(t *test
 
 	require.ErrorIs(t, err, cli.ReportedError{})
 	assert.Equal(t, `quarry: claude install: Claude Code has a marketplace named "quarry" that is not koblas/quarry on GitHub; `+
-		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again\n", stderr.String())
+		"remove it with claude plugin marketplace remove quarry, then run quarry claude install again\n"+desktopNoHomeLine, stderr.String())
 }
 
 func Test_claude_install_returns_the_stdout_write_error_when_a_step_line_cannot_be_printed(t *testing.T) {
@@ -679,13 +687,36 @@ func Test_claude_install_returns_the_stdout_write_error_when_a_step_line_cannot_
 	assert.NotErrorIs(t, err, cli.ReportedError{})
 }
 
-func Test_claude_install_returns_the_runners_own_error_as_a_runtime_failure(t *testing.T) {
-	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: errNoStart})
+func Test_claude_install_prints_an_unclassified_claude_failure_in_place(t *testing.T) {
+	cases := []struct {
+		name       string
+		tool       *toolCalls
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:       "before any step ran",
+			tool:       (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: errNoStart}),
+			wantStdout: desktopSkippedLine,
+			wantStderr: "quarry: claude install: fork/exec /opt/claude: permission denied\n",
+		},
+		{
+			name:       "after the marketplace add",
+			tool:       (&toolCalls{}).reply(installPluginArgv, toolReply{err: errNoStart}),
+			wantStdout: marketplaceAddedLine + desktopSkippedLine,
+			wantStderr: "quarry: claude install: added the quarry marketplace, but fork/exec /opt/claude: permission denied\n",
+		},
+	}
 
-	_, _, err := runClaude(t, tool, "claude", "install")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			stdout, stderr, err := runClaude(t, c.tool, "claude", "install")
 
-	require.ErrorIs(t, err, errNoStart)
-	assert.NotErrorAs(t, err, new(cli.UsageError))
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, c.wantStdout, stdout)
+			assert.Equal(t, c.wantStderr, stderr)
+		})
+	}
 }
 
 func Test_claude_install_refuses_json(t *testing.T) {

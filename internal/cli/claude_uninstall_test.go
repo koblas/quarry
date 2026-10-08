@@ -454,13 +454,13 @@ func Test_claude_uninstall_reports_each_failure(t *testing.T) {
 	}
 }
 
-func Test_claude_uninstall_returns_the_runners_own_error_as_a_runtime_failure(t *testing.T) {
+func Test_claude_uninstall_prints_an_unclassified_claude_failure_in_place(t *testing.T) {
 	tool := (&toolCalls{}).reply(marketplaceListArgv, toolReply{err: errNoStart})
 
-	_, _, err := runClaude(t, tool, "claude", "uninstall")
+	_, stderr, err := runClaude(t, tool, "claude", "uninstall")
 
-	require.ErrorIs(t, err, errNoStart)
-	assert.NotErrorAs(t, err, new(cli.UsageError))
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, "quarry: claude uninstall: fork/exec /opt/claude: permission denied\n", stderr)
 }
 
 func Test_claude_uninstall_returns_the_stdout_write_error_when_the_result_cannot_be_printed(t *testing.T) {
