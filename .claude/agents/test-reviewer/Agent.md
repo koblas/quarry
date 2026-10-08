@@ -79,7 +79,11 @@ gate round). Each `SURVIVED [guard]` row is a guard no test pins: MAJOR unless y
 mutant is equivalent (same behaviour for every input) — say why in one line. `SURVIVED [line]`
 rows: judge the same way, MINOR if the line carries no decision. Survivors are where to spend
 reading first; do not re-run the script or mutate the worktree. `TIMED OUT` rows are
-unchecked, not killed — say so.
+unchecked, not killed — say so, and judge those lines by reading as if unsampled (the limit
+scales to 2 × the measured baseline, so a timeout can mean the mutant made a test hang, or the
+machine was loaded). A `NO MUTATION EVIDENCE` line (over half the sample timed out) means the
+run proves nothing either way: report mutation evidence as absent — never as a PASS on
+survivors or kills.
 
 For each test file under review:
 

@@ -107,10 +107,15 @@ reviewers read the test-count deltas instead of recounting.
 `.claude/scripts/mutation-sample.py --base <base>` (no `--profile` needed: the coverage gate
 above already bounced any uncovered line). It
 mutates up to 20 changed lines (guards first) in an isolated `$TMPDIR` copy — never the
-worktree — and lists each `SURVIVED` mutant. Costs no model tokens. Exit 2 (tool failure, or
-unmutated tests already failing) → back to the developer, like the coverage gate. Record its
-summary line in the round's `METRICS.md` row. Worst case is `--max` × `--timeout` (20 × 120s):
-run it with `run_in_background` and wait for it. Skip it when `test-reviewer` is not in this
+worktree — runs each mutant's own package tests first and widens to dependents only if it
+survives, and lists each `SURVIVED` mutant. Costs no model tokens. Exit 2 (tool failure,
+unmutated tests already failing, or a baseline over 3 × `--timeout`) → back to the developer,
+like the coverage gate. Record its summary line in the round's `METRICS.md` row, and its
+`NO MUTATION EVIDENCE` line if printed — paste that line to `test-reviewer` too, which then
+reports mutation evidence as absent (exit stays 0; do not re-run hoping for a quieter machine).
+Per-stage limit is max(T, 2 × measured baseline) with T = `--timeout`, so worst case is
+`--max` × (max(T, 2·own) + max(T, 2·dependents) + T for the build), plus up to 2 × 3T of
+baselines per mutated package: run it with `run_in_background` and wait for it. Skip it when `test-reviewer` is not in this
 round or no production `.go` file changed; on a re-gate run it only if `test-reviewer` re-runs.
 
 Do NOT review code yourself — only orchestrate.
