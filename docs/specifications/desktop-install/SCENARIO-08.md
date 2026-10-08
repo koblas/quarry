@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-08
-status: open
+status: done
 ---
 
 # SCENARIO-08: Install picks the quarry path Claude Desktop will start
@@ -26,10 +26,10 @@ Surface surveyed (nothing to port): production calls on the old path are `s.exec
 - [x] Step 5: cli — `claude_install.go:48,54-61` `installDesktop(cmd, home, executable, lookPath)` adds `WithLookPath(claudedesktop.LookPath(lookPath))` (nil converts to nil) and, after `writeResult`, W1 via `writeClaudeLine` when `res.PathQuarry != ""`; `render_claude.go:36-39` W1 const; D9/D10 consts + new `desktopBinaryFailureLine(home, err)` called from `desktopFailureLine` (`:210-220`; the existing helpers are at complexity limit), `claudePath` + `%q` on every path, `desktopEntryJSON("<the path command -v quarry prints>")` for D10. Copy verbatim from spec `## Surface & Copy` D9, D10, W1. Tests (fixed strings except as noted) in `claude_install_desktop_test.go`: D9 `$TMPDIR` row (`t.Setenv("TMPDIR", "/quarry-test-temp")`, exe `/quarry-test-temp/quarry`; the NewServer-default pin) and `go-build` row; D10 row (injected error, `desktopConfigShown`, config untouched); W1 for each of DA, DU, DK (PATH quarry = REAL file under `home/bin`, printed `~/bin/quarry`, exe fixed `/opt/homebrew/bin/quarry`); no W1 when PATH quarry does not stat (`findsAllBut` path), when LookPath errors, when folder missing, when config refused (D5s) — each asserts stderr empty/exact; exit 0 for W1, 1 + `ReportedError` for D9/D10. Json mode n/a: `--json` is refused before Desktop. Re-point the two flipping tests below
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; update `Install`/`Result`/package doc (`doc.go`), no spec ids in comments
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; update `Install`/`Result`/package doc (`doc.go`), no spec ids in comments
 
 ### Verify
-- [ ] Step 7: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...` + `spec-check.py desktop-install`; tick SCENARIO-08 with its acceptance test; rewrite `STATE.md`
+- [x] Step 7: `.claude/scripts/verify.sh <start> ./internal/claudedesktop/... ./internal/cli/...` + `spec-check.py desktop-install`; tick SCENARIO-08 with its acceptance test; rewrite `STATE.md`
 
 ## Test inventory flipped by D9 (re-point in Step 5, not before)
 - `claude_install_desktop_test.go:144-169` `..._prints_a_binary_under_home_as_tilde_...` and `:766-777` `..._absolute_path_in_the_symbolic_link_refusal_for_a_binary_under_home`: exe is `home/bin/quarry`, home is `t.TempDir()` (under `$TMPDIR`) -> D9. cli has no temp-root seam (an `Env.TempDir` would exceed the spec seam list), so: after `desktopHome(t)` has created the home, call a new helper that does `t.Setenv("TMPDIR", "/quarry-test-temp-that-does-not-exist")` (absolute and absent, precedent `testHome`). Order matters: the first `t.TempDir()` creates its base under the then-current `$TMPDIR`. No `t.Parallel` in `internal/cli`, so `t.Setenv` is legal.
@@ -52,12 +52,8 @@ Surface surveyed (nothing to port): production calls on the old path are `s.exec
 
 ## Phase report
 
-Run B2 (step 5) done; `internal/claudedesktop`, `internal/cli`, `cmd/...` green; `golangci-lint run ./...` `0 issues`. Steps 6-7 left for V (verify.sh, spec tick, STATE.md, `status: done`).
+Run V done; scenario complete, `status: done`. `verify.sh` over claudedesktop, cli, cmd/quarry: all `rc=0`, `0 issues`, uncovered-diff 0. test-stats: claudedesktop 46 (+16), cli 708 (+11).
 
-- `internal/cli/claude_install.go`: `installDesktop(cmd, home, executable, lookPath)` passes `WithLookPath(claudedesktop.LookPath(lookPath))` and, after `writeResult`, prints W1 via `writeClaudeLine` when `res.PathQuarry != ""` (exit 0).
-- `internal/cli/render_claude.go`: consts `desktopPathQuarryWarning` (W1), `desktopTempRefusal` (D9), `desktopNoBinaryRefusal` + `desktopPathQuarryPlaceholder` (D10); `desktopBinaryFailureLine(home, err)` called first in `desktopFailureLine`; every path through `claudePath` + `%q`.
-- `internal/cli/claude_install_desktop_path_test.go` (new): helpers `outsideTemp`, `findsQuarryAt`, `installDesktopFinding`, `pathQuarryFile`; W1 for DA/DU/DK, no W1 for unstat-able PATH quarry / no quarry on PATH / missing folder / refused config; PATH link to the running binary writes the link; D9 rows (`$TMPDIR`, `go-build`, home-relative `~`); D10 with `desktopConfigShown`.
-- `claude_install_desktop_test.go`: the two D9-flipped tests call `outsideTemp(t)` right after `desktopHome(t)`.
-- `internal/claudedesktop/doc.go`: package doc covers path choice and temp refusal (Step 6 doc item done).
-- Mutations (each reverted, `claudedesktop.go`/`claude_install.go` restored byte-identical): W1 without PATH stat -> cli `..._does_not_warn_when_the_quarry_on_path_cannot_be_checked` plus two claudedesktop rows; `NewServer` without `os.TempDir()` default -> cli `..._refuses_a_temporary_quarry_binary_.../under_the_temporary_directory` and `..._prints_a_temporary_binary_under_home_as_tilde`; delete `WithLookPath` line -> cli W1 rows (three) and the PATH-link row.
-- Not done: `verify.sh`, `spec-check.py`, spec tick, STATE.md rewrite. Narrow loop `-run 'claude_install|desktop|Desktop'` for cli; `go test ./internal/claudedesktop/` whole.
+- Checkpoint pins added: `path_test.go` `Test_install_writes_the_path_quarry_when_the_running_binary_is_a_link_to_it` (exe Stat vs Lstat), a `..cache` row in `Test_install_refuses_a_temporary_build_and_names_it` (also pins `TempBuildError.Error`), renamed `..._even_when_a_different_quarry_is_on_PATH`; cli `Test_claude_install_escapes_quotes_backslashes_and_control_bytes_in_the_path_warning` (W1, real file under `home/bin`) and `..._in_the_temporary_build_refusal` (D9).
+- Mutations, each reddened its test then restored: `os.Stat(exe)`->`Lstat` -> the link test; `".."+Separator`->`".."` -> the `..cache` row; D9 `%q`->`"%s"` and W1 `%q`->`"%s"` -> the two escape tests.
+- Docs shortened: `Install` 4 lines, `choosePath` 2 lines.

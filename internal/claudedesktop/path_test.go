@@ -109,6 +109,19 @@ func Test_install_writes_the_path_link_when_it_is_a_hard_link_to_the_running_bin
 	assert.Equal(t, claudedesktop.Result{Folder: folder, Config: filepath.Join(folder, configName), Command: hardLink}, res)
 }
 
+func Test_install_writes_the_path_quarry_when_the_running_binary_is_a_link_to_it(t *testing.T) {
+	t.Parallel()
+	home, folder := desktopFolder(t)
+	onPath := writeQuarry(t, t.TempDir())
+	running := filepath.Join(t.TempDir(), "quarry")
+	require.NoError(t, os.Symlink(onPath, running))
+
+	res, err := installWithPath(t, home, running, t.TempDir(), lookPathReturning(onPath))
+
+	require.NoError(t, err)
+	assert.Equal(t, claudedesktop.Result{Folder: folder, Config: filepath.Join(folder, configName), Command: onPath}, res)
+}
+
 func Test_install_writes_the_running_binary_without_a_path_warning_when_the_path_quarry_cannot_be_used(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -235,6 +248,7 @@ func Test_install_refuses_a_temporary_build_and_names_it(t *testing.T) {
 		{name: "the root is not clean", temp: root + "/./a/..", exe: root + "/work/quarry"},
 		{name: "go-build is a middle element", temp: root, exe: "/opt/go-build/exe/quarry"},
 		{name: "an element only starts with go-build", temp: root, exe: "/opt/go-build-1/quarry"},
+		{name: "an element only starts with two dots", temp: root, exe: root + "/..cache/quarry"},
 		{name: "go-build is the binary's own name", temp: root, exe: "/opt/go-build"},
 	}
 	for _, c := range cases {
@@ -247,6 +261,7 @@ func Test_install_refuses_a_temporary_build_and_names_it(t *testing.T) {
 			tempErr, ok := errors.AsType[*claudedesktop.TempBuildError](err)
 			require.True(t, ok, "got %v", err)
 			assert.Equal(t, c.exe, tempErr.Path)
+			require.EqualError(t, err, c.exe+" is a temporary build")
 			assert.Empty(t, snapshot(t, folder))
 		})
 	}
@@ -322,7 +337,7 @@ func Test_install_refuses_a_temporary_build_before_reading_a_config_it_would_ref
 	}
 }
 
-func Test_install_refuses_a_temporary_build_before_looking_for_the_path_quarry_to_write(t *testing.T) {
+func Test_install_refuses_a_temporary_build_even_when_a_different_quarry_is_on_PATH(t *testing.T) {
 	t.Parallel()
 	home, folder := desktopFolder(t)
 	temp := t.TempDir()

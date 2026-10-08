@@ -210,14 +210,10 @@ type Result struct {
 	PathQuarry string // the quarry a shell runs, when it is not the file Command names
 }
 
-// Install adds the quarry entry to Claude Desktop's config, creating the file or merging into
-// it after saving a backup beside it; an entry of ours is repointed, or left alone when it
-// already starts this binary. The entry starts the quarry on PATH when that is the running
-// binary, else the running binary; Result.PathQuarry names a different quarry on PATH. It refuses
-// a binary in a temporary location (*TempBuildError), a symlink (*SymlinkError), any other
-// non-regular path (*NotAFileError) and a quarry key that is not ours (*ForeignEntryError); it names
-// an unknown binary path, a config it cannot check or read, a failed backup and a failed write
-// as *ExecutableError, *ReadError, *BackupError and *WriteError.
+// Install adds the quarry entry to Claude Desktop's config, backing up an existing file first, or
+// repoints or leaves alone an entry of ours. It refuses a temporary build (*TempBuildError) and a
+// config it cannot safely edit (*ExecutableError, *SymlinkError, *NotAFileError, *ForeignEntryError,
+// *ReadError, *BackupError, *WriteError); Result.PathQuarry names a different quarry on PATH.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	if s.home == "" {
 		return Result{}, ErrNoHome
@@ -270,10 +266,8 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 	return res, nil
 }
 
-// choosePath returns the path the entry should start and, when PATH holds a different quarry
-// that could be checked, that quarry's path. A PATH quarry that is the same file as exe is
-// the one to write, so a Homebrew link survives upgrades. Stat follows links, so the link and
-// its target compare equal.
+// choosePath returns the path to write — the PATH quarry when it is the running binary, else the
+// running binary — and the PATH quarry when it is a different, checkable file.
 func (s *Server) choosePath(exe string) (string, string) {
 	if s.lookPath == nil {
 		return exe, ""
@@ -286,6 +280,7 @@ func (s *Server) choosePath(exe string) (string, string) {
 	if err != nil {
 		return exe, ""
 	}
+	// Stat, not Lstat: a link and its target must compare equal.
 	if exeInfo, err := os.Stat(exe); err == nil && os.SameFile(pathInfo, exeInfo) {
 		return onPath, ""
 	}

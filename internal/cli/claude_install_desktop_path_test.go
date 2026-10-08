@@ -101,6 +101,23 @@ func Test_claude_install_warns_when_the_quarry_on_path_is_not_the_one_desktop_wi
 	}
 }
 
+func Test_claude_install_escapes_quotes_backslashes_and_control_bytes_in_the_path_warning(t *testing.T) {
+	home, _ := desktopHome(t)
+	outsideTemp(t)
+	const running = "/opt/q\"uote\\back\x01ctl/quarry"
+	onPath := filepath.Join(home, "bin", "p\"q\\r\x01s", "quarry")
+	require.NoError(t, os.MkdirAll(filepath.Dir(onPath), 0o755))
+	require.NoError(t, os.WriteFile(onPath, []byte("#!/bin/sh\n"), 0o600))
+	var out, errOut bytes.Buffer
+
+	err := installDesktopFinding(t, home, running, findsQuarryAt(onPath), &out, &errOut)
+
+	require.NoError(t, err)
+	assert.Equal(t, `quarry: claude install: warning: Claude Desktop starts "/opt/q\"uote\\back\x01ctl/quarry", `+
+		`but the quarry on your PATH is "~/bin/p\"q\\r\x01s/quarry"; `+
+		"run quarry claude install with the quarry you want Claude Desktop to start\n", errOut.String())
+}
+
 func Test_claude_install_does_not_warn_when_the_quarry_on_path_cannot_be_checked(t *testing.T) {
 	home, _ := desktopHome(t)
 	outsideTemp(t)
@@ -198,6 +215,18 @@ func Test_claude_install_refuses_a_temporary_quarry_binary_and_leaves_desktop_al
 			assert.Empty(t, entryNames(t, folder))
 		})
 	}
+}
+
+func Test_claude_install_escapes_quotes_backslashes_and_control_bytes_in_the_temporary_build_refusal(t *testing.T) {
+	home, _ := desktopHome(t)
+	outsideTemp(t)
+	var out, errOut bytes.Buffer
+
+	err := installDesktopAs(t, &toolCalls{}, home, "/opt/go-build/q\"uote\\back\x01ctl/quarry", &out, &errOut)
+
+	require.ErrorIs(t, err, cli.ReportedError{})
+	assert.Equal(t, `quarry: claude install: this quarry runs from a temporary build ("/opt/go-build/q\"uote\\back\x01ctl/quarry"), `+
+		"which will be gone when Claude Desktop starts it; run quarry claude install from an installed quarry, not go run\n", errOut.String())
 }
 
 func Test_claude_install_prints_a_temporary_binary_under_home_as_tilde(t *testing.T) {
