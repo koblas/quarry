@@ -17,16 +17,27 @@ const uninstallCommand = "uninstall"
 func newClaudeUninstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   uninstallCommand,
-		Short: "Uninstall quarry's plugin from Claude Code",
-		Long: `Uninstall quarry's Claude Code plugin from your user scope and remove the
-quarry marketplace. uninstall runs:
+		Short: "Uninstall quarry from Claude Code and Claude Desktop",
+		Long: `Uninstall quarry from Claude Code and from Claude Desktop, whichever of
+the two is on this Mac; uninstall skips the other and says so.
+
+In Claude Code, uninstall removes quarry's plugin from your user scope
+and the quarry marketplace. It runs:
 
   claude plugin uninstall --scope user quarry@quarry
   claude plugin marketplace remove --scope user quarry
 
-skipping each step with nothing to remove. A copy of the plugin installed
-for a single project stays, and uninstall names each one. Your quarry
-store and snapshots are not touched.`,
+A copy of the plugin installed for a single project stays, and uninstall
+names each one.
+
+In Claude Desktop, uninstall removes the "quarry" entry under mcpServers
+in ~/Library/Application Support/Claude/claude_desktop_config.json when
+that entry runs quarry mcp. Every other setting stays as it was, though
+the file's layout may change, and the file it replaces is saved as
+claude_desktop_config.json.before-quarry. Quit Claude Desktop first.
+
+Each step with nothing to remove is skipped. Your quarry store and
+snapshots are not touched.`,
 		Args: claudeNoArgs(uninstallCommand),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := claudeRefuseJSON(uninstallCommand, jsonOut); err != nil {

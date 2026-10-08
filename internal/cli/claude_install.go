@@ -17,18 +17,32 @@ const installCommand = "install"
 func newClaudeInstallCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, executable claudedesktop.Executable, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   installCommand,
-		Short: "Install quarry's plugin (skill and MCP server) in Claude Code",
-		Long: `Install quarry's Claude Code plugin for all your projects. The plugin adds
-the quarry skill, which teaches Claude to answer from quarry, and quarry's
-MCP server. install runs:
+		Short: "Install quarry in Claude Code and Claude Desktop",
+		Long: `Install quarry in Claude Code and in Claude Desktop, whichever of the two
+is on this Mac; install skips the other and says so.
+
+Claude Code counts as present when the claude command is on your PATH.
+install adds quarry's plugin for all your projects: the quarry skill,
+which teaches Claude to answer from quarry, and quarry's MCP server. It
+runs:
 
   claude plugin marketplace add --scope user koblas/quarry
   claude plugin install --scope user quarry@quarry
 
-skipping each step that is already done, so running it again is safe.
 Claude Code downloads the plugin from github.com/koblas/quarry; quarry
 itself sends nothing and opens none of Claude Code's files. The plugin
-starts "quarry" from your PATH. Restart Claude Code to load it.`,
+starts "quarry" from your PATH.
+
+Claude Desktop counts as present when ~/Library/Application Support/Claude
+exists. install adds quarry's MCP server, not the skill, as the "quarry"
+entry under mcpServers in claude_desktop_config.json in that folder,
+with the full path to quarry. Every other setting stays as it was, though
+the file's layout may change, and the file it replaces is saved as
+claude_desktop_config.json.before-quarry. Quit Claude Desktop first: it
+can rewrite the file while it runs.
+
+Each step already done is skipped, so running install again is safe.
+Restart Claude Code, or quit and reopen Claude Desktop, to load quarry.`,
 		Args: claudeNoArgs(installCommand),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := claudeRefuseJSON(installCommand, jsonOut); err != nil {

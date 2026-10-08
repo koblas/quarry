@@ -32,9 +32,9 @@ const claudeCommand = "claude"
 func newClaudeCommand(runTool claudeplugin.Runner, lookPath claudeplugin.LookPath, home string, executable claudedesktop.Executable, jsonOut *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   claudeCommand,
-		Short: "Install quarry's plugin in Claude Code, or remove it",
-		Long: `Install quarry's plugin in Claude Code, or remove it. quarry does this by
-running the claude command, so claude must be on your PATH.`,
+		Short: "Install quarry in Claude Code and Claude Desktop, or remove it",
+		Long: `Install quarry in Claude Code and Claude Desktop, or remove it. Each
+command acts on whichever of the two is on this Mac and skips the other.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
