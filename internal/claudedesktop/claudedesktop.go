@@ -136,6 +136,14 @@ type TempBuildError struct {
 
 func (e *TempBuildError) Error() string { return e.Path + " is a temporary build" }
 
+// BinaryNameError is returned by Install when the quarry path it would write does not end in an
+// element named exactly quarry, which is the only name an entry of ours can have; nothing is read or written.
+type BinaryNameError struct {
+	Base string // the chosen path's last element
+}
+
+func (e *BinaryNameError) Error() string { return fmt.Sprintf("the quarry binary is named %q", e.Base) }
+
 // ExecutableError is returned by Install when the path of the running quarry binary cannot be
 // learned; nothing is written.
 type ExecutableError struct {
@@ -211,8 +219,8 @@ type Result struct {
 }
 
 // Install adds the quarry entry to Claude Desktop's config, backing up an existing file first, or
-// repoints or leaves alone an entry of ours. It refuses a temporary build (*TempBuildError) and a
-// config it cannot safely edit (*ExecutableError, *SymlinkError, *NotAFileError, *ForeignEntryError,
+// repoints or leaves alone an entry of ours. It refuses a temporary build (*TempBuildError), a path
+// not named quarry (*BinaryNameError) and a config it cannot safely edit (*ExecutableError, *SymlinkError, *NotAFileError, *ForeignEntryError,
 // *ReadError, *BackupError, *WriteError); Result.PathQuarry names a different quarry on PATH.
 func (s *Server) Install(_ context.Context) (Result, error) {
 	folder, config, found, err := s.locate()
@@ -233,6 +241,9 @@ func (s *Server) Install(_ context.Context) (Result, error) {
 		if s.isTemporary(p) {
 			return res, &TempBuildError{Path: p}
 		}
+	}
+	if base := lastElement(command); base != quarryName {
+		return res, &BinaryNameError{Base: base}
 	}
 	current, err := readConfig(res.Config)
 	if symlink, ok := errors.AsType[*SymlinkError](err); ok {
@@ -538,6 +549,10 @@ func kindOf(data []byte) string {
 	}
 }
 
+// lastElement is the text after the last slash of path; unlike filepath.Base it keeps a trailing
+// slash as an empty element, so a directory is never taken for a binary.
+func lastElement(path string) string { return path[strings.LastIndex(path, "/")+1:] }
+
 // parseOurs reports whether raw is an entry that starts `quarry mcp`, returning its fields and
 // command. Names are compared as text, never resolved on disk.
 func parseOurs(raw json.RawMessage) (map[string]json.RawMessage, string, bool) {
@@ -546,7 +561,7 @@ func parseOurs(raw json.RawMessage) (map[string]json.RawMessage, string, bool) {
 		return nil, "", false
 	}
 	var command string
-	if json.Unmarshal(fields["command"], &command) != nil || command[strings.LastIndex(command, "/")+1:] != quarryName {
+	if json.Unmarshal(fields["command"], &command) != nil || lastElement(command) != quarryName {
 		return nil, "", false
 	}
 	var args []string

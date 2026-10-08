@@ -272,7 +272,7 @@ func Test_install_accepts_a_binary_outside_the_temporary_directory(t *testing.T)
 	const root = "/var/quarry-test-temp"
 	cases := []struct{ name, temp, exe string }{
 		{name: "a sibling directory shares the root's prefix", temp: root, exe: root + "x/quarry"},
-		{name: "the binary is the root itself", temp: root, exe: root},
+		{name: "the binary is the root itself", temp: "/var/quarry", exe: "/var/quarry"},
 		{name: "an element ends with go-build", temp: root, exe: "/opt/ago-build/quarry"},
 		{name: "the root is empty", temp: "", exe: root + "/work/quarry"},
 	}

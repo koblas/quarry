@@ -262,3 +262,32 @@ func Test_claude_install_names_the_config_to_edit_when_it_cannot_find_its_own_bi
 		"under mcpServers in "+desktopConfigShown+" yourself\n", errOut.String())
 	assert.Empty(t, entryNames(t, folder))
 }
+
+func Test_claude_install_refuses_a_quarry_binary_with_another_name_and_leaves_desktop_alone(t *testing.T) {
+	cases := []struct{ name, exe, shown string }{
+		{name: "a plain name", exe: "/opt/homebrew/bin/qry", shown: `"qry"`},
+		{name: "quotes and control bytes in the name", exe: "/opt/bin/q\"y\x01", shown: `"q\"y\x01"`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, folder := desktopHome(t)
+			outsideTemp(t)
+			config := filepath.Join(folder, desktopConfigName)
+			require.NoError(t, os.WriteFile(config, []byte("{"), 0o600))
+			var out, errOut bytes.Buffer
+
+			err := installDesktopAs(t, &toolCalls{}, home, c.exe, &out, &errOut)
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, codeLines, out.String())
+			assert.Equal(t, "quarry: claude install: this quarry binary is named "+c.shown+", and quarry recognises its Claude Desktop entry "+
+				"only when the binary is named quarry; rename it to quarry, or put a link named quarry to it on your PATH, "+
+				"then run quarry claude install again\n", errOut.String())
+			written, err := os.ReadFile(config)
+			require.NoError(t, err)
+			assert.Equal(t, "{", string(written))
+			assert.Equal(t, []string{desktopConfigName}, entryNames(t, folder))
+		})
+	}
+}

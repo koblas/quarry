@@ -53,6 +53,8 @@ const (
 		"run quarry claude install with the quarry you want Claude Desktop to start"
 	desktopTempRefusal = "this quarry runs from a temporary build (%q), which will be gone when Claude Desktop starts it; " +
 		"run quarry claude install from an installed quarry, not go run"
+	desktopBinaryNameRefusal = "this quarry binary is named %q, and quarry recognises its Claude Desktop entry only when the binary is named quarry; " +
+		"rename it to quarry, or put a link named quarry to it on your PATH, then run quarry claude install again"
 	desktopNoBinaryRefusal = "cannot tell where this quarry binary is (%s), so quarry cannot add it to Claude Desktop; " +
 		"add %s under mcpServers in %q yourself"
 	desktopPathQuarryPlaceholder = "<the path command -v quarry prints>"
@@ -254,6 +256,9 @@ func desktopFailureLine(verb, home string, err error) (string, bool) {
 func desktopBinaryFailureLine(home string, err error) (string, bool) {
 	if temp, ok := errors.AsType[*claudedesktop.TempBuildError](err); ok {
 		return fmt.Sprintf(desktopTempRefusal, claudePath(home, temp.Path)), true
+	}
+	if name, ok := errors.AsType[*claudedesktop.BinaryNameError](err); ok {
+		return fmt.Sprintf(desktopBinaryNameRefusal, name.Base), true
 	}
 	if exe, ok := errors.AsType[*claudedesktop.ExecutableError](err); ok {
 		return fmt.Sprintf(desktopNoBinaryRefusal, osreason.Reason(exe.Err),
