@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/cli"
 	"github.com/stretchr/testify/assert"
@@ -472,4 +473,154 @@ func Test_claude_install_refuses_a_quarry_entry_that_does_not_run_quarry_mcp(t *
 	require.NoError(t, readErr)
 	assert.Equal(t, existing, string(body))
 	assert.Equal(t, []string{desktopConfigName}, entryNames(t, folder))
+}
+
+const desktopRetryTail = ", then run quarry claude install again\n"
+
+// desktopRefusalState is what a refused install must leave behind in the Claude folder.
+type desktopRefusalState struct {
+	entries []string
+	mode    os.FileMode
+	size    int64
+	modTime time.Time
+}
+
+func desktopRefusalSnapshot(t *testing.T, folder string) desktopRefusalState {
+	t.Helper()
+	info, err := os.Lstat(filepath.Join(folder, desktopConfigName))
+	require.NoError(t, err)
+	return desktopRefusalState{entries: entryNames(t, folder), mode: info.Mode(), size: info.Size(), modTime: info.ModTime()}
+}
+
+func Test_claude_install_refuses_a_desktop_config_it_cannot_safely_change(t *testing.T) {
+	const (
+		backupBytes = `{"saved": "earlier backup"}`
+		linkTarget  = "elsewhere.json"
+		linkedBytes = `{"mcpServers": {}}`
+	)
+	cases := []struct {
+		name     string
+		seed     func(t *testing.T, folder string)
+		wantLine string
+		verify   func(t *testing.T, folder string)
+	}{
+		{
+			name: "the file is not valid JSON",
+			seed: func(t *testing.T, folder string) {
+				t.Helper()
+				writeDesktopConfig(t, filepath.Join(folder, desktopConfigName), `{"globalShortcut": "x", "mcpServers": {`)
+				require.NoError(t, os.WriteFile(filepath.Join(folder, desktopBackupName), []byte(backupBytes), 0o600))
+			},
+			wantLine: "quarry: claude install: cannot read " + desktopConfigShown +
+				": it is not valid JSON (unexpected end of JSON input, at byte 39); fix it so Claude Desktop can read it too" + desktopRetryTail,
+			verify: func(t *testing.T, folder string) {
+				t.Helper()
+				body, err := os.ReadFile(filepath.Join(folder, desktopBackupName))
+				require.NoError(t, err)
+				assert.Equal(t, backupBytes, string(body))
+			},
+		},
+		{
+			name: "the top level is an array",
+			seed: func(t *testing.T, folder string) {
+				t.Helper()
+				writeDesktopConfig(t, filepath.Join(folder, desktopConfigName), `[1]`)
+			},
+			wantLine: "quarry: claude install: cannot add quarry to " + desktopConfigShown +
+				": it holds a JSON array, not an object; fix it so Claude Desktop can read it too" + desktopRetryTail,
+			verify: func(t *testing.T, folder string) {
+				t.Helper()
+				body, err := os.ReadFile(filepath.Join(folder, desktopConfigName))
+				require.NoError(t, err)
+				assert.Equal(t, `[1]`, string(body))
+			},
+		},
+		{
+			name: "mcpServers is an array",
+			seed: func(t *testing.T, folder string) {
+				t.Helper()
+				writeDesktopConfig(t, filepath.Join(folder, desktopConfigName), `{"mcpServers": []}`)
+			},
+			wantLine: "quarry: claude install: cannot add quarry to " + desktopConfigShown +
+				": its mcpServers is a JSON array, not an object; fix it so Claude Desktop can read it too" + desktopRetryTail,
+			verify: func(t *testing.T, folder string) {
+				t.Helper()
+				body, err := os.ReadFile(filepath.Join(folder, desktopConfigName))
+				require.NoError(t, err)
+				assert.Equal(t, `{"mcpServers": []}`, string(body))
+			},
+		},
+		{
+			name: "the file is a symbolic link",
+			seed: func(t *testing.T, folder string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filepath.Join(folder, linkTarget), []byte(linkedBytes), 0o600))
+				require.NoError(t, os.Symlink(linkTarget, filepath.Join(folder, desktopConfigName)))
+			},
+			wantLine: "quarry: claude install: " + desktopConfigShown + " is a symbolic link, so quarry leaves it alone; add " +
+				`"quarry": {"command": "` + desktopQuarryBinary + `", "args": ["mcp"]}` +
+				" under mcpServers in the file it links to yourself, then quit and reopen Claude Desktop\n",
+			verify: func(t *testing.T, folder string) {
+				t.Helper()
+				target, err := os.Readlink(filepath.Join(folder, desktopConfigName))
+				require.NoError(t, err)
+				assert.Equal(t, linkTarget, target)
+				body, err := os.ReadFile(filepath.Join(folder, linkTarget))
+				require.NoError(t, err)
+				assert.Equal(t, linkedBytes, string(body))
+			},
+		},
+		{
+			name: "the file is a named pipe",
+			seed: func(t *testing.T, folder string) {
+				t.Helper()
+				require.NoError(t, syscall.Mkfifo(filepath.Join(folder, desktopConfigName), 0o600))
+			},
+			wantLine: "quarry: claude install: " + desktopConfigShown +
+				" is not a file, so quarry leaves it alone; move it aside" + desktopRetryTail,
+			verify: func(t *testing.T, folder string) {
+				t.Helper()
+				info, err := os.Lstat(filepath.Join(folder, desktopConfigName))
+				require.NoError(t, err)
+				assert.NotZero(t, info.Mode()&fs.ModeNamedPipe)
+			},
+		},
+		{
+			name: "the file cannot be read",
+			seed: func(t *testing.T, folder string) {
+				t.Helper()
+				config := filepath.Join(folder, desktopConfigName)
+				writeDesktopConfig(t, config, `{"globalShortcut": "x"}`)
+				require.NoError(t, os.Chmod(config, 0o000))
+				t.Cleanup(func() { _ = os.Chmod(config, 0o644) })
+			},
+			wantLine: "quarry: claude install: cannot read " + desktopConfigShown +
+				" (permission denied); check its permissions" + desktopRetryTail,
+			verify: func(t *testing.T, folder string) {
+				t.Helper()
+				config := filepath.Join(folder, desktopConfigName)
+				require.NoError(t, os.Chmod(config, 0o644))
+				body, err := os.ReadFile(config)
+				require.NoError(t, err)
+				assert.Equal(t, `{"globalShortcut": "x"}`, string(body))
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, folder := desktopHome(t)
+			c.seed(t, folder)
+			before := desktopRefusalSnapshot(t, folder)
+			var out, errOut bytes.Buffer
+
+			err := installDesktop(t, &toolCalls{}, home, &out, &errOut)
+
+			require.ErrorIs(t, err, cli.ReportedError{})
+			assert.Equal(t, marketplaceAddedLine+pluginInstalledLine+installRestartLine, out.String())
+			assert.Equal(t, c.wantLine, errOut.String())
+			assert.Equal(t, before, desktopRefusalSnapshot(t, folder))
+			c.verify(t, folder)
+		})
+	}
 }
