@@ -7,23 +7,33 @@ Usage: .claude/scripts/mutation-sample.py [--base REF] [--max N] [--timeout SECS
                  every line of untracked, non-ignored non-test .go files.
   --max N        mutants to try (default 20). Guards come first: lines with `if`, a
                  comparison, `&&`/`||`, or `return ... err`; then round-robin across files.
-  --timeout S    per-mutant `go test` timeout in seconds (default 120).
+  --timeout S    floor, in seconds, for each per-mutant `go test` stage (default 120). The
+                 limit actually applied is max(S, 2 x that stage's unmutated baseline), so a
+                 slow dependent suite (cmd/quarry, ~150s) no longer times every mutant out.
+                 Baselines run under a flat 3 x S cap; exceeding it exits 2.
   --profile FILE coverage profile from the Verify run; lines no test executes are skipped
                  (uncovered-diff.py already reports them — a mutant there survives trivially).
 
 Each mutant flips ONE operator on ONE line (== / !=, < / >=, <= / >, && / ||, true / false,
 `return ..., err` -> `..., nil`). It runs against an isolated copy of the working tree under
 $TMPDIR (tracked + untracked, non-ignored files), never the worktree itself, so parallel
-agents and reviewers are unaffected. For each mutant the copy builds the mutated package
-(build failure = non-viable, not a survivor), then runs the tests of every package whose test
-build depends on it. Any failure kills the mutant; all passing = SURVIVED.
+agents and reviewers are unaffected. Before mutating, it times two unmutated baselines per
+mutated package: the package's own tests (narrow) and the other packages whose test build
+imports it (wide). For each mutant the copy builds the mutated package (build failure =
+non-viable, not a survivor), runs the narrow tests, and only if the mutant survives those
+widens to the dependents. Any failure kills the mutant; all passing = SURVIVED. A stage that
+exceeds its limit is TIMED OUT (its process group is killed, so no test binary outlives it);
+a narrow timeout does not widen.
 
-Output (stdout, paste into the test-reviewer prompt): a summary line, then one row per
-survivor `path:line (func) — before → after`. A survivor on a guard means no test pins that
+Output (stdout, paste into the test-reviewer prompt): a summary line; a
+`NO MUTATION EVIDENCE` line when more than half of the sampled mutants (non-viable included)
+timed out; then one row per survivor `path:line (func) — before → after` and one per
+timed-out mutant. A survivor on a guard means no test pins that
 guard: a MAJOR candidate the reviewer confirms or dismisses with a reason.
 
-Exit status: 0 (survivors are findings, not tool failures); 2 on tool failure, including a
-copy whose unmutated tests already fail. Standard library only; Python 3.9+.
+Exit status: 0 (survivors and NO MUTATION EVIDENCE are findings, not tool failures); 2 on
+tool failure, including a copy whose unmutated tests already fail or a baseline exceeding
+3 x S. Standard library only; Python 3.9+.
 """
 
 from __future__ import annotations
@@ -32,6 +42,7 @@ import argparse
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -167,8 +178,8 @@ def isolated_copy() -> Path:
     return dest
 
 
-def dependents(copy: Path, pkgs: set[str]) -> dict[str, list[str]]:
-    """Map each mutated package dir to the packages whose test build imports it."""
+def dependents(copy: Path, pkgs: set[str]) -> dict[str, tuple[list[str], list[str]]]:
+    """Map each mutated package dir to (its own package, other packages whose test build imports it)."""
     listing = subprocess.run(
         ["go", "list", "-test", "-f", "{{.ImportPath}}|{{.Dir}}|{{join .Deps \" \"}}", "./..."],
         cwd=copy, check=True, capture_output=True, text=True).stdout
@@ -181,29 +192,52 @@ def dependents(copy: Path, pkgs: set[str]) -> dict[str, list[str]]:
     for pkg in pkgs:
         imp = by_dir.get(str((copy / pkg).resolve()))
         if imp is None:
-            out[pkg] = ["./" + pkg]
+            out[pkg] = (["./" + pkg], [])
             continue
         hits = {i.split(" ")[0].removesuffix("_test") for i, deps in deps_of.items()
-                if imp in deps or i.split(" ")[0] == imp}
-        out[pkg] = sorted(h for h in hits if not h.endswith(".test"))
+                if imp in deps}
+        out[pkg] = ([imp], sorted(h for h in hits if not h.endswith(".test") and h != imp))
     return out
 
 
-def run(cmd: list[str], cwd: Path, timeout: int) -> str:
+def run(cmd: list[str], cwd: Path, timeout: float) -> tuple[str, float]:
+    """Run cmd in its own process group; on timeout kill the whole group so test binaries
+    `go test` spawned do not keep burning CPU into the next mutant. Returns (status, seconds)."""
     env = {**os.environ, "GOFLAGS": "-mod=readonly", "GOPROXY": "off"}
+    started = time.monotonic()
+    p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
     try:
-        p = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
+        rc = p.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        return "timeout"
-    return "ok" if p.returncode == 0 else "fail"
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        p.wait()
+        return "timeout", time.monotonic() - started
+    return ("ok" if rc == 0 else "fail"), time.monotonic() - started
+
+
+def mutant_outcome(copy: Path, own: list[str], others: list[str], limits: tuple[float, float]) -> str:
+    """Narrow first: the mutated package's own tests, then — only if it survives — its dependents."""
+    for targets, limit in ((own, limits[0]), (others, limits[1])):
+        if not targets:
+            continue
+        status, _ = run(["go", "test", "-count=1", "-failfast", *targets], copy, limit)
+        if status != "ok":
+            return {"fail": "killed", "timeout": "timed out"}[status]
+    return "survived"
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--base")
-    ap.add_argument("--max", type=int, default=20)
-    ap.add_argument("--timeout", type=int, default=120)
-    ap.add_argument("--profile")
+    ap.add_argument("--base", help="diff base (default: merge-base of HEAD and origin/main)")
+    ap.add_argument("--max", type=int, default=20, help="mutants to try (default 20)")
+    ap.add_argument("--timeout", type=int, default=120,
+                    help="floor in seconds per test stage; applied limit is "
+                         "max(TIMEOUT, 2 x the stage's unmutated baseline) (default 120)")
+    ap.add_argument("--profile", help="coverage profile; uncovered lines are skipped")
     args = ap.parse_args()
     started = time.time()
     try:
@@ -225,11 +259,26 @@ def main() -> int:
     try:
         pkgs = {str(Path(m.path).parent) for m in picked}
         targets = dependents(copy, pkgs)
+        limits: dict[str, tuple[float, float]] = {}
+        baseline_cap = args.timeout * 3
         for pkg in sorted(pkgs):
-            if run(["go", "test", "-count=1", *targets[pkg]], copy, args.timeout * 3) != "ok":
-                print(f"mutation-sample: unmutated tests fail for {pkg}; fix them first",
-                      file=sys.stderr)
-                return 2
+            own, others = targets[pkg]
+            stage_limits = []
+            for stage in (own, others):
+                if not stage:
+                    stage_limits.append(float(args.timeout))
+                    continue
+                status, secs = run(["go", "test", "-count=1", *stage], copy, baseline_cap)
+                if status == "timeout":
+                    print(f"mutation-sample: unmutated tests for {pkg} exceeded {baseline_cap}s; "
+                          f"raise --timeout", file=sys.stderr)
+                    return 2
+                if status != "ok":
+                    print(f"mutation-sample: unmutated tests fail for {pkg}; fix them first",
+                          file=sys.stderr)
+                    return 2
+                stage_limits.append(max(float(args.timeout), 2 * secs))
+            limits[pkg] = (stage_limits[0], stage_limits[1])
         results = defaultdict(list)
         for m in picked:
             f = copy / m.path
@@ -241,12 +290,10 @@ def main() -> int:
             f.write_text("".join(lines))
             try:
                 pkg = str(Path(m.path).parent)
-                if run(["go", "build", "./" + pkg], copy, args.timeout) != "ok":
+                if run(["go", "build", "./" + pkg], copy, args.timeout)[0] != "ok":
                     results["non-viable"].append(m)
                     continue
-                outcome = run(["go", "test", "-count=1", "-failfast", *targets[pkg]], copy,
-                              args.timeout)
-                results[{"ok": "survived", "fail": "killed", "timeout": "timed out"}[outcome]].append(m)
+                results[mutant_outcome(copy, *targets[pkg], limits[pkg])].append(m)
             finally:
                 f.write_text(original)
     except (subprocess.CalledProcessError, OSError) as e:
@@ -259,6 +306,9 @@ def main() -> int:
           f"{len(results['killed'])} killed, {len(results['survived'])} survived, "
           f"{len(results['non-viable'])} non-viable, {len(results['timed out'])} timed out; "
           f"{skipped} uncovered lines skipped; {time.time() - started:.0f}s")
+    if 2 * len(results["timed out"]) > len(picked):
+        print(f"NO MUTATION EVIDENCE: {len(results['timed out'])} of {len(picked)} sampled mutants "
+              f"timed out — survivors and kills above are not a sample of the change")
     for m in results["survived"]:
         tag = "guard" if m.guard else "line"
         print(f"SURVIVED [{tag}] {m.path}:{m.line} ({m.func}) — `{m.before}` → `{m.after}`")
