@@ -370,6 +370,19 @@ func tool(name, description string, input *jsonschema.Schema) *sdk.Tool {
 		Description:  description,
 		InputSchema:  input,
 		OutputSchema: &jsonschema.Schema{Type: "object"},
+		Annotations:  readOnlyAnnotations(),
+	}
+}
+
+// readOnlyAnnotations tells clients a tool only reads the local store: it changes nothing,
+// repeating a call has no further effect, and it reaches no outside service.
+func readOnlyAnnotations() *sdk.ToolAnnotations {
+	no := false
+	return &sdk.ToolAnnotations{
+		ReadOnlyHint:    true,
+		DestructiveHint: &no,
+		IdempotentHint:  true,
+		OpenWorldHint:   &no,
 	}
 }
 
