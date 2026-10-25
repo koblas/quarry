@@ -214,3 +214,22 @@ func Test_a_search_call_with_absent_null_or_empty_arguments_searches_the_newest_
 		})
 	}
 }
+
+func Test_every_tool_is_annotated_read_only_non_destructive_idempotent_and_closed_world(t *testing.T) {
+	r := startServer(t, newServer())
+	listed, err := r.session.ListTools(t.Context(), nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, listed.Tools)
+
+	for _, tool := range listed.Tools {
+		t.Run(tool.Name, func(t *testing.T) {
+			require.NotNil(t, tool.Annotations)
+			assert.True(t, tool.Annotations.ReadOnlyHint, "readOnlyHint")
+			require.NotNil(t, tool.Annotations.DestructiveHint)
+			assert.False(t, *tool.Annotations.DestructiveHint, "destructiveHint")
+			assert.True(t, tool.Annotations.IdempotentHint, "idempotentHint")
+			require.NotNil(t, tool.Annotations.OpenWorldHint)
+			assert.False(t, *tool.Annotations.OpenWorldHint, "openWorldHint")
+		})
+	}
+}
