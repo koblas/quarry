@@ -93,7 +93,7 @@ func Test_run_imports_the_quicken_data_into_a_new_store(t *testing.T) {
 		"Source", abbreviated(t, bundle.Dir, home),
 		"Size", megabytes(info.Size()),
 		"SHA-256", hex.EncodeToString(sum[:]),
-		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)",
+		"Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.2 (82 tables, 1,838 columns)",
 		"Store", abbreviated(t, storePath, home),
 		"Rows", "2 transactions, 4 splits, 0 transfers, 2 payees, 2 categories, 2 tags; 0 investment transactions, 0 securities, 0 prices",
 		"Balances", "no accounts to check; 2 never reconciled",

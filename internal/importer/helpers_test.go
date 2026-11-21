@@ -10,6 +10,7 @@ import (
 
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/importer"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	_ "github.com/mattn/go-sqlite3"
@@ -60,6 +61,14 @@ func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (store.Replaced,
 func importInto(tb testing.TB, fake *fakeStore, dataPath string) (store.Result, error) {
 	tb.Helper()
 	return importer.NewServer(importer.WithStore(fake)).Import(tb.Context(), store.SnapshotRef{Path: dataPath})
+}
+
+// importResolvingEntities imports the snapshot at dataPath into fake with entity-numbered names resolved through
+// v9.ResolveName, as the sync command wires it.
+func importResolvingEntities(tb testing.TB, fake *fakeStore, dataPath string) (store.Result, error) {
+	tb.Helper()
+	return importer.NewServer(importer.WithStore(fake), importer.WithEntityResolver(v9.ResolveName)).
+		Import(tb.Context(), store.SnapshotRef{Path: dataPath})
 }
 
 // importBuilt writes b to a fresh bundle and imports it into fake.
@@ -189,6 +198,14 @@ func execOn(tb testing.TB, dataPath, query string, args ...any) {
 	defer func() { _ = db.Close() }()
 	_, err = db.ExecContext(tb.Context(), query, args...)
 	require.NoError(tb, err)
+}
+
+// listEntitiesAgain adds a second Z_PRIMARYKEY row, under a Z_ENT no entity uses, for each name.
+func listEntitiesAgain(tb testing.TB, dataPath string, names ...string) {
+	tb.Helper()
+	for i, name := range names {
+		execOn(tb, dataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (?, ?, 0, 0)", 900+i, name)
+	}
 }
 
 // setColumnBlob overwrites column on the row identified by pk with value as

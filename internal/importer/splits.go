@@ -110,14 +110,25 @@ func addEntrylessSplits(cashRows []store.Transaction, splits []store.Split, link
 	return splits, links
 }
 
-const splitTagsQuery = `SELECT Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS FROM Z_15USERTAGS`
+// splitTagsQuery builds the query over the CashFlowTransactionEntry-UserTag join table, naming it and its two columns
+// as the file numbers them, or all three as Quicken originally wrote them when the EntityResolver cannot rename
+// every one (a half-renamed query would name tables and columns no file has).
+func (srv *Server) splitTagsQuery(entities map[string][]int64) string {
+	const entryColumn, tagColumn, table = "Z_15CASHFLOWTRANSACTIONENTRIES", "Z_76USERTAGS", "Z_15USERTAGS"
+	entry, entryOK := srv.resolve(entryColumn, entities)
+	tag, tagOK := srv.resolve(tagColumn, entities)
+	joined, tableOK := srv.resolve(table, entities)
+	if !entryOK || !tagOK || !tableOK {
+		entry, tag, joined = entryColumn, tagColumn, table
+	}
+	return "SELECT " + entry + ", " + tag + " FROM " + joined
+}
 
-// mapSplitTags reads Z_15USERTAGS, keeping only links whose split is in
-// splitIDs (an entry whose transaction was skipped has no split to link)
-// and whose tag exists (non-deleted); a link missing either end is dropped.
-func mapSplitTags(ctx context.Context, src Source, splitIDs map[int64]string, existingTags map[int64]bool) ([]store.SplitTag, error) {
+// mapSplitTags reads split-to-tag links through query, dropping any whose split is not in splitIDs or whose tag
+// is not in existingTags.
+func mapSplitTags(ctx context.Context, src Source, query string, splitIDs map[int64]string, existingTags map[int64]bool) ([]store.SplitTag, error) {
 	var rows []store.SplitTag
-	err := src.QueryRows(ctx, splitTagsQuery, nil, func(scan func(dest ...any) error) error {
+	err := src.QueryRows(ctx, query, nil, func(scan func(dest ...any) error) error {
 		var entryPK, tagPK sql.NullInt64
 		if err := scan(&entryPK, &tagPK); err != nil {
 			return err

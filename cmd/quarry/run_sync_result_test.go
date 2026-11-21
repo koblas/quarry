@@ -37,8 +37,10 @@ func runWithFailingStdout(args []string, err error) (int, string) {
 	return run(context.Background(), args, failingWriter{err: err}, &stderr), stderr.String()
 }
 
+const referenceLabel = "hardkoded/quicken-skills@752107b+quarry.2"
+
 // referenceMatch is the Schema line's text when the snapshot matches the schema reference exactly.
-const referenceMatch = "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)"
+const referenceMatch = "matches reference " + referenceLabel + " (82 tables, 1,838 columns)"
 
 // syncArtifacts are the files the one sync under a home left, and the digests read from the snapshot.
 type syncArtifacts struct {
@@ -429,7 +431,7 @@ func Test_run_reports_a_schema_mismatch(t *testing.T) {
 	want := art.head(t, home, bundle.Dir, "1 account") + fmt.Sprintf(
 		"%-10s%s\n"+
 			"  - table   %s\n  - column  %s.%s\n  - column  %s.%s\n  + column  %s.%s\n",
-		"Schema", "DIFFERS from reference hardkoded/quicken-skills@752107b+quarry.1: "+
+		"Schema", "DIFFERS from reference hardkoded/quicken-skills@752107b+quarry.2: "+
 			"1 table and 2 columns missing, 1 column not in reference",
 		v9fixture.MissingSchemaDroppedTable,
 		v9fixture.MissingSchemaDroppedColumnTable, v9fixture.MissingSchemaDroppedColumn1,

@@ -73,8 +73,9 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		srv := snapshot.NewServer(append([]snapshot.Option{
 			snapshot.WithSnapshotDir(snapshotsDirUnder(home)),
 			snapshot.WithReference(v9.ReferenceLabel, ref),
+			snapshot.WithEntityResolver(v9.ResolveName),
 			snapshot.WithHome(home),
-			snapshot.WithImporter(importer.NewServer(importer.WithStore(st))),
+			snapshot.WithImporter(importer.NewServer(importer.WithStore(st), importer.WithEntityResolver(v9.ResolveName))),
 			snapshot.WithStoreProbe(st),
 			snapshot.WithLocker(lockfile.New(lockPathUnder(storeDir), lockfile.ModeSync)),
 		}, opts...)...)

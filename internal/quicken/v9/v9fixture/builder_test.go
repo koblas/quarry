@@ -234,3 +234,106 @@ func queryInt(t *testing.T, db *sqlite.DB, query string, args ...any) int64 {
 	}))
 	return got
 }
+
+func Test_builder_seeds_the_full_entity_map_by_default(t *testing.T) {
+	bundle := v9fixture.NewBuilder().WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	want := map[string]int64{
+		"Account": 1, "Budget": 9, "CashFlowTransactionEntry": 15, "DownloadSession": 30,
+		"QuickFillRuleSplitEntry": 55, "UserTag": 76, "Transaction": 78, "CashFlowTransaction": 79,
+	}
+	for name, ent := range want {
+		assert.Equal(t, ent, queryInt(t, db, "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = ?", name), name)
+	}
+	schema, err := db.Schema(t.Context())
+	require.NoError(t, err)
+	assert.Contains(t, schema, "Z_15USERTAGS")
+	assert.Contains(t, schema["ZATTACHMENT"], "Z78_TRANSACTION")
+}
+
+func Test_builder_renames_numbered_tables_and_columns_after_an_entity_is_inserted(t *testing.T) {
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	b.Account(v9fixture.AccountRow{Name: "Checking", Active: true})
+
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	schema, err := db.Schema(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Z_16CASHFLOWTRANSACTIONENTRIES", "Z_77USERTAGS"}, schema["Z_16USERTAGS"])
+	assert.Equal(t, []string{"Z_56QUICKFILLRULESPLITENTRIES", "Z_77USERTAGS1"}, schema["Z_56USERTAGS"])
+	assert.Equal(t, []string{"Z_1ACCOUNTS", "Z_10BUDGETS"}, schema["Z_1BUDGETS"])
+	assert.Equal(t, []string{"Z_1ACCOUNTS1", "Z_31DOWNLOADSESSIONS"}, schema["Z_1DOWNLOADSESSIONS"])
+	assert.Contains(t, schema["ZATTACHMENT"], "Z79_TRANSACTION")
+	assert.Contains(t, schema["ZCASHFLOWTRANSACTIONENTRY"], "Z79_PARENT")
+	assert.Contains(t, schema["ZRECONCILEDTRANSACTION"], "Z79_ORIGINALTRANSACTION")
+	assert.Contains(t, schema["ZCHECKPAYCHECK"], "Z80_TRANSACTION")
+	assert.NotContains(t, schema, "Z_15USERTAGS")
+	assert.NotContains(t, schema["ZATTACHMENT"], "Z78_TRANSACTION")
+}
+
+func Test_builder_shifts_every_entity_at_or_above_the_inserted_number_in_z_primarykey(t *testing.T) {
+	bundle := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2).WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	want := map[string]int64{
+		"Account": 1, "AccountGroup": 2, "Budget": 10, "UserTag": 77, "Transaction": 79,
+		"CashFlowTransaction": 80, "SmartCashFlowTransaction": 81,
+	}
+	for name, ent := range want {
+		assert.Equal(t, ent, queryInt(t, db, "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = ?", name), name)
+	}
+}
+
+func Test_builder_keeps_the_renumbered_schema_when_an_entity_is_dropped_after_the_insert(t *testing.T) {
+	bundle := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2).WithoutEntity("UserTag").WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	schema, err := db.Schema(t.Context())
+	require.NoError(t, err)
+
+	assert.Contains(t, schema, "Z_16USERTAGS")
+	assert.Equal(t, int64(0), queryInt(t, db, "SELECT count(*) FROM Z_PRIMARYKEY WHERE Z_NAME = ?", "UserTag"))
+	assert.Equal(t, int64(80), queryInt(t, db, "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = ?", "CashFlowTransaction"))
+}
+
+func Test_builder_leaves_the_schema_as_written_when_an_entity_number_is_overridden(t *testing.T) {
+	bundle := v9fixture.NewBuilder().WithEntity("CashFlowTransactionEntry", 16).WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	schema, err := db.Schema(t.Context())
+	require.NoError(t, err)
+
+	assert.Contains(t, schema, "Z_15USERTAGS")
+	assert.Equal(t, int64(16), queryInt(t, db, "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = ?", "CashFlowTransactionEntry"))
+}
+
+func Test_builder_links_a_user_tag_through_the_renumbered_join_table(t *testing.T) {
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	accountPK := b.Account(v9fixture.AccountRow{Name: "Checking", Active: true})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: accountPK, Amount: "1.00"})
+	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
+	b.LinkUserTag(entryPK, tagPK)
+
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	linked := queryInt(t, db, "SELECT count(*) FROM Z_16USERTAGS WHERE Z_16CASHFLOWTRANSACTIONENTRIES = ? AND Z_77USERTAGS = ?", entryPK, tagPK)
+	assert.Equal(t, int64(1), linked)
+}
