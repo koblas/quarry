@@ -69,6 +69,7 @@ All existing; literal text unchanged except the label.
   - several (sorted, joined ", " and " and "): `the snapshot lists the CategoryTag and Security entities more than once, so quarry cannot tell which records are theirs`
   - missing and duplicated together: only the existing missing-entity refusal.
   - No count, no "Z_PRIMARYKEY" in the copy. Rendered through `internal/snapshot/import.go:230` unchanged, stderr, exit 1, for `sync` and `sync --from` alike: `cannot import snapshot <id>: the snapshot lists the CategoryTag entity more than once, so quarry cannot tell which records are its; ~/Library/Application Support/quarry/<store> was not changed; run quarry sync --from <id> once quarry supports it`. No MCP counterpart.
+  - Which stage refuses (product-vision ruling, gate R2, option A): whichever check meets the duplicate first. On a renumbered file a duplicated entity whose number appears in reference names fails the schema check first — its names stay as written (BR-R3), so the existing mismatch refusal is the ruled outcome (`outcome.go:23-40`, exit 1, snapshot and manifest kept). The duplicate copy above covers every case that reaches the importer (original numbering, and entities whose number appears in no reference name). Two refusals, both exit 1, store unchanged — deliberate, not a defect.
 
 ### Changes to existing surfaces
 - `internal/quicken/v9/reference.go:18`: `ReferenceLabel = "hardkoded/quicken-skills@752107b+quarry.2"`; tests pinning `+quarry.1` move with it.
