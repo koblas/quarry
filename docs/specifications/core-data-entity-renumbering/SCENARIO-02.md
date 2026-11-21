@@ -28,7 +28,7 @@ Steps 1-2 are real code, not stubs: the fixture builds renumbered names through 
 - [x] Step 4: `snapshot.go:290-327` `inspectContent`, `:263-288` `buildManifest`, `from.go:44-62` — read `Z_ENT, Z_NAME` rows via `QueryRows` after a `sqlite_master` existence check; return `map[string][]int64` beside the schema; both callers pass it to `compareSchema`. Rows (in `renumbering_test.go`): table absent → only `- table Z_PRIMARYKEY`, numbered names literal; NULL `Z_NAME` row skipped; read fault (a `Z_PRIMARYKEY` without `Z_NAME`) through Sync → `contentRefusal` copy, snapshot discarded; same fault through `ImportFrom` → `fromContentRefusal` (follow the `from_test.go:518-583` prepared-snapshot pattern). Not `// unreachable`
 - [x] Step 5: `snapshot.go:346-350` `compareSchema` + new `internal/snapshot/resolve.go` `resolveReference` — option unset = literal compare (no change at the 25 `WithReference` sites); resolve each reference table and column name, union columns if two reference tables resolve onto one name; `Compare`, then show a missing column as the reference writes it (table and column) unless both parts are `ok`, and re-sort to `diff.go:55-71` order; unexpected untouched. `schemaInfoFromDiff` (`:361-380`) keeps counts and `ReferenceFingerprint` over the unresolved reference. Server tests: duplicate-name union row; mixed item reference-named and sorted; all-resolved item under file numbering
 
-- [ ] Step 6: `reference.go:17-18` label `+quarry.2`, `reference.sql:5-6` `+quarry.2` correction line naming the map, `cmd/quarry/run.go:63-77` add `snapshot.WithEntityResolver(v9.ResolveName)`; new `cmd/quarry/run_renumbering_test.go` with the four folded tests through `runCapture` (`run_sync_result_test.go:127-153` shape), each asserting full stdout and the `--json` `schema` fields; bump `+quarry.1` at `run_sync_result_test.go:41,432`, `run_transfers_test.go:41`, `run_import_test.go:96` (not `render_internal_test.go`: false grep hit).
+- [x] Step 6: `reference.go:17-18` label `+quarry.2`, `reference.sql:5-6` `+quarry.2` correction line naming the map, `cmd/quarry/run.go:63-77` add `snapshot.WithEntityResolver(v9.ResolveName)`; new `cmd/quarry/run_renumbering_test.go` with the four folded tests through `runCapture` (`run_sync_result_test.go:127-153` shape), each asserting full stdout and the `--json` `schema` fields; bump `+quarry.1` at `run_sync_result_test.go:41,432`, `run_transfers_test.go:41`, `run_import_test.go:96` (not `render_internal_test.go`: false grep hit).
   01: `NewBuilder().WriteBundle` (full map seeded, not `OpenBundle`, whose `fixture.go:75-90` seeds three) → exact Schema line, empty stderr, exit 0.
   04: inserted entity + drop `ZATTACHMENT.Z79_TRANSACTION` (drop its index first if SQLite refuses) → `- column  ZATTACHMENT.Z79_TRANSACTION`, refusal copy, snapshot kept, exit 1.
   05: `WithEntity("CashFlowTransactionEntry", 16)` → `- table   Z_16USERTAGS`, `+ table   Z_15USERTAGS`, exit 1.
@@ -63,15 +63,21 @@ Steps 1-2 are real code, not stubs: the fixture builds renumbered names through 
 
 ## Phase report
 
-Run B1 — steps 4-5 done; `go test ./internal/snapshot/` green (acceptance test now green), `golangci-lint run ./internal/snapshot/...` 0 issues. Step 6 (B2) not started.
+Run B2 — step 6 done. Narrow loop green (`go test ./internal/quicken/v9/... ./internal/snapshot/ ./cmd/quarry/ -run ...`), plus unfiltered `go test` of `cmd/quarry`, `internal/snapshot`, `internal/quicken/...` all ok. `golangci-lint run ./...` 0 issues (also fixed a testifylint argument-order finding at `internal/quicken/v9/entities_internal_test.go:41`). Steps 7-8 (run V) not started.
 
 Files changed:
-- `internal/snapshot/snapshot.go`: `Server.resolver` + real `WithEntityResolver`; `primaryKeyTable` const; `fileContent{accounts, schema, entities}`; `inspectContent` now returns it and reads entities via `readEntities` (`SELECT Z_ENT, Z_NAME ... WHERE Z_NAME IS NOT NULL`; absent table -> empty map; fault -> `read entity numbers: ...`); `compareSchema(actual, entities)` resolves, compares, then `asWritten` for missing columns. `buildManifest` and `from.go:44-62` pass entities through.
-- `internal/snapshot/resolve.go` (new): `nameResolver`, `resolveReference` (sorted table order, columns of tables resolving onto one name merge), `resolvedReference.asWritten` (reference spelling unless table and column both resolved; re-sorted table then column).
-- `internal/snapshot/renumbering_test.go`: 8 new tests (absent Z_PRIMARYKEY, NULL Z_NAME row, Sync fault with snapshot dir empty x2 rows, ImportFrom fault, union, all-resolved display, column-unresolved display and sort, table-unresolved display).
+- `internal/quicken/v9/reference.go`: `ReferenceLabel` -> `+quarry.2`; `reference.sql` header: `+quarry.2` correction line naming the Z_PRIMARYKEY resolution and `entities.go`.
+- `cmd/quarry/run.go`: `snapshot.WithEntityResolver(v9.ResolveName)` in `newServerFactory`.
+- `cmd/quarry/run_renumbering_test.go` (new): the four folded tests (01, 04, 05, 06). Each asserts full stdout, stderr and exit code from `runCapture`, then the `schema` object of `sync --from <id> --json` (the --json document is printed on refusal too) through `snapshot.SchemaInfo`.
+- Label bump `+quarry.1` -> `+quarry.2` in `run_sync_result_test.go:41,432`, `run_transfers_test.go:41`, `run_import_test.go:96`.
 
-Notes for B2 / V:
-- Fault copy for both paths carries the innermost cause only (`causeText` unwraps), e.g. `cannot read ~/snapshots/<id>.sqlite: no such column: Z_NAME; take a new snapshot with quarry sync`.
-- Counts and `ReferenceFingerprint` still come from the unresolved reference (`schemaInfoFromDiff` unchanged); unexpected items untouched.
-- Mutations run, each reddened: `tableOK && columnOK` -> `columnOK` (table-unresolved test) / `tableOK` (column-unresolved test); drop `asWritten` sort (column-unresolved test); drop `asWritten` call (both display tests); union -> overwrite (union test); drop `WHERE Z_NAME IS NOT NULL` (NULL Z_NAME test); drop table-exists guard (absent-Z_PRIMARYKEY test). Not mutated here: the `wiring line in cmd/quarry/run.go` and mixed-item arm via the cmd 06 test (B2's steps); `ResolveName` duplicate arm done in run A.
-- `WithEntityResolver` is still unwired in `cmd/quarry/run.go`.
+Evidence:
+- Refusal rows match the plan: 04 `- column  ZATTACHMENT.Z79_TRANSACTION` (plain `DROP COLUMN` works, no index drop needed); 05 `- table   Z_16USERTAGS` / `+ table   Z_15USERTAGS`; 06 four column rows as planned. Refusal copy is the existing mismatch copy, snapshot kept, exit 1.
+- The four cmd tests were green on first run: the wiring and the resolver already existed when they were written (code-first), so no red was observable; mutations below stand in for it.
+- Mutations, each restored: delete the `WithEntityResolver` line in `run.go` -> 04, 05, 06 red (01 stays green: old numbering resolves to itself); `resolved: tableOK && columnOK` -> `tableOK && (columnOK || true)` -> 06 red (mixed-item arm); `(tableOK || true) && (columnOK || true)` -> 06 red; `(tableOK || true) && columnOK` stays green at cmd level (table-unresolved arm is held by the snapshot test from B1).
+- `v9.ResolveName` duplicate-`Z_NAME` arm was mutated in run A.
+
+Notes for V (steps 7-8):
+- Step 7 still owes the `phase0-snapshot/specification.md` BR-5/6/7 edits, and doc comments on `ResolveName`, `WithInsertedEntity`, `WithEntityResolver`, `inspectContent`, `compareSchema` (check what exists).
+- `docs/prior-art/README.md:60` still names `+quarry.1` as the label of the 2026-09-28 correction: historical, left as is.
+- Left unbuilt for SCENARIO-03: importer split-tags query (`importer/splits.go:113,115`), `Builder.LinkUserTag` and `Seed` insert (`builder.go`, still `Z_15USERTAGS`), end-to-end renumbered success through `cmd/quarry`.

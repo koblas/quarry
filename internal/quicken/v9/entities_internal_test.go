@@ -38,5 +38,5 @@ func Test_reference_entity_map_keys_equal_the_numbers_in_reference_names(t *test
 	}
 
 	require.NotEmpty(t, found)
-	assert.Equal(t, found, want)
+	assert.Equal(t, want, found)
 }

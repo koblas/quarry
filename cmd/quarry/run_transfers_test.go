@@ -38,7 +38,7 @@ func syncBlock(t *testing.T, home, bundleDir string, accounts int, lines ...[2]s
 	fmt.Fprintf(&b, "%-10s%s\n", "Source", abbreviated(t, bundleDir, home))
 	fmt.Fprintf(&b, "%-10s%s, %d accounts\n", "Size", megabytes(info.Size()), accounts)
 	fmt.Fprintf(&b, "%-10s%s\n", "SHA-256", hex.EncodeToString(sum[:]))
-	fmt.Fprintf(&b, "%-10s%s\n", "Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.1 (82 tables, 1,838 columns)")
+	fmt.Fprintf(&b, "%-10s%s\n", "Schema", "matches reference hardkoded/quicken-skills@752107b+quarry.2 (82 tables, 1,838 columns)")
 	for _, line := range lines {
 		fmt.Fprintf(&b, "%-10s%s\n", line[0], line[1])
 	}
