@@ -26,11 +26,11 @@ func (b *Builder) ddlEntities() map[string][]int64 {
 
 // userTagJoin names the UserTag join table and its two columns as the schema carries them: the reference's
 // Z_15USERTAGS, Z_15CASHFLOWTRANSACTIONENTRIES and Z_76USERTAGS resolved through the DDL numbering.
-func (b *Builder) userTagJoin() (table, entryColumn, tagColumn string) {
+func (b *Builder) userTagJoin() (string, string, string) {
 	entities := b.ddlEntities()
-	table, _ = v9.ResolveName("Z_15USERTAGS", entities)
-	entryColumn, _ = v9.ResolveName("Z_15CASHFLOWTRANSACTIONENTRIES", entities)
-	tagColumn, _ = v9.ResolveName("Z_76USERTAGS", entities)
+	table, _ := v9.ResolveName("Z_15USERTAGS", entities)
+	entryColumn, _ := v9.ResolveName("Z_15CASHFLOWTRANSACTIONENTRIES", entities)
+	tagColumn, _ := v9.ResolveName("Z_76USERTAGS", entities)
 	return table, entryColumn, tagColumn
 }
 
