@@ -3,8 +3,10 @@ package v9fixture
 import (
 	"context"
 	"database/sql"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -12,8 +14,15 @@ import (
 )
 
 // Default Z_PRIMARYKEY entity numbers for the row kinds Builder seeds,
-// overridable per Builder via WithEntity.
+// overridable per Builder via WithEntity. The first six are entities whose
+// numbers appear in the schema's own table and column names.
 const (
+	EntAccount                  = 1
+	EntBudget                   = 9
+	EntCashFlowTransactionEntry = 15
+	EntDownloadSession          = 30
+	EntQuickFillRuleSplitEntry  = 55
+	EntTransaction              = 78
 	EntCategoryTag              = 75
 	EntUserTag                  = 76
 	EntCashFlowTransaction      = 79
@@ -220,7 +229,12 @@ type userTagLink struct{ entryPK, tagPK int64 }
 // or WriteBundle executes the accumulated rows against a database carrying
 // v9.ReferenceDDL.
 type Builder struct {
+	// entities is each entity's Z_PRIMARYKEY number; ddl is the number the
+	// schema's table and column names carry for it. They start equal and
+	// WithInsertedEntity moves both, after which WithEntity moves only
+	// entities.
 	entities map[string]int64
+	ddl      map[string]int64
 	omitted  map[string]bool
 	nextPK   map[string]int64
 
@@ -241,16 +255,22 @@ type Builder struct {
 	positions    []pkRow[PositionRow]
 	lots         []pkRow[LotRow]
 	userTagLinks []userTagLink
+
+	renumbered bool
 }
 
 // NewBuilder returns a Builder seeded with the reference schema's default
-// Z_PRIMARYKEY entity numbers (EntCategoryTag, EntUserTag,
-// EntCashFlowTransaction, EntSmartCashFlowTransaction,
-// EntInvestmentTransaction, EntSecurity, EntSecurityQuote, EntPosition, EntLot),
-// each overridable via WithEntity.
+// Z_PRIMARYKEY entity numbers (the Ent* constants), each overridable via
+// WithEntity, with a schema that carries the reference's own numbering.
 func NewBuilder() *Builder {
 	return &Builder{
 		entities: map[string]int64{
+			"Account":                  EntAccount,
+			"Budget":                   EntBudget,
+			"CashFlowTransactionEntry": EntCashFlowTransactionEntry,
+			"DownloadSession":          EntDownloadSession,
+			"QuickFillRuleSplitEntry":  EntQuickFillRuleSplitEntry,
+			"Transaction":              EntTransaction,
 			"CategoryTag":              EntCategoryTag,
 			"UserTag":                  EntUserTag,
 			"CashFlowTransaction":      EntCashFlowTransaction,
@@ -260,6 +280,16 @@ func NewBuilder() *Builder {
 			"SecurityQuote":            EntSecurityQuote,
 			"Position":                 EntPosition,
 			"Lot":                      EntLot,
+		},
+		ddl: map[string]int64{
+			"Account":                  EntAccount,
+			"Budget":                   EntBudget,
+			"CashFlowTransactionEntry": EntCashFlowTransactionEntry,
+			"DownloadSession":          EntDownloadSession,
+			"QuickFillRuleSplitEntry":  EntQuickFillRuleSplitEntry,
+			"UserTag":                  EntUserTag,
+			"Transaction":              EntTransaction,
+			"CashFlowTransaction":      EntCashFlowTransaction,
 		},
 		omitted: make(map[string]bool),
 		nextPK:  make(map[string]int64),
@@ -273,13 +303,36 @@ func (b *Builder) WithoutEntity(name string) *Builder {
 	return b
 }
 
-// WithEntity overrides name's Z_PRIMARYKEY entity number. name is one of
-// "CategoryTag", "UserTag", "CashFlowTransaction",
-// "SmartCashFlowTransaction", "InvestmentTransaction", "Security",
-// "SecurityQuote", "Position" or "Lot".
+// WithEntity overrides name's Z_PRIMARYKEY entity number, leaving the
+// schema's table and column names as they are. name is one of the Builder's
+// entity kinds: "Account", "Budget", "CashFlowTransactionEntry",
+// "DownloadSession", "QuickFillRuleSplitEntry", "Transaction", "CategoryTag",
+// "UserTag", "CashFlowTransaction", "SmartCashFlowTransaction",
+// "InvestmentTransaction", "Security", "SecurityQuote", "Position" or "Lot".
 func (b *Builder) WithEntity(name string, ent int64) *Builder {
 	b.entities[name] = ent
 	return b
+}
+
+// WithInsertedEntity adds name at Z_PRIMARYKEY number ent the way Quicken
+// does: every entity numbered ent or higher moves up by one, and WriteBundle
+// renames the schema's numbered tables and columns to match. Call it before
+// adding rows, which take their entity numbers when added; WithEntity and
+// WithoutEntity afterwards change Z_PRIMARYKEY only.
+func (b *Builder) WithInsertedEntity(name string, ent int64) *Builder {
+	shiftFrom(b.entities, ent)
+	shiftFrom(b.ddl, ent)
+	b.entities[name] = ent
+	b.renumbered = true
+	return b
+}
+
+func shiftFrom(numbers map[string]int64, ent int64) {
+	for name, number := range numbers {
+		if number >= ent {
+			numbers[name] = number + 1
+		}
+	}
 }
 
 func (b *Builder) nextPKFor(table string) int64 {
@@ -490,7 +543,7 @@ func nullableRef(ref int64) any {
 
 // Seed executes every row accumulated on Builder against db, which must
 // already carry v9.ReferenceDDL, then writes a Z_PRIMARYKEY row for each of
-// Builder's nine entity kinds, with Z_MAX set to the highest Z_PK Builder
+// Builder's entity kinds, with Z_MAX set to the highest Z_PK Builder
 // assigned that entity (0 when none were added).
 func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 	tb.Helper()
@@ -609,10 +662,7 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 			nullableRef(link.entryPK), nullableRef(link.tagPK))
 	}
 
-	for _, name := range []string{
-		"CategoryTag", "UserTag", "CashFlowTransaction", "SmartCashFlowTransaction", "InvestmentTransaction",
-		"Security", "SecurityQuote", "Position", "Lot",
-	} {
+	for _, name := range slices.Sorted(maps.Keys(b.entities)) {
 		if b.omitted[name] {
 			continue
 		}
@@ -676,7 +726,8 @@ func exec(tb testing.TB, ctx context.Context, db *sql.DB, query string, args ...
 }
 
 // WriteBundle creates a closed, non-WAL Home.quicken bundle under dir with
-// v9.ReferenceDDL's schema and every row accumulated on Builder.
+// v9.ReferenceDDL's schema (renamed to the inserted-entity numbering after
+// WithInsertedEntity) and every row accumulated on Builder.
 func (b *Builder) WriteBundle(tb testing.TB, dir string) Bundle {
 	tb.Helper()
 
@@ -687,6 +738,9 @@ func (b *Builder) WriteBundle(tb testing.TB, dir string) Bundle {
 
 	conn, err := sql.Open("sqlite3", dataPath)
 	require.NoError(tb, err)
+	if b.renumbered {
+		b.renumberSchema(tb, conn)
+	}
 	b.Seed(tb, conn)
 	require.NoError(tb, conn.Close())
 

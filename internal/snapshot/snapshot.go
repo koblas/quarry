@@ -63,6 +63,15 @@ func WithReference(label string, schema sqlschema.Schema) Option {
 	}
 }
 
+// EntityResolver renames a reference table or column name to the numbering of the file being checked, given
+// each Z_NAME of the file's Z_PRIMARYKEY and its Z_ENT numbers; ok is false when it cannot.
+type EntityResolver func(name string, entities map[string][]int64) (resolved string, ok bool)
+
+// WithEntityResolver sets the EntityResolver the schema comparison renames reference names through.
+func WithEntityResolver(EntityResolver) Option {
+	return func(*Server) {}
+}
+
 // WithSource overrides the Source Sync opens the bundle with. Production
 // callers do not need it; tests use it to inject a fake.
 func WithSource(source Source) Option {
