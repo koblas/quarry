@@ -181,4 +181,4 @@ Scenario: SCENARIO-07 — the MCP server reports the same version string
 - [x] SCENARIO-02: --json reports version, commit, modified and Go version — `internal/cli/version_test.go` `Test_version_json_reports_version_commit_modified_and_go`
 - [x] SCENARIO-03: The root --version flag prints the same line — `internal/cli/version_test.go` `Test_version_flag_prints_the_same_bytes_as_the_version_command`
 - [x] SCENARIO-06: The store records the same version string — `cmd/quarry/run_version_test.go` `Test_run_sync_records_the_resolved_version_in_the_store`
-- [ ] SCENARIO-07: The MCP server reports the same version string
+- [x] SCENARIO-07: The MCP server reports the same version string — `cmd/quarry/run_mcp_test.go` `Test_run_mcp_initialize_reports_the_resolved_version`

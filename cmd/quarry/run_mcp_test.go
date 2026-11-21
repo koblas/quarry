@@ -66,19 +66,18 @@ func Test_run_mcp_lists_quarrys_tools_over_json_rpc(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-// The Env is envFor's, as the binary builds it, with only stdin swapped for the test's pipe.
 func Test_run_mcp_initialize_reports_the_resolved_version(t *testing.T) {
+	newHome(t)
 	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
 	defer cancel()
 	peer := startMCP(ctx, t, func(env *cli.Env) {
-		stdin := env.Stdin
-		*env = envFor(dirtyDevelInfo(), env.Stdout, env.Stderr)
-		env.Stdin = stdin
+		env.ServeMCP = envFor(dirtyDevelInfo(), env.Stdout, env.Stderr).ServeMCP
 	})
 
 	serverInfo := peer.session.InitializeResult().ServerInfo
 
 	require.NoError(t, peer.session.Close())
+	peer.waitForExit(ctx, t)
 	assert.Equal(t, &sdk.Implementation{Name: "quarry", Version: dirtyDevelVersion}, serverInfo)
 }
 

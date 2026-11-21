@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-07
-status: open
+status: done
 ---
 
 # SCENARIO-07: The MCP server reports the same version string
@@ -27,12 +27,11 @@ Surface & Copy delivered: Store/MCP line, MCP half (`serverInfo.version` = `(dev
 - [x] `go build ./... && golangci-lint run ./...` zero issues.
 
 ### Verify
-- [ ] `verify.sh`; spec tick; `spec-check.py`; STATE.md.
+- [x] `verify.sh`; spec tick; `spec-check.py`; STATE.md.
 
 ## Handoff
 Nothing left for a later scenario: MCP half wired and pinned. `(devel)` constants in `internal/mcp/server.go` and `internal/store/duckstore/duckstore.go` stay (out of scope).
 
 ## Phase report
-Run L done. Acceptance `Test_run_mcp_initialize_reports_the_resolved_version` (`run_mcp_test.go:~35`) was GREEN ON ARRIVAL: `envFor` already passes `info` to `newMCPServe` (SCENARIO-06), so no production change. Red evidence is the mutation: `run.go` `envFor` `ServeMCP: newMCPServe(nil)` -> acceptance fails at its assertion (expected `(devel) 260d0d29f940+dirty`, actual `(devel)`); restored byte-identical.
-Files: `run_version_test.go:~113` hoisted `dirtyDevelInfo()` / `dirtyDevelVersion` (06's acceptance now uses them, behaviour-neutral); `run_mcp_test.go` acceptance plus `a dirty development checkout` row in `Test_newMCPServe_reports_the_build_infos_module_version`. `startMCP` tweak swaps the Env for `envFor(...)` keeping the pipe stdin.
-`go build ./... && golangci-lint run ./...`: 0 issues (Sweep ticked). Not yet run (run V): `verify.sh`, spec tick, `spec-check.py`, STATE.md rewrite (drop the SCENARIO-07 Left-unbuilt entry), `status: done`.
+Run L: acceptance green on arrival (wiring from SCENARIO-06); red evidence is the mutation. Run V: checkpoint pin-only fixes applied: the test keeps `testEnv` and takes only `envFor(dirtyDevelInfo(), ...).ServeMCP`, uses `newHome(t)` and `peer.waitForExit(ctx, t)`, how-comment dropped. Mutation `envFor` `ServeMCP: newMCPServe(nil)` re-run: acceptance fails at its assertion (expected `(devel) 260d0d29f940+dirty`, actual `(devel)`); `run.go` restored byte-identical.
+Verify: `verify.sh 398439ab...`: go build rc=0, go test rc=0, uncovered-diff rc=0 (no production lines added), go test -race rc=0, golangci-lint rc=0 (0 issues). test-stats: cmd/quarry 991 (+1) tests, tempdir 26 (+0), disk 75 (+0).
