@@ -177,7 +177,7 @@ Scenario: SCENARIO-07 — the MCP server reports the same version string
 - [x] SCENARIO-01: quarry version prints the binary's version — `internal/cli/version_test.go` `Test_version_prints_the_binarys_version`
 - [x] SCENARIO-04: Version needs nothing else to work — delivered by SCENARIO-01 — `internal/cli/version_test.go` `Test_version_needs_no_store_config_or_home`
 - [x] SCENARIO-05: Version refuses arguments — delivered by SCENARIO-01 — `cmd/quarry/run_version_test.go` `Test_run_version_refuses_arguments`
-- [ ] SCENARIO-02: --json reports version, commit, modified and Go version
+- [x] SCENARIO-02: --json reports version, commit, modified and Go version — `internal/cli/version_test.go` `Test_version_json_reports_version_commit_modified_and_go`
 - [ ] SCENARIO-03: The root --version flag prints the same line
 - [ ] SCENARIO-06: The store records the same version string
 - [ ] SCENARIO-07: The MCP server reports the same version string

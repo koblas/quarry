@@ -11,7 +11,7 @@ type versionDocument struct {
 	Go       string  `json:"go"`
 }
 
-// renderVersionJSON renders info as version's --json document, encoded like every other: 2-space indent, trailing newline.
+// renderVersionJSON renders info as version's --json document.
 func renderVersionJSON(info version.Info) ([]byte, error) {
 	return marshalDocument(versionDocument{Version: info.Version, Commit: info.Commit, Modified: info.Modified, Go: info.Go})
 }

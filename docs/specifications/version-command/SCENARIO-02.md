@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: --json reports version, commit, modified and Go version

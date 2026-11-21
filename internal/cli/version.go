@@ -7,9 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newVersionCommand builds version: it prints "quarry <version>" for the
-// version resolved from info, which may be nil, as JSON when *jsonOut is set,
-// and reads nothing else.
+// newVersionCommand builds version: "quarry <version>" for the version resolved
+// from info (which may be nil), or the JSON document when *jsonOut is set.
 func newVersionCommand(info *debug.BuildInfo, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
