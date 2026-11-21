@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"runtime/debug"
 	"time"
 
 	"github.com/koblas/quarry/internal/claudedesktop"
@@ -59,6 +60,7 @@ type Env struct {
 	Executable     claudedesktop.Executable
 	IsTerminal     TerminalProbe
 	Now            func() time.Time
+	BuildInfo      *debug.BuildInfo // the binary's build information; nil means none
 }
 
 // Execute parses args against quarry's command tree and runs the matched

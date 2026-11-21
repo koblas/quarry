@@ -43,5 +43,6 @@ quarry never writes to the Quicken file.`,
 	root.AddCommand(newSnapshotsCommand(env.NewSnapshots, env.LoadConfig, jsonOut))
 	root.AddCommand(newMCPCommand(env.ServeMCP, env.IsTerminal, jsonOut))
 	root.AddCommand(newClaudeCommand(env.RunTool, env.LookPath, env.Home, env.Executable, jsonOut))
+	root.AddCommand(newVersionCommand(env.BuildInfo))
 	return root
 }

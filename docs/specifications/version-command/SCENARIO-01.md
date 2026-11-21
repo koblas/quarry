@@ -19,9 +19,9 @@ Placement: `internal/version` imports stdlib only (`runtime/debug`, `runtime`), 
 ## Implementation Plan
 
 ### Acceptance (red)
-- [ ] Step 1: `internal/cli/version_test.go` `Test_version_prints_the_binarys_version` (six Outline rows through `cli.Execute`, Env carries only Stdout/Stderr/BuildInfo; asserts exact stdout `quarry <shown>\n`, empty stderr, nil error) and `Test_version_needs_no_store_config_or_home` (Env with every factory nil, `Home` ""; same stdout)
-- [ ] Step 2: `cmd/quarry/run_version_test.go` `Test_run_version_refuses_arguments` — `run(["version","foo"])` → exit 2, stdout empty, stderr `quarry: version takes no arguments\n` (sibling shape: `run_mcp_test.go:210`, `run_usage_test.go:422`)
-- [ ] Step 3: signature-only stubs — `internal/version/doc.go` + `version.go` `Resolve`/`Info` (zero Info); `internal/cli/run.go:44-58` `Env.BuildInfo *debug.BuildInfo` ("nil: no build info"); `internal/cli/version.go` `newVersionCommand(info *debug.BuildInfo)` registered in `root.go:44-45` with `Use`/`Short` only and **no `Args`** so 05 reds at its assertion. Tests 1-2 must fail at assertion before Build.
+- [x] Step 1: `internal/cli/version_test.go` `Test_version_prints_the_binarys_version` (six Outline rows through `cli.Execute`, Env carries only Stdout/Stderr/BuildInfo; asserts exact stdout `quarry <shown>\n`, empty stderr, nil error) and `Test_version_needs_no_store_config_or_home` (Env with every factory nil, `Home` ""; same stdout)
+- [x] Step 2: `cmd/quarry/run_version_test.go` `Test_run_version_refuses_arguments` — `run(["version","foo"])` → exit 2, stdout empty, stderr `quarry: version takes no arguments\n` (sibling shape: `run_mcp_test.go:210`, `run_usage_test.go:422`)
+- [x] Step 3: signature-only stubs — `internal/version/doc.go` + `version.go` `Resolve`/`Info` (zero Info); `internal/cli/run.go:44-58` `Env.BuildInfo *debug.BuildInfo` ("nil: no build info"); `internal/cli/version.go` `newVersionCommand(info *debug.BuildInfo)` registered in `root.go:44-45` with `Use`/`Short` only and **no `Args`** so 05 reds at its assertion. Tests 1-2 must fail at assertion before Build.
 
 ### Build
 - [ ] Step 4 (batch 1): `internal/version/version.go` `Resolve` + `version_test.go` `Test_Resolve` table — one row per `## Surface & Copy` edge row (tag, no vcs; pseudo-version clean/dirty with 40-char commit and modified false/true; `(devel)`+rev modified; rev shorter than 12 and exactly 12/13 as bound rows; modified absent; modified malformed `"True"`/`"1"`/`""` → null; empty `Main.Version`; `(devel)` no vcs; nil info) asserting all four `Info` fields, `Go == runtime.Version()` every row. Fallible arms: none (pure). Info shape fixed: `Commit *string`, `Modified *bool` (BR-V3 null).
@@ -53,3 +53,23 @@ Placement: `internal/version` imports stdlib only (`runtime/debug`, `runtime`), 
 - Cobra sorts Available Commands: registration position is irrelevant to the help pin; `version` sorts after `sync`.
 - Stub without `Args` is deliberate so 05 reds; add `Args: noArgs` in Step 5 only.
 - UNRULED input-integrity arms of the rewritten rule, to rule before run A (orchestrator → product-vision copy ruling): `vcs.revision` present but empty; duplicate `vcs.revision`/`vcs.modified` settings keys. Spec rules only "absent" and `vcs.modified` malformed. Plan assumes empty revision = absent (Commit nil, text `(devel)`) and does not test duplicates; replace once ruled.
+
+## Phase report
+
+Run A (steps 1-3) done; acceptance tests red at their assertions, nothing green yet.
+
+Files:
+- `internal/version/doc.go`, `internal/version/version.go` (stub `Resolve` returns zero `Info`; `Info{Version string; Commit *string; Modified *bool; Go string}` is final shape).
+- `internal/cli/version.go` stub `newVersionCommand(_ *debug.BuildInfo)`: `Use`/`Short` only, no `Args`, no `RunE`. Step 5 renames the parameter, adds `Args: noArgs`, `Long`, `RunE`.
+- `internal/cli/run.go:62` `Env.BuildInfo *debug.BuildInfo`; `internal/cli/root.go` registers `newVersionCommand(env.BuildInfo)` last (doc comment `root.go:7-11` not yet updated: Step 5).
+- `internal/cli/version_test.go` (`buildInfoOf` helper, `pseudoVersion`/`checkoutRev` consts reusable by Step 5 tests), `cmd/quarry/run_version_test.go`.
+
+Red now (stub prints help, not the version):
+- `Test_version_prints_the_binarys_version` 6/6 subtests: expected `"quarry v1.0.0\n"`, actual `"Show quarry's version\n\n"`.
+- `Test_version_needs_no_store_config_or_home`: same expected/actual (uses recording factories, asserts none called, Home "").
+- `Test_run_version_refuses_arguments`: exit expected 2 actual 0; stdout not empty (help); stderr expected `quarry: version takes no arguments\n` actual "".
+
+Next run (B1, steps 4-6) must know:
+- Mid-feature ruling overrules the plan's "duplicates not tested": `Test_Resolve` (step 4) also needs the spec's empty-revision, revision-unknown+modified=true, duplicate `vcs.revision` (differ / equal), duplicate `vcs.modified` (differ / equal incl. equal `"TRUE"` malformed) and tagged+duplicate/empty rows, each asserting all four `Info` fields. Duplicates compare raw strings: agreement is one value, any disagreement makes the key unknown. Add a mutation arm showing first-wins and last-wins each redden a differing-duplicate row (`+dirty` only on the `<rev>` arm).
+- `Test_version_*` helpers in `version_test.go` are black-box (`cli_test`); `failingWriter` is in `fakes_test.go`.
+- No `go build`/lint sweep run yet (Sweep belongs to V); `golangci-lint` may flag the stubs' unused params, which Build removes.
