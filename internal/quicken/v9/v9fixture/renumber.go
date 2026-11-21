@@ -15,6 +15,25 @@ import (
 // renamePlaceholder parks a name for one statement, so renaming a name onto one that is still in use never collides.
 const renamePlaceholder = "__renumbering"
 
+// ddlEntities is b.ddl in the shape v9.ResolveName reads: each entity's one number in the schema's names.
+func (b *Builder) ddlEntities() map[string][]int64 {
+	entities := make(map[string][]int64, len(b.ddl))
+	for name, number := range b.ddl {
+		entities[name] = []int64{number}
+	}
+	return entities
+}
+
+// userTagJoin names the UserTag join table and its two columns as the schema carries them: the reference's
+// Z_15USERTAGS, Z_15CASHFLOWTRANSACTIONENTRIES and Z_76USERTAGS resolved through the DDL numbering.
+func (b *Builder) userTagJoin() (table, entryColumn, tagColumn string) {
+	entities := b.ddlEntities()
+	table, _ = v9.ResolveName("Z_15USERTAGS", entities)
+	entryColumn, _ = v9.ResolveName("Z_15CASHFLOWTRANSACTIONENTRIES", entities)
+	tagColumn, _ = v9.ResolveName("Z_76USERTAGS", entities)
+	return table, entryColumn, tagColumn
+}
+
 // renumberSchema renames the entity-numbered tables and columns of db, which carries v9.ReferenceDDL, to the
 // Builder's DDL numbering through v9.ResolveName.
 func (b *Builder) renumberSchema(tb testing.TB, db *sql.DB) {
@@ -22,10 +41,7 @@ func (b *Builder) renumberSchema(tb testing.TB, db *sql.DB) {
 	ctx := context.Background()
 	reference, err := v9.Reference(ctx)
 	require.NoError(tb, err)
-	entities := make(map[string][]int64, len(b.ddl))
-	for name, number := range b.ddl {
-		entities[name] = []int64{number}
-	}
+	entities := b.ddlEntities()
 
 	var tableRenames [][2]string
 	for _, table := range slices.Sorted(maps.Keys(reference)) {

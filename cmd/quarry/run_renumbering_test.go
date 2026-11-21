@@ -162,3 +162,24 @@ func Test_run_names_items_of_an_entity_absent_from_z_primarykey_as_the_reference
 		{Table: "Z_56USERTAGS", Column: "Z_77USERTAGS1"},
 	}, schema.UnexpectedColumns)
 }
+
+func Test_run_imports_the_split_tags_of_a_file_whose_entities_were_renumbered(t *testing.T) {
+	home := newHome(t)
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	accountPK := b.Account(v9fixture.AccountRow{Name: "Checking", Type: "CHECKING", Currency: "CAD", Active: true})
+	categoryPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
+	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: accountPK, Amount: "7.00"})
+	splitPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "7.00", CategoryTag: categoryPK})
+	b.LinkUserTag(splitPK, tagPK)
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), fmt.Sprintf("%-10s%s\n", "Schema", referenceMatch))
+	assert.Equal(t, map[string]string{
+		fmt.Sprintf("split-%d", splitPK): fmt.Sprintf("tag-%d", tagPK),
+	}, stringMap(t, openStoreReadOnly(t, home), "SELECT split_id, tag_id FROM split_tags"))
+}

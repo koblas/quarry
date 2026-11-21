@@ -3,6 +3,7 @@ package v9fixture
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -438,10 +439,10 @@ func (b *Builder) UserTag(row TagRow) int64 {
 	return pk
 }
 
-// LinkUserTag adds a Z_15USERTAGS row pairing entryPK (an EntryRow's Z_PK)
-// with tagPK (a UserTag's Z_PK); either as 0 writes NULL. The join table's own columns
-// (Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS) are fixed by the schema's
-// DDL and do not follow a WithEntity("UserTag", ...) override.
+// LinkUserTag adds a UserTag join-table row (Z_15USERTAGS in the reference)
+// pairing entryPK (an EntryRow's Z_PK) with tagPK (a UserTag's Z_PK); either
+// as 0 writes NULL. The table and its two columns follow the schema's DDL
+// numbering (WithInsertedEntity), not a WithEntity("UserTag", ...) override.
 func (b *Builder) LinkUserTag(entryPK, tagPK int64) {
 	b.userTagLinks = append(b.userTagLinks, userTagLink{entryPK: entryPK, tagPK: tagPK})
 }
@@ -655,9 +656,10 @@ func (b *Builder) Seed(tb testing.TB, db *sql.DB) {
 			lot.pk, lot.row.Entity, nullableRef(lot.row.Position), nullableString(lot.row.LatestUnits), deletionCount(lot.row.Deleted))
 	}
 
+	joinTable, entryColumn, tagColumn := b.userTagJoin()
 	for _, link := range b.userTagLinks {
 		exec(tb, ctx, db,
-			`INSERT INTO "Z_15USERTAGS" (Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS) VALUES (?, ?)`,
+			fmt.Sprintf("INSERT INTO %q (%q, %q) VALUES (?, ?)", joinTable, entryColumn, tagColumn),
 			nullableRef(link.entryPK), nullableRef(link.tagPK))
 	}
 

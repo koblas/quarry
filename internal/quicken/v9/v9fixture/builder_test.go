@@ -320,3 +320,20 @@ func Test_builder_leaves_the_schema_as_written_when_an_entity_number_is_overridd
 	assert.Contains(t, schema, "Z_15USERTAGS")
 	assert.Equal(t, int64(16), queryInt(t, db, "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = ?", "CashFlowTransactionEntry"))
 }
+
+func Test_builder_links_a_user_tag_through_the_renumbered_join_table(t *testing.T) {
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	accountPK := b.Account(v9fixture.AccountRow{Name: "Checking", Active: true})
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: accountPK, Amount: "1.00"})
+	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
+	b.LinkUserTag(entryPK, tagPK)
+
+	bundle := b.WriteBundle(t, t.TempDir())
+
+	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	linked := queryInt(t, db, "SELECT count(*) FROM Z_16USERTAGS WHERE Z_16CASHFLOWTRANSACTIONENTRIES = ? AND Z_77USERTAGS = ?", entryPK, tagPK)
+	assert.Equal(t, int64(1), linked)
+}
