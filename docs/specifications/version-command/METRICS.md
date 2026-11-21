@@ -7,6 +7,7 @@
 | SCENARIO-02 | code-first (light) | L, V | 0/0/1/1 | folded into V |
 | SCENARIO-03 | code-first (light) | L, V | 0/0/3/0 | folded into V |
 | SCENARIO-06 | code-first (light) | L, V | 0/0/1/0 | folded into V |
+| SCENARIO-07 | code-first (light) | L, V | 0/0/3/0 | folded into V |
 
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / timed out / sampled, secs) | Verdict |
