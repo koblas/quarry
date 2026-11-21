@@ -8,8 +8,9 @@ import (
 )
 
 // newVersionCommand builds version: it prints "quarry <version>" for the
-// version resolved from info, which may be nil, and reads nothing else.
-func newVersionCommand(info *debug.BuildInfo) *cobra.Command {
+// version resolved from info, which may be nil, as JSON when *jsonOut is set,
+// and reads nothing else.
+func newVersionCommand(info *debug.BuildInfo, jsonOut *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Args:  noArgs,
@@ -26,7 +27,10 @@ and never looks at Quicken.
 --json adds the full commit, whether the checkout had uncommitted changes,
 and the Go version quarry was built with.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return emit(cmd, []byte("quarry "+version.Resolve(info).Version+"\n"), "", nil)
+			resolved := version.Resolve(info)
+			return emitReport(cmd, *jsonOut, nil,
+				func() ([]byte, error) { return renderVersionJSON(resolved) },
+				func() string { return "quarry " + resolved.Version + "\n" })
 		},
 	}
 }
