@@ -64,6 +64,11 @@ All existing; literal text unchanged except the label.
 - Extras warning: unchanged (`extrasWarningText`, `outcome.go:46-58`).
 - Mismatch refusals (sync and `--from`): unchanged (`outcome.go:23-40`), exit 1, snapshot and manifest kept.
 - `--json` / manifest: no field added or removed; `schema.reference` = new label; `fingerprint` literal.
+- **Duplicated looked-up entity** (mid-feature copy ruling, product-vision 2026-11-21, from gate R1 correctness BLOCKER). Every entity the importer looks up (required or optional) must resolve to exactly one Z_ENT; otherwise refuse via the existing `*UnmappableError` path (`internal/importer/entities.go`, beside the missing-entity reason). Reason text:
+  - one name: `the snapshot lists the CategoryTag entity more than once, so quarry cannot tell which records are its`
+  - several (sorted, joined ", " and " and "): `the snapshot lists the CategoryTag and Security entities more than once, so quarry cannot tell which records are theirs`
+  - missing and duplicated together: only the existing missing-entity refusal.
+  - No count, no "Z_PRIMARYKEY" in the copy. Rendered through `internal/snapshot/import.go:230` unchanged, stderr, exit 1, for `sync` and `sync --from` alike: `cannot import snapshot <id>: the snapshot lists the CategoryTag entity more than once, so quarry cannot tell which records are its; ~/Library/Application Support/quarry/<store> was not changed; run quarry sync --from <id> once quarry supports it`. No MCP counterpart.
 
 ### Changes to existing surfaces
 - `internal/quicken/v9/reference.go:18`: `ReferenceLabel = "hardkoded/quicken-skills@752107b+quarry.2"`; tests pinning `+quarry.1` move with it.
@@ -72,6 +77,8 @@ All existing; literal text unchanged except the label.
 - Same, BR-7: "The same algorithm runs over the reference; exact match ⇔ equal fingerprints." → "The same algorithm runs over the reference, over names as written. Equal fingerprints imply a match. A file Quicken renumbered matches with a different fingerprint (names are compared after entity resolution; see core-data-entity-renumbering BR-R1–R4)."
 - `internal/importer/splits.go:115` doc: "reads Z_15USERTAGS" → "reads the CashFlowTransaction–UserTag join table (resolved by entity name)".
 - `internal/quicken/v9/reference.sql` header: add a `+quarry.2` correction line naming the entity map.
+- `internal/importer/entities.go:33-34` doc: drop "(a name listed twice stays visible)"; becomes "…or an *UnmappableError naming every missing required entity, or every looked-up entity listed more than once." `found[name] = ent` (last wins) must not reach a caller for a duplicated name; `numbers` stays.
+- The importer now refuses a duplicated looked-up entity (above); the Product Verdict's "no new copy" holds for the schema check only.
 
 **User-verified, outside the pipeline**
 1. `quarry sync` on the live file → exit 0, `matches reference hardkoded/quicken-skills@752107b+quarry.2 …, plus … not in it`, extras warning.

@@ -9,12 +9,14 @@
 ## Final gate
 | Round | Reviewers run | Findings (B/M/m/n) | Mutants (survived / timed out / sampled, secs) | Verdict |
 | --- | --- | --- | --- | --- |
+| 1 | arch, correctness, refactor, test | 1/0/7/5 | 2 / 0 / 20, 851s | BLOCKED |
 
 ## Tokens
 
 ## Caught late
 | Stage | Finding | Where (file:line) | Scenario that shipped it |
 | --- | --- | --- | --- |
+| gate R1 | importer keeps last Z_ENT for duplicated Z_NAME → silent empty import (pre-existing, rewritten fn) | internal/importer/entities.go:50 | SCENARIO-03 |
 
 ## Escaped defects
 | Found | Defect | Where (file:line or issue) | Scenario that shipped it |
