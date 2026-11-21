@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -104,4 +108,32 @@ func Test_run_root_refuses_an_unknown_command_naming_it(t *testing.T) {
 	assert.Equal(t, 2, exitCode)
 	assert.Empty(t, stdout.String())
 	assert.Equal(t, "quarry: unknown command \"bogus\" for \"quarry\"; Run 'quarry --help' for usage.\n", stderr.String())
+}
+
+func Test_run_sync_records_the_resolved_version_in_the_store(t *testing.T) {
+	const want = "(devel) 260d0d29f940+dirty"
+	home := newHome(t)
+	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), day(2026, time.March, 1))
+	info := &debug.BuildInfo{
+		Main: debug.Module{Version: "(devel)"},
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "260d0d29f9401c3a5e7b8d6f4a2c9e1b3d5f7a80"},
+			{Key: "vcs.modified", Value: "true"},
+		},
+	}
+	var syncOut, syncErr bytes.Buffer
+
+	syncCode := runWith(t.Context(), []string{"sync", "--quicken", bundle.Dir}, envFor(info, &syncOut, &syncErr, fixedRates()))
+
+	require.Equal(t, 0, syncCode, syncErr.String())
+	assert.Equal(t, "quarry_version\n"+want+"\n", sqlCSV(t, "SELECT quarry_version FROM store_info"))
+	statusCode, statusOut, statusErr := runCapture(t.Context(), []string{"status", "--json"})
+	require.Equal(t, 0, statusCode, statusErr.String())
+	var status struct {
+		Store struct {
+			QuarryVersion string `json:"quarry_version"`
+		} `json:"store"`
+	}
+	require.NoError(t, json.Unmarshal(statusOut.Bytes(), &status))
+	assert.Equal(t, want, status.Store.QuarryVersion)
 }

@@ -160,7 +160,7 @@ func Test_run_sync_releases_the_lock_when_it_returns(t *testing.T) {
 			c.arrange(t, home)
 			locker := &recordingLocker{}
 			env := testEnv(io.Discard, io.Discard)
-			build := newServerFactory(fixedRates())
+			build := newServerFactory(env.BuildInfo, fixedRates())
 			env.NewServer = func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
 				return build(ctx, append(opts, snapshot.WithLocker(locker))...)
 			}

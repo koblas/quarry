@@ -64,7 +64,7 @@ func valetResponse(req *http.Request, status int, body string) *http.Response {
 
 // valetServerFactory is the sync Server factory fetching rates through bank.
 func valetServerFactory(bank http.RoundTripper) cli.ServerFactory {
-	return newServerFactory(duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: bank}))))
+	return newServerFactory(nil, duckstore.WithRates(fx.NewServer(fx.WithHTTPClient(&http.Client{Transport: bank}))))
 }
 
 // serverRemovingThrough is base with its Server deleting snapshots through remove.
@@ -842,7 +842,7 @@ func syncCountingRateRequests(bundle v9fixture.Bundle, args ...string) countedSy
 	var out, errOut bytes.Buffer
 	counter := &countingRates{}
 	env := testEnv(&out, &errOut)
-	env.NewServer = newServerFactory(duckstore.WithRates(counter))
+	env.NewServer = newServerFactory(env.BuildInfo, duckstore.WithRates(counter))
 
 	exitCode := runWith(context.Background(), append([]string{"sync", "--quicken", bundle.Dir}, args...), env)
 

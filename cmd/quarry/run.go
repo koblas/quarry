@@ -52,9 +52,9 @@ func signalContext(parent context.Context) (context.Context, context.CancelFunc)
 
 // newServerFactory returns cli.Execute's ServerFactory: it resolves the
 // home directory and the embedded reference schema, then builds the Server
-// against them, passing storeOpts to the store it builds and appending the
-// Server options the caller passes.
-func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
+// against them, stamping the store with the version info resolves to, passing
+// storeOpts to it and appending the Server options the caller passes.
+func newServerFactory(info *debug.BuildInfo, storeOpts ...duckstore.Option) cli.ServerFactory {
 	return func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
 		home, err := resolveHome("sync")
 		if err != nil {
@@ -67,7 +67,6 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		}
 
 		storeDir := storeDirUnder(home)
-		info, _ := debug.ReadBuildInfo()
 		st := duckstore.New(storeDir, append([]duckstore.Option{
 			duckstore.WithQuarryVersion(buildVersion(info)), duckstore.WithRates(fx.NewServer()),
 		}, storeOpts...)...)
@@ -185,16 +184,21 @@ func resolveHome(command string) (string, error) {
 	return home, nil
 }
 
-// defaultEnv is the process's wiring: the real stdin, the given output
-// streams, and the factories over the default store.
+// defaultEnv is the process's wiring: envFor this binary's build info, with the real rates source.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	info, _ := debug.ReadBuildInfo()
+	return envFor(info, stdout, stderr)
+}
+
+// envFor is the wiring for a binary built as info (nil when unknown): the real stdin, the given output
+// streams, and the factories over the default store, whose sync appends storeOpts.
+func envFor(info *debug.BuildInfo, stdout, stderr io.Writer, storeOpts ...duckstore.Option) cli.Env {
 	home, _ := os.UserHomeDir() // "" on error: claude's path then prints raw
 	return cli.Env{
 		Stdin:        os.Stdin,
 		Stdout:       stdout,
 		Stderr:       stderr,
-		NewServer:    newServerFactory(),
+		NewServer:    newServerFactory(info, storeOpts...),
 		NewReport:    newReportFactory(),
 		NewSnapshots: newSnapshotsFactory(),
 		LoadConfig:   newConfigLoader(),
