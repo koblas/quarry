@@ -10,6 +10,7 @@ import (
 
 	"github.com/koblas/quarry/internal/finding"
 	"github.com/koblas/quarry/internal/importer"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	_ "github.com/mattn/go-sqlite3"
@@ -60,6 +61,14 @@ func (f *fakeStore) Replace(_ context.Context, rows store.Rows) (store.Replaced,
 func importInto(tb testing.TB, fake *fakeStore, dataPath string) (store.Result, error) {
 	tb.Helper()
 	return importer.NewServer(importer.WithStore(fake)).Import(tb.Context(), store.SnapshotRef{Path: dataPath})
+}
+
+// importResolvingEntities imports the snapshot at dataPath into fake with entity-numbered names resolved through
+// v9.ResolveName, as the sync command wires it.
+func importResolvingEntities(tb testing.TB, fake *fakeStore, dataPath string) (store.Result, error) {
+	tb.Helper()
+	return importer.NewServer(importer.WithStore(fake), importer.WithEntityResolver(v9.ResolveName)).
+		Import(tb.Context(), store.SnapshotRef{Path: dataPath})
 }
 
 // importBuilt writes b to a fresh bundle and imports it into fake.

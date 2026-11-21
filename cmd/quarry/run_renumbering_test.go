@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/snapshot"
@@ -163,18 +165,55 @@ func Test_run_names_items_of_an_entity_absent_from_z_primarykey_as_the_reference
 	}, schema.UnexpectedColumns)
 }
 
-func Test_run_imports_the_split_tags_of_a_file_whose_entities_were_renumbered(t *testing.T) {
-	home := newHome(t)
+// renumberedTaggedSplit writes a bundle under home whose entities Quicken renumbered, holding one split linked to
+// one tag, and returns the bundle, the split's Z_PK and the tag's.
+func renumberedTaggedSplit(t *testing.T, home string) (v9fixture.Bundle, int64, int64) {
+	t.Helper()
 	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
 	accountPK := b.Account(v9fixture.AccountRow{Name: "Checking", Type: "CHECKING", Currency: "CAD", Active: true})
 	categoryPK := b.Category(v9fixture.TagRow{Name: "Food", Type: new(int64(1))})
 	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
-	txnPK := b.Transaction(v9fixture.TransactionRow{Account: accountPK, Amount: "7.00"})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: accountPK, Amount: "7.00", PostedDate: &posted})
 	splitPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "7.00", CategoryTag: categoryPK})
 	b.LinkUserTag(splitPK, tagPK)
-	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	return b.WriteBundle(t, filepath.Join(home, "Documents")), splitPK, tagPK
+}
+
+func Test_run_imports_the_split_tags_of_a_file_whose_entities_were_renumbered(t *testing.T) {
+	home := newHome(t)
+	bundle, splitPK, tagPK := renumberedTaggedSplit(t, home)
 
 	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+
+	require.Equal(t, 0, exitCode, stderr.String())
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), fmt.Sprintf("%-10s%s\n", "Schema", referenceMatch))
+	assert.Equal(t, map[string]string{
+		fmt.Sprintf("split-%d", splitPK): fmt.Sprintf("tag-%d", tagPK),
+	}, stringMap(t, openStoreReadOnly(t, home), "SELECT split_id, tag_id FROM split_tags"))
+}
+
+// The manifest is a decoy: sync --from compares the snapshot itself, never the schema the manifest recorded.
+func Test_run_sync_from_imports_a_snapshot_whose_manifest_recorded_a_refusal_under_the_old_label(t *testing.T) {
+	home := newHome(t)
+	bundle, splitPK, tagPK := renumberedTaggedSplit(t, home)
+	syncBundle(t, bundle)
+	art := readSyncArtifacts(t, home)
+	raw, err := os.ReadFile(art.manifestPath)
+	require.NoError(t, err)
+	var manifest snapshot.Manifest
+	require.NoError(t, json.Unmarshal(raw, &manifest))
+	manifest.Schema = snapshot.SchemaInfo{
+		Reference: "hardkoded/quicken-skills@752107b+quarry.1", MissingTables: []string{"Z_16USERTAGS"},
+		UnexpectedTables: []string{"Z_15USERTAGS"},
+	}
+	refused, err := manifest.Encode()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(art.manifestPath, refused, 0o600))
+	require.NoError(t, os.Remove(art.storePath))
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--from", snapshotID(art.snapshotPath)})
 
 	require.Equal(t, 0, exitCode, stderr.String())
 	assert.Empty(t, stderr.String())

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koblas/quarry/internal/importer"
+	v9 "github.com/koblas/quarry/internal/quicken/v9"
 	"github.com/koblas/quarry/internal/quicken/v9/v9fixture"
 	"github.com/koblas/quarry/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -236,4 +238,77 @@ func Test_import_skips_a_split_tag_link_whose_split_has_no_parent_transaction(t 
 	fake, _ := importOK(t, b)
 
 	assert.Empty(t, fake.Rows.SplitTags)
+}
+
+// taggedSplit adds an account, a tag and a split linked to that tag on b, returning the link importing it must produce.
+func taggedSplit(b *v9fixture.Builder) store.SplitTag {
+	acctPK := newChequing(b)
+	tagPK := b.UserTag(v9fixture.TagRow{Name: "Reimbursable"})
+	posted := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	txnPK := b.Transaction(v9fixture.TransactionRow{Account: acctPK, Amount: "1.00", PostedDate: &posted})
+	entryPK := b.Entry(v9fixture.EntryRow{Parent: txnPK, Amount: "1.00"})
+	b.LinkUserTag(entryPK, tagPK)
+	return store.SplitTag{SplitID: "split-" + itoa(entryPK), TagID: "tag-" + itoa(tagPK)}
+}
+
+func Test_import_reads_split_tags_from_the_renumbered_join_table(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	want := taggedSplit(b)
+	fake := &fakeStore{}
+
+	_, err := importResolvingEntities(t, fake, snapshotPath(t, b))
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SplitTag{want}, fake.Rows.SplitTags)
+}
+
+func Test_import_cannot_read_the_renumbered_join_table_without_an_entity_resolver(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	taggedSplit(b)
+
+	_, err := importBuilt(t, &fakeStore{}, b)
+
+	require.ErrorContains(t, err, "read split tags")
+}
+
+func Test_import_reads_split_tags_literally_when_cashflowtransactionentry_is_absent(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder().WithoutEntity("CashFlowTransactionEntry")
+	want := taggedSplit(b)
+	fake := &fakeStore{}
+
+	_, err := importResolvingEntities(t, fake, snapshotPath(t, b))
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SplitTag{want}, fake.Rows.SplitTags)
+}
+
+func Test_import_reads_split_tags_literally_when_cashflowtransactionentry_is_listed_twice(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder()
+	want := taggedSplit(b)
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (99, 'CashFlowTransactionEntry', 0, 0)")
+	fake := &fakeStore{}
+
+	_, err := importResolvingEntities(t, fake, dataPath)
+
+	require.NoError(t, err)
+	assert.Equal(t, []store.SplitTag{want}, fake.Rows.SplitTags)
+}
+
+func Test_import_propagates_a_fault_reading_the_renumbered_join_table(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	taggedSplit(b)
+	srv := importer.NewServer(
+		importer.WithStore(&fakeStore{}), importer.WithEntityResolver(v9.ResolveName),
+		importer.WithSourceOpener(openerFailingOn("Z_16USERTAGS", errSourceBoom)))
+
+	_, err := srv.Import(t.Context(), store.SnapshotRef{Path: snapshotPath(t, b)})
+
+	require.ErrorIs(t, err, errSourceBoom)
+	require.ErrorContains(t, err, "read split tags")
 }

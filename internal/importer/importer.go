@@ -12,8 +12,9 @@ import (
 // Server maps a Quicken v9 snapshot into quarry's schema and writes it
 // through a Store.
 type Server struct {
-	store Store
-	open  SourceOpener
+	store   Store
+	open    SourceOpener
+	resolve EntityResolver
 }
 
 // Option configures a Server built by NewServer.
@@ -30,10 +31,20 @@ func WithSourceOpener(open SourceOpener) Option {
 	return func(srv *Server) { srv.open = open }
 }
 
+// EntityResolver renames a reference table or column name to the numbering of the file being imported, given
+// each Z_NAME of the file's Z_PRIMARYKEY and its Z_ENT numbers; ok is false when it cannot.
+type EntityResolver func(name string, entities map[string][]int64) (resolved string, ok bool)
+
+// WithEntityResolver sets the EntityResolver Import renames entity-numbered table and column names through;
+// unset, every name is read as written.
+func WithEntityResolver(resolve EntityResolver) Option {
+	return func(srv *Server) { srv.resolve = resolve }
+}
+
 // NewServer builds a Server from opts, defaulting SourceOpener to a
-// read-only SQLite open.
+// read-only SQLite open and the EntityResolver to the identity.
 func NewServer(opts ...Option) *Server {
-	srv := &Server{open: defaultOpener}
+	srv := &Server{open: defaultOpener, resolve: keepName}
 	for _, opt := range opts {
 		opt(srv)
 	}
@@ -56,7 +67,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	}
 	defer func() { _ = src.Close() }()
 
-	entities, err := resolveEntities(ctx, src)
+	entities, entityNumbers, err := resolveEntities(ctx, src)
 	if err != nil {
 		return store.Result{}, err
 	}
@@ -128,7 +139,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err := readCategoryRefs(ctx, src, refs); err != nil {
 		return store.Result{}, err
 	}
-	splitTags, err := mapSplitTags(ctx, src, splitIDs, existingTags)
+	splitTags, err := mapSplitTags(ctx, src, srv.splitTagsQuery(entityNumbers), splitIDs, existingTags)
 	if err != nil {
 		return store.Result{}, err
 	}

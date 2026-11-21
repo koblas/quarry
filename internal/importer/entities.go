@@ -20,16 +20,22 @@ const (
 	securityQuoteEntity = "SecurityQuote"
 	positionEntity      = "Position"
 	lotEntity           = "Lot"
+	// splitEntryEntity is the entity behind the split-tags join table; its absence leaves that table's name as written.
+	splitEntryEntity = "CashFlowTransactionEntry"
 )
 
 // optionalEntities lists every optional entity name resolveEntities looks up.
-var optionalEntities = []string{investmentEntity, securityEntity, securityQuoteEntity, positionEntity, lotEntity}
+var optionalEntities = []string{investmentEntity, securityEntity, securityQuoteEntity, positionEntity, lotEntity, splitEntryEntity}
 
-// resolveEntities returns each entity's Z_ENT by name from Z_PRIMARYKEY, or
-// an *UnmappableError naming every missing required entity.
-func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) {
+// keepName is the EntityResolver that reads every name as written.
+func keepName(name string, _ map[string][]int64) (string, bool) { return name, true }
+
+// resolveEntities returns each entity's Z_ENT by name from Z_PRIMARYKEY, plus every Z_ENT listed per name
+// (a name listed twice stays visible), or an *UnmappableError naming every missing required entity.
+func resolveEntities(ctx context.Context, src Source) (map[string]int64, map[string][]int64, error) {
 	names := slices.Concat(requiredEntities, optionalEntities)
 	found := make(map[string]int64, len(names))
+	numbers := make(map[string][]int64, len(names))
 	args := make([]any, len(names))
 	for i, name := range names {
 		args[i] = name
@@ -42,10 +48,11 @@ func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) 
 			return err
 		}
 		found[name] = ent
+		numbers[name] = append(numbers[name], ent)
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("resolve entities: %w", err)
+		return nil, nil, fmt.Errorf("resolve entities: %w", err)
 	}
 
 	var missing []string
@@ -56,10 +63,10 @@ func resolveEntities(ctx context.Context, src Source) (map[string]int64, error) 
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
-		return nil, &UnmappableError{Reason: fmt.Sprintf(
+		return nil, nil, &UnmappableError{Reason: fmt.Sprintf(
 			"the snapshot has no %s entity, which quarry needs to read Quicken's records", joinOr(missing))}
 	}
-	return found, nil
+	return found, numbers, nil
 }
 
 // joinOr joins names with ", " between all but the last pair and " or "

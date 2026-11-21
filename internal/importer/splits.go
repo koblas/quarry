@@ -110,14 +110,21 @@ func addEntrylessSplits(cashRows []store.Transaction, splits []store.Split, link
 	return splits, links
 }
 
-const splitTagsQuery = `SELECT Z_15CASHFLOWTRANSACTIONENTRIES, Z_76USERTAGS FROM Z_15USERTAGS`
+// splitTagsQuery builds the query over the CashFlowTransaction-UserTag join table, naming it and its two columns
+// as the file numbers them.
+func (srv *Server) splitTagsQuery(entities map[string][]int64) string {
+	entry, _ := srv.resolve("Z_15CASHFLOWTRANSACTIONENTRIES", entities)
+	tag, _ := srv.resolve("Z_76USERTAGS", entities)
+	table, _ := srv.resolve("Z_15USERTAGS", entities)
+	return "SELECT " + entry + ", " + tag + " FROM " + table
+}
 
-// mapSplitTags reads Z_15USERTAGS, keeping only links whose split is in
+// mapSplitTags reads the CashFlowTransaction-UserTag join table through query, keeping only links whose split is in
 // splitIDs (an entry whose transaction was skipped has no split to link)
 // and whose tag exists (non-deleted); a link missing either end is dropped.
-func mapSplitTags(ctx context.Context, src Source, splitIDs map[int64]string, existingTags map[int64]bool) ([]store.SplitTag, error) {
+func mapSplitTags(ctx context.Context, src Source, query string, splitIDs map[int64]string, existingTags map[int64]bool) ([]store.SplitTag, error) {
 	var rows []store.SplitTag
-	err := src.QueryRows(ctx, splitTagsQuery, nil, func(scan func(dest ...any) error) error {
+	err := src.QueryRows(ctx, query, nil, func(scan func(dest ...any) error) error {
 		var entryPK, tagPK sql.NullInt64
 		if err := scan(&entryPK, &tagPK); err != nil {
 			return err
