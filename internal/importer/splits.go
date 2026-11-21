@@ -110,7 +110,7 @@ func addEntrylessSplits(cashRows []store.Transaction, splits []store.Split, link
 	return splits, links
 }
 
-// splitTagsQuery builds the query over the CashFlowTransaction-UserTag join table, naming it and its two columns
+// splitTagsQuery builds the query over the CashFlowTransactionEntry-UserTag join table, naming it and its two columns
 // as the file numbers them, or all three as Quicken originally wrote them when the EntityResolver cannot rename
 // every one (a half-renamed query would name tables and columns no file has).
 func (srv *Server) splitTagsQuery(entities map[string][]int64) string {

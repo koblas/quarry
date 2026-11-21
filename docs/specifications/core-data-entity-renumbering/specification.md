@@ -76,7 +76,7 @@ All existing; literal text unchanged except the label.
 - `docs/specifications/phase0-snapshot/specification.md` BR-5: label now `…+quarry.2`.
 - Same, BR-6, append: "Entity-numbered names are compared after resolving each number through the file's `Z_PRIMARYKEY` (core-data-entity-renumbering BR-R2)."
 - Same, BR-7: "The same algorithm runs over the reference; exact match ⇔ equal fingerprints." → "The same algorithm runs over the reference, over names as written. Equal fingerprints imply a match. A file Quicken renumbered matches with a different fingerprint (names are compared after entity resolution; see core-data-entity-renumbering BR-R1–R4)."
-- `internal/importer/splits.go:115` doc: "reads Z_15USERTAGS" → "reads the CashFlowTransaction–UserTag join table (resolved by entity name)".
+- `internal/importer/splits.go:115` doc: "reads Z_15USERTAGS" → "reads the CashFlowTransactionEntry–UserTag join table (resolved by entity name)".
 - `internal/quicken/v9/reference.sql` header: add a `+quarry.2` correction line naming the entity map.
 - `internal/importer/entities.go:33-34` doc: drop "(a name listed twice stays visible)"; becomes "…or an *UnmappableError naming every missing required entity, or every looked-up entity listed more than once." `found[name] = ent` (last wins) must not reach a caller for a duplicated name; `numbers` stays.
 - The importer now refuses a duplicated looked-up entity (above); the Product Verdict's "no new copy" holds for the schema check only.
