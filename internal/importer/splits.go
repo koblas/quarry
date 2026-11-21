@@ -111,12 +111,17 @@ func addEntrylessSplits(cashRows []store.Transaction, splits []store.Split, link
 }
 
 // splitTagsQuery builds the query over the CashFlowTransaction-UserTag join table, naming it and its two columns
-// as the file numbers them.
+// as the file numbers them, or all three as Quicken originally wrote them when the EntityResolver cannot rename
+// every one (a half-renamed query would name tables and columns no file has).
 func (srv *Server) splitTagsQuery(entities map[string][]int64) string {
-	entry, _ := srv.resolve("Z_15CASHFLOWTRANSACTIONENTRIES", entities)
-	tag, _ := srv.resolve("Z_76USERTAGS", entities)
-	table, _ := srv.resolve("Z_15USERTAGS", entities)
-	return "SELECT " + entry + ", " + tag + " FROM " + table
+	const entryColumn, tagColumn, table = "Z_15CASHFLOWTRANSACTIONENTRIES", "Z_76USERTAGS", "Z_15USERTAGS"
+	entry, entryOK := srv.resolve(entryColumn, entities)
+	tag, tagOK := srv.resolve(tagColumn, entities)
+	joined, tableOK := srv.resolve(table, entities)
+	if !entryOK || !tagOK || !tableOK {
+		entry, tag, joined = entryColumn, tagColumn, table
+	}
+	return "SELECT " + entry + ", " + tag + " FROM " + joined
 }
 
 // mapSplitTags reads split-to-tag links through query, dropping any whose split is not in splitIDs or whose tag

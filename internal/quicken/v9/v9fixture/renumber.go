@@ -1,7 +1,6 @@
 package v9fixture
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"maps"
@@ -38,33 +37,47 @@ func (b *Builder) userTagJoin() (string, string, string) {
 // Builder's DDL numbering through v9.ResolveName.
 func (b *Builder) renumberSchema(tb testing.TB, db *sql.DB) {
 	tb.Helper()
-	ctx := context.Background()
+	ctx := tb.Context()
 	reference, err := v9.Reference(ctx)
 	require.NoError(tb, err)
 	entities := b.ddlEntities()
+	renamed := func(name string) (rename, bool) {
+		to, _ := v9.ResolveName(name, entities)
+		return rename{from: name, to: to}, to != name
+	}
 
-	var tableRenames [][2]string
+	var tableRenames []rename
 	for _, table := range slices.Sorted(maps.Keys(reference)) {
-		var columnRenames [][2]string
+		var columnRenames []rename
 		for _, column := range reference[table] {
-			if renamed, _ := v9.ResolveName(column, entities); renamed != column {
-				columnRenames = append(columnRenames, [2]string{column, renamed})
+			if r, ok := renamed(column); ok {
+				columnRenames = append(columnRenames, r)
 			}
 		}
-		for _, r := range columnRenames {
-			requireExec(tb, ctx, db, fmt.Sprintf("ALTER TABLE %q RENAME COLUMN %q TO %q", table, r[0], r[0]+renamePlaceholder))
-		}
-		for _, r := range columnRenames {
-			requireExec(tb, ctx, db, fmt.Sprintf("ALTER TABLE %q RENAME COLUMN %q TO %q", table, r[0]+renamePlaceholder, r[1]))
-		}
-		if renamed, _ := v9.ResolveName(table, entities); renamed != table {
-			tableRenames = append(tableRenames, [2]string{table, renamed})
+		renameAll(tb, db, columnRenames, func(from, to string) string {
+			return fmt.Sprintf("ALTER TABLE %q RENAME COLUMN %q TO %q", table, from, to)
+		})
+		if r, ok := renamed(table); ok {
+			tableRenames = append(tableRenames, r)
 		}
 	}
-	for _, r := range tableRenames {
-		requireExec(tb, ctx, db, fmt.Sprintf("ALTER TABLE %q RENAME TO %q", r[0], r[0]+renamePlaceholder))
+	renameAll(tb, db, tableRenames, func(from, to string) string {
+		return fmt.Sprintf("ALTER TABLE %q RENAME TO %q", from, to)
+	})
+}
+
+// rename is one table or column name and the name it becomes.
+type rename struct{ from, to string }
+
+// renameAll runs statement for each rename, parking every name under renamePlaceholder first so no rename lands
+// on a name another rename has yet to vacate.
+func renameAll(tb testing.TB, db *sql.DB, renames []rename, statement func(from, to string) string) {
+	tb.Helper()
+	ctx := tb.Context()
+	for _, r := range renames {
+		requireExec(tb, ctx, db, statement(r.from, r.from+renamePlaceholder))
 	}
-	for _, r := range tableRenames {
-		requireExec(tb, ctx, db, fmt.Sprintf("ALTER TABLE %q RENAME TO %q", r[0]+renamePlaceholder, r[1]))
+	for _, r := range renames {
+		requireExec(tb, ctx, db, statement(r.from+renamePlaceholder, r.to))
 	}
 }

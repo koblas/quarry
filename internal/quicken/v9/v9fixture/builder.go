@@ -264,37 +264,34 @@ type Builder struct {
 // Z_PRIMARYKEY entity numbers (the Ent* constants), each overridable via
 // WithEntity, with a schema that carries the reference's own numbering.
 func NewBuilder() *Builder {
-	return &Builder{
-		entities: map[string]int64{
-			"Account":                  EntAccount,
-			"Budget":                   EntBudget,
-			"CashFlowTransactionEntry": EntCashFlowTransactionEntry,
-			"DownloadSession":          EntDownloadSession,
-			"QuickFillRuleSplitEntry":  EntQuickFillRuleSplitEntry,
-			"Transaction":              EntTransaction,
-			"CategoryTag":              EntCategoryTag,
-			"UserTag":                  EntUserTag,
-			"CashFlowTransaction":      EntCashFlowTransaction,
-			"SmartCashFlowTransaction": EntSmartCashFlowTransaction,
-			"InvestmentTransaction":    EntInvestmentTransaction,
-			"Security":                 EntSecurity,
-			"SecurityQuote":            EntSecurityQuote,
-			"Position":                 EntPosition,
-			"Lot":                      EntLot,
-		},
-		ddl: map[string]int64{
-			"Account":                  EntAccount,
-			"Budget":                   EntBudget,
-			"CashFlowTransactionEntry": EntCashFlowTransactionEntry,
-			"DownloadSession":          EntDownloadSession,
-			"QuickFillRuleSplitEntry":  EntQuickFillRuleSplitEntry,
-			"UserTag":                  EntUserTag,
-			"Transaction":              EntTransaction,
-			"CashFlowTransaction":      EntCashFlowTransaction,
-		},
-		omitted: make(map[string]bool),
-		nextPK:  make(map[string]int64),
+	entities := map[string]int64{
+		"Account":                  EntAccount,
+		"Budget":                   EntBudget,
+		"CashFlowTransactionEntry": EntCashFlowTransactionEntry,
+		"DownloadSession":          EntDownloadSession,
+		"QuickFillRuleSplitEntry":  EntQuickFillRuleSplitEntry,
+		"Transaction":              EntTransaction,
+		"CategoryTag":              EntCategoryTag,
+		"UserTag":                  EntUserTag,
+		"CashFlowTransaction":      EntCashFlowTransaction,
+		"SmartCashFlowTransaction": EntSmartCashFlowTransaction,
+		"InvestmentTransaction":    EntInvestmentTransaction,
+		"Security":                 EntSecurity,
+		"SecurityQuote":            EntSecurityQuote,
+		"Position":                 EntPosition,
+		"Lot":                      EntLot,
 	}
+	ddl := make(map[string]int64, len(schemaNumbered))
+	for _, name := range schemaNumbered {
+		ddl[name] = entities[name]
+	}
+	return &Builder{entities: entities, ddl: ddl, omitted: make(map[string]bool), nextPK: make(map[string]int64)}
+}
+
+// schemaNumbered lists the entities whose numbers the reference schema's table and column names carry.
+var schemaNumbered = []string{
+	"Account", "Budget", "CashFlowTransactionEntry", "DownloadSession", "QuickFillRuleSplitEntry", "UserTag",
+	"Transaction", "CashFlowTransaction",
 }
 
 // WithoutEntity omits name's Z_PRIMARYKEY row entirely, simulating a
@@ -327,6 +324,7 @@ func (b *Builder) WithInsertedEntity(name string, ent int64) *Builder {
 	return b
 }
 
+// shiftFrom moves every entity numbered ent or higher in numbers up by one.
 func shiftFrom(numbers map[string]int64, ent int64) {
 	for name, number := range numbers {
 		if number >= ent {

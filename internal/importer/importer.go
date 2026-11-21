@@ -67,10 +67,11 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	}
 	defer func() { _ = src.Close() }()
 
-	entities, entityNumbers, err := resolveEntities(ctx, src)
+	resolved, err := resolveEntities(ctx, src)
 	if err != nil {
 		return store.Result{}, err
 	}
+	entities := resolved.ents
 
 	off := &offenders{}
 
@@ -139,7 +140,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 	if err := readCategoryRefs(ctx, src, refs); err != nil {
 		return store.Result{}, err
 	}
-	splitTags, err := mapSplitTags(ctx, src, srv.splitTagsQuery(entityNumbers), splitIDs, existingTags)
+	splitTags, err := mapSplitTags(ctx, src, srv.splitTagsQuery(resolved.listed), splitIDs, existingTags)
 	if err != nil {
 		return store.Result{}, err
 	}

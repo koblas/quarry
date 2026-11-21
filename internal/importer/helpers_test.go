@@ -200,6 +200,14 @@ func execOn(tb testing.TB, dataPath, query string, args ...any) {
 	require.NoError(tb, err)
 }
 
+// listEntitiesAgain adds a second Z_PRIMARYKEY row, under a Z_ENT no entity uses, for each name.
+func listEntitiesAgain(tb testing.TB, dataPath string, names ...string) {
+	tb.Helper()
+	for i, name := range names {
+		execOn(tb, dataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (?, ?, 0, 0)", 900+i, name)
+	}
+}
+
 // setColumnBlob overwrites column on the row identified by pk with value as
 // a real SQLite BLOB, for fixture shapes v9fixture.Builder has no field for.
 func setColumnBlob(tb testing.TB, dataPath, table, column string, pk int64, value []byte) {

@@ -271,6 +271,28 @@ func Test_import_cannot_read_the_renumbered_join_table_without_an_entity_resolve
 	_, err := importBuilt(t, &fakeStore{}, b)
 
 	require.ErrorContains(t, err, "read split tags")
+	require.ErrorContains(t, err, "no such table: Z_15USERTAGS")
+}
+
+func Test_import_reads_the_join_table_as_written_when_the_resolver_cannot_rename_one_of_its_names(t *testing.T) {
+	t.Parallel()
+	for _, unresolvable := range []string{"Z_15USERTAGS", "Z_15CASHFLOWTRANSACTIONENTRIES", "Z_76USERTAGS"} {
+		t.Run(unresolvable, func(t *testing.T) {
+			t.Parallel()
+			b := v9fixture.NewBuilder()
+			want := taggedSplit(b)
+			resolve := func(name string, _ map[string][]int64) (string, bool) {
+				return "NOT_A_NAME", name != unresolvable
+			}
+			fake := &fakeStore{}
+
+			_, err := importer.NewServer(importer.WithStore(fake), importer.WithEntityResolver(resolve)).
+				Import(t.Context(), store.SnapshotRef{Path: snapshotPath(t, b)})
+
+			require.NoError(t, err)
+			assert.Equal(t, []store.SplitTag{want}, fake.Rows.SplitTags)
+		})
+	}
 }
 
 func Test_import_reads_split_tags_literally_when_cashflowtransactionentry_is_absent(t *testing.T) {
@@ -285,30 +307,32 @@ func Test_import_reads_split_tags_literally_when_cashflowtransactionentry_is_abs
 	assert.Equal(t, []store.SplitTag{want}, fake.Rows.SplitTags)
 }
 
-func Test_import_reads_split_tags_literally_when_cashflowtransactionentry_is_listed_twice(t *testing.T) {
+func Test_import_refuses_when_cashflowtransactionentry_is_listed_twice(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder()
-	want := taggedSplit(b)
+	taggedSplit(b)
 	dataPath := snapshotPath(t, b)
-	execOn(t, dataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (99, 'CashFlowTransactionEntry', 0, 0)")
-	fake := &fakeStore{}
+	listEntitiesAgain(t, dataPath, "CashFlowTransactionEntry")
 
-	_, err := importResolvingEntities(t, fake, dataPath)
+	_, err := importResolvingEntities(t, &fakeStore{}, dataPath)
 
-	require.NoError(t, err)
-	assert.Equal(t, []store.SplitTag{want}, fake.Rows.SplitTags)
+	assert.Equal(t,
+		"the snapshot lists the CashFlowTransactionEntry entity more than once, so quarry cannot tell which records are its",
+		importReason(t, err))
 }
 
-func Test_import_reads_split_tags_literally_when_the_renumbered_cashflowtransactionentry_is_listed_twice(t *testing.T) {
+func Test_import_refuses_when_the_renumbered_cashflowtransactionentry_is_listed_twice(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
 	taggedSplit(b)
 	dataPath := snapshotPath(t, b)
-	execOn(t, dataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (99, 'CashFlowTransactionEntry', 0, 0)")
+	listEntitiesAgain(t, dataPath, "CashFlowTransactionEntry")
 
 	_, err := importResolvingEntities(t, &fakeStore{}, dataPath)
 
-	require.ErrorContains(t, err, "read split tags")
+	assert.Equal(t,
+		"the snapshot lists the CashFlowTransactionEntry entity more than once, so quarry cannot tell which records are its",
+		importReason(t, err))
 }
 
 func Test_import_propagates_a_fault_reading_the_renumbered_join_table(t *testing.T) {

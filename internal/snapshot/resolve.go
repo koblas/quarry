@@ -2,21 +2,19 @@ package snapshot
 
 import (
 	"cmp"
+	"maps"
 	"slices"
 
 	"github.com/koblas/quarry/internal/platform/sqlschema"
 )
 
-// nameResolver returns the function that renames a reference name to the numbering entities gives the file;
-// with no EntityResolver set every name stays as written.
+// nameResolver returns the function that renames a reference name to the numbering entities gives the file.
 func (s *Server) nameResolver(entities map[string][]int64) func(string) (string, bool) {
-	return func(name string) (string, bool) {
-		if s.resolver == nil {
-			return name, true
-		}
-		return s.resolver(name, entities)
-	}
+	return func(name string) (string, bool) { return s.resolver(name, entities) }
 }
+
+// keepName is the EntityResolver that reads every name as written.
+func keepName(name string, _ map[string][]int64) (string, bool) { return name, true }
 
 // resolvedReference is a reference schema renamed to a file's numbering, with the reference's own spelling of
 // each renamed column kept for display.
@@ -31,24 +29,21 @@ type writtenColumn struct {
 	resolved bool
 }
 
-// resolveReference renames every table and column of reference through resolve. Two reference tables that
-// resolve onto one name merge their columns.
+// resolveReference renames every table and column of reference through resolve. Tables that resolve onto one
+// name merge their columns, and columns that resolve onto one name count once, shown as the first spelled it.
 func resolveReference(reference sqlschema.Schema, resolve func(string) (string, bool)) resolvedReference {
 	out := resolvedReference{
 		schema:  make(sqlschema.Schema, len(reference)),
 		written: map[sqlschema.ColumnRef]writtenColumn{},
 	}
-	tables := make([]string, 0, len(reference))
-	for table := range reference {
-		tables = append(tables, table)
-	}
-	slices.Sort(tables)
-
-	for _, table := range tables {
+	for _, table := range slices.Sorted(maps.Keys(reference)) {
 		resolvedTable, tableOK := resolve(table)
 		columns := out.schema[resolvedTable]
 		for _, column := range reference[table] {
 			resolvedColumn, columnOK := resolve(column)
+			if slices.Contains(columns, resolvedColumn) {
+				continue
+			}
 			key := sqlschema.ColumnRef{Table: resolvedTable, Column: resolvedColumn}
 			columns = append(columns, resolvedColumn)
 			out.written[key] = writtenColumn{

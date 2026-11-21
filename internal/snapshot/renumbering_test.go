@@ -194,6 +194,31 @@ func Test_sync_requires_the_columns_of_every_reference_table_that_resolves_onto_
 	assert.Equal(t, 2, info.ReferenceTables)
 }
 
+func Test_sync_names_a_missing_column_once_when_two_reference_columns_of_a_table_resolve_onto_it(t *testing.T) {
+	reference := sqlschema.Schema{"ZT": {"ZX", "ZY"}}
+	resolve := renamer(map[string]string{"ZX": "ZC", "ZY": "ZC"})
+
+	info, err := syncCopyAgainst(t, reference, resolve, "CREATE TABLE ZT (ZOTHER TEXT)")
+
+	require.ErrorAs(t, err, new(snapshot.MismatchError))
+	assert.Equal(t, []snapshot.ColumnRef{{Table: "ZT", Column: "ZC"}}, info.MissingColumns)
+}
+
+func Test_sync_shows_the_first_reference_column_that_resolved_onto_a_missing_column(t *testing.T) {
+	reference := sqlschema.Schema{"ZT": {"ZX", "ZY"}}
+	resolve := func(name string, _ map[string][]int64) (string, bool) {
+		if name == "ZT" {
+			return name, true
+		}
+		return "ZC", name == "ZX"
+	}
+
+	info, err := syncCopyAgainst(t, reference, resolve, "CREATE TABLE ZT (ZOTHER TEXT)")
+
+	require.ErrorAs(t, err, new(snapshot.MismatchError))
+	assert.Equal(t, []snapshot.ColumnRef{{Table: "ZT", Column: "ZC"}}, info.MissingColumns)
+}
+
 func Test_sync_shows_a_missing_column_under_the_file_numbering_when_its_table_and_column_resolved(t *testing.T) {
 	reference := sqlschema.Schema{"ZT": {"ZC"}}
 	resolve := renamer(map[string]string{"ZT": "ZT5", "ZC": "ZC5"})

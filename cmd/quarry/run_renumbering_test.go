@@ -221,3 +221,23 @@ func Test_run_sync_from_imports_a_snapshot_whose_manifest_recorded_a_refusal_und
 		fmt.Sprintf("split-%d", splitPK): fmt.Sprintf("tag-%d", tagPK),
 	}, stringMap(t, openStoreReadOnly(t, home), "SELECT split_id, tag_id FROM split_tags"))
 }
+
+func Test_run_refuses_a_snapshot_that_lists_an_entity_more_than_once(t *testing.T) {
+	home := newHome(t)
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Checking", Type: "CHECKING", Currency: "CAD", Active: true})
+	bundle := b.WriteBundle(t, filepath.Join(home, "Documents"))
+	execOn(t, bundle.DataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (900, 'CategoryTag', 0, 0)")
+
+	exitCode, stdout, stderr := runCapture(context.Background(), []string{"sync", "--quicken", bundle.Dir})
+
+	require.Equal(t, 1, exitCode)
+	assert.Empty(t, stdout.String())
+	art := readSyncArtifacts(t, home)
+	id := snapshotID(art.snapshotPath)
+	assert.Equal(t,
+		"quarry: cannot import snapshot "+id+": the snapshot lists the CategoryTag entity more than once, "+
+			"so quarry cannot tell which records are its; "+abbreviated(t, art.storePath, home)+
+			" was not changed; run quarry sync --from "+id+" once quarry supports it\n",
+		stderr.String())
+}

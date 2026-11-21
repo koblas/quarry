@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -30,12 +31,18 @@ var optionalEntities = []string{investmentEntity, securityEntity, securityQuoteE
 // keepName is the EntityResolver that reads every name as written.
 func keepName(name string, _ map[string][]int64) (string, bool) { return name, true }
 
-// resolveEntities returns each entity's Z_ENT by name from Z_PRIMARYKEY, plus every Z_ENT listed per name
-// (a name listed twice stays visible), or an *UnmappableError naming every missing required entity.
-func resolveEntities(ctx context.Context, src Source) (map[string]int64, map[string][]int64, error) {
+// resolvedEntities is the entities resolveEntities found: ents holds each found name's single Z_ENT, listed
+// every Z_ENT per name, for the EntityResolver.
+type resolvedEntities struct {
+	ents   map[string]int64
+	listed map[string][]int64
+}
+
+// resolveEntities returns each looked-up entity's Z_ENT by name from Z_PRIMARYKEY, or an *UnmappableError naming
+// every missing required entity, or else every looked-up entity listed more than once.
+func resolveEntities(ctx context.Context, src Source) (resolvedEntities, error) {
 	names := slices.Concat(requiredEntities, optionalEntities)
-	found := make(map[string]int64, len(names))
-	numbers := make(map[string][]int64, len(names))
+	listed := make(map[string][]int64, len(names))
 	args := make([]any, len(names))
 	for i, name := range names {
 		args[i] = name
@@ -47,39 +54,59 @@ func resolveEntities(ctx context.Context, src Source) (map[string]int64, map[str
 		if err := scan(&ent, &name); err != nil {
 			return err
 		}
-		found[name] = ent
-		numbers[name] = append(numbers[name], ent)
+		listed[name] = append(listed[name], ent)
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("resolve entities: %w", err)
+		return resolvedEntities{}, fmt.Errorf("resolve entities: %w", err)
 	}
 
 	var missing []string
 	for _, name := range requiredEntities {
-		if _, ok := found[name]; !ok {
+		if len(listed[name]) == 0 {
 			missing = append(missing, name)
 		}
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
-		return nil, nil, &UnmappableError{Reason: fmt.Sprintf(
-			"the snapshot has no %s entity, which quarry needs to read Quicken's records", joinOr(missing))}
+		return resolvedEntities{}, &UnmappableError{Reason: fmt.Sprintf(
+			"the snapshot has no %s entity, which quarry needs to read Quicken's records", joinNames(missing, "or"))}
 	}
-	return found, numbers, nil
+
+	ents := make(map[string]int64, len(listed))
+	var repeated []string
+	for _, name := range slices.Sorted(maps.Keys(listed)) {
+		if len(listed[name]) > 1 {
+			repeated = append(repeated, name)
+			continue
+		}
+		ents[name] = listed[name][0]
+	}
+	if len(repeated) > 0 {
+		return resolvedEntities{}, &UnmappableError{Reason: repeatedReason(repeated)}
+	}
+	return resolvedEntities{ents: ents, listed: listed}, nil
 }
 
-// joinOr joins names with ", " between all but the last pair and " or "
-// before the last: "A", "A or B", "A, B or C".
-func joinOr(names []string) string {
+// repeatedReason is the refusal for the sorted names of entities Z_PRIMARYKEY lists more than once.
+func repeatedReason(names []string) string {
+	if len(names) == 1 {
+		return fmt.Sprintf("the snapshot lists the %s entity more than once, so quarry cannot tell which records are its", names[0])
+	}
+	return fmt.Sprintf("the snapshot lists the %s entities more than once, so quarry cannot tell which records are theirs",
+		joinNames(names, "and"))
+}
+
+// joinNames joins names with ", " between all but the last pair and " <conjunction> " before the last:
+// "A", "A or B", "A, B or C".
+func joinNames(names []string, conjunction string) string {
 	switch len(names) {
 	case 0:
-		// unreachable: resolveEntities only calls joinOr inside its own
-		// len(missing) > 0 check.
+		// unreachable: both callers check len(names) > 0 first.
 		return ""
 	case 1:
 		return names[0]
 	default:
-		return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
+		return strings.Join(names[:len(names)-1], ", ") + " " + conjunction + " " + names[len(names)-1]
 	}
 }
