@@ -26,10 +26,16 @@ and never looks at Quicken.
 --json adds the full commit, whether the checkout had uncommitted changes,
 and the Go version quarry was built with.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			resolved := version.Resolve(info)
-			return emitReport(cmd, *jsonOut, nil,
-				func() ([]byte, error) { return renderVersionJSON(resolved) },
-				func() string { return "quarry " + resolved.Version + "\n" })
+			return printVersion(cmd, info, *jsonOut)
 		},
 	}
+}
+
+// printVersion writes the version line, or the JSON document when jsonOut is
+// set, to cmd's stdout. It is the one emit path behind version and --version.
+func printVersion(cmd *cobra.Command, info *debug.BuildInfo, jsonOut bool) error {
+	resolved := version.Resolve(info)
+	return emitReport(cmd, jsonOut, nil,
+		func() ([]byte, error) { return renderVersionJSON(resolved) },
+		func() string { return "quarry " + resolved.Version + "\n" })
 }

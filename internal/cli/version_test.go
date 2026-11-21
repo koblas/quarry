@@ -280,3 +280,41 @@ func Test_version_json_reports_a_failed_stdout_write(t *testing.T) {
 	require.ErrorIs(t, err, errVersionDiskFull)
 	assert.EqualError(t, err, "cannot write the result to stdout: no space left on device")
 }
+
+func Test_version_flag_prints_the_same_bytes_as_the_version_command(t *testing.T) {
+	info := buildInfoOf(pseudoVersion+"+dirty",
+		debug.BuildSetting{Key: "vcs.revision", Value: checkoutRev},
+		debug.BuildSetting{Key: "vcs.modified", Value: "true"})
+	cases := []struct {
+		name string
+		flag []string
+		cmd  []string
+	}{
+		{"text", []string{"--version"}, []string{"version"}},
+		{"json after the flag", []string{"--version", "--json"}, []string{"version", "--json"}},
+		{"json before the flag", []string{"--json", "--version"}, []string{"version", "--json"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var want, got, stderr bytes.Buffer
+			require.NoError(t, cli.Execute(t.Context(), c.cmd, cli.Env{Stdout: &want, Stderr: io.Discard, BuildInfo: info}))
+
+			err := cli.Execute(t.Context(), c.flag, cli.Env{Stdout: &got, Stderr: &stderr, BuildInfo: info})
+
+			require.NoError(t, err)
+			assert.NotEmpty(t, want.String())
+			assert.Equal(t, want.String(), got.String())
+			assert.Empty(t, stderr.String())
+		})
+	}
+}
+
+func Test_version_flag_reports_a_failed_stdout_write(t *testing.T) {
+	env := cli.Env{Stdout: failingWriter{err: errVersionDiskFull}, Stderr: io.Discard, BuildInfo: buildInfoOf("v1.0.0")}
+
+	err := cli.Execute(t.Context(), []string{"--version"}, env)
+
+	require.ErrorIs(t, err, errVersionDiskFull)
+	assert.EqualError(t, err, "cannot write the result to stdout: no space left on device")
+}

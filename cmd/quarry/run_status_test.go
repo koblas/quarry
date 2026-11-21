@@ -143,6 +143,11 @@ quarry never writes to the Quicken file.`)
 		"  summary     Summarize a month: unusual charges, new recurring charges, net worth and findings\n"+
 		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n"+
 		"  version     Show quarry's version\n\n")
+	assert.Contains(t, stdout.String(), ""+
+		"Flags:\n"+
+		"  -h, --help      help for quarry\n"+
+		"      --json      print the result as JSON on stdout\n"+
+		"      --version   print quarry's version\n")
 }
 
 func Test_run_status_help_describes_the_command_without_needing_home(t *testing.T) {
