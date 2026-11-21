@@ -37,7 +37,9 @@ questions — skip the full procedure below:
    Missing *Planning* out-of-domain row or "Siblings and mirrors" item is MAJOR. A rule
    `product-vision` rules as intent (→ *The scoping pass owes the literal copy*) is pinned at
    the intent's boundary — all-zero, missing, empty — not only at the data shape the code
-   tests; a missing boundary row is MAJOR. For static
+   tests; a missing boundary row is MAJOR. A function the diff rewrites with no row per
+   input-integrity arm (duplicate, missing, malformed), or a test pinning a fallback for
+   such input that `## Surface & Copy` does not rule, is MAJOR. For static
    content (skill text, references, SQL, README), also ask: does each pinned behaviour claim
    carry its `file:line` citation in the spec (`product-vision` → *The scoping pass owes the
    literal copy*), and does a sibling file state a rule this one omits? Either gap is MAJOR.
