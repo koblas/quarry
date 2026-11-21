@@ -50,10 +50,8 @@ func signalContext(parent context.Context) (context.Context, context.CancelFunc)
 	return ctx, stop
 }
 
-// newServerFactory returns cli.Execute's ServerFactory: it resolves the
-// home directory and the embedded reference schema, then builds the Server
-// against them, stamping the store with the version info resolves to, passing
-// storeOpts to it and appending the Server options the caller passes.
+// newServerFactory returns cli.Execute's ServerFactory: a Server over the
+// resolved home, its store stamped with the version info resolves to.
 func newServerFactory(info *debug.BuildInfo, storeOpts ...duckstore.Option) cli.ServerFactory {
 	return func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
 		home, err := resolveHome("sync")

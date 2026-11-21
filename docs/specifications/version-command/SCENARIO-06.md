@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-06
-status: open
+status: done
 ---
 
 # SCENARIO-06: The store records the same version string
@@ -24,13 +24,13 @@ Surface & Copy delivered: Store/MCP line, store half (`store_info.quarry_version
 - [x] Step 3: wiring pin = the acceptance test over `envFor`; `defaultEnv` -> `envFor` delegation already pinned by `Test_defaultEnv_carries_this_binarys_build_info`.
 
 ### Sweep
-- [ ] `go build ./... && golangci-lint run ./...` zero issues; doc comments.
+- [x] `go build ./... && golangci-lint run ./...` zero issues; doc comments.
 
 ### Verify
-- [ ] `verify.sh`; spec tick; `spec-check.py`; STATE.md.
+- [x] `verify.sh`; spec tick; `spec-check.py`; STATE.md.
 
 ## Handoff
-`newServerFactory` takes the info; MCP half (`newMCPServe(info)` already takes it) is SCENARIO-07, untouched here.
+`newServerFactory` takes the info; MCP half (`newMCPServe(info)` already takes it) is SCENARIO-07, untouched here. SCENARIO-07's plan must drive `quarry mcp` initialize through `envFor(info, ...)` and assert `serverInfo.version`: the `ServeMCP: newMCPServe(info)` link in `envFor` is unpinned while the `startMCP` helpers (`run_mcp_test.go:319,414,1079`) hardcode `newMCPServe(nil, ...)`. Mutation `ServeMCP: newMCPServe(nil)` in `envFor` must redden it.
 
 ## Phase report
 Run L done. Acceptance red at both assertions (`(devel)` vs `(devel) 260d0d29f940+dirty`), now green. Files: `cmd/quarry/run.go` (`newServerFactory(info, ...)` ~:57, `defaultEnv`/`envFor` ~:205-235), `cmd/quarry/run_version_test.go:107-139` acceptance, 5 caller sites in `main_test.go:40`, `run_store_test.go:631`, `run_sync_lock_test.go:163`, `run_sync_rates_test.go:67,845` (`valetServerFactory` passes nil: no env in scope).
