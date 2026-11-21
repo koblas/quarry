@@ -122,6 +122,7 @@ func Test_run_help_prints_quarrys_description(t *testing.T) {
 read-only snapshot, rebuilds its own store from that snapshot, and checks the
 store against Quicken's balances. Every other command reads that store;
 quarry never writes to the Quicken file.`)
+	assert.Contains(t, stdout.String(), "Usage:\n  quarry [flags]\n  quarry [command]\n")
 	assert.Contains(t, stdout.String(), ""+
 		"Available Commands:\n"+
 		"  acb         Show adjusted cost base and realized capital gains per tax year, in CAD\n"+

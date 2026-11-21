@@ -87,7 +87,7 @@ func Test_run_root_without_a_subcommand_prints_the_help_it_always_has(t *testing
 	_, help, _ := runCapture(t.Context(), []string{"--help"})
 	require.NotEmpty(t, help.String())
 
-	for _, args := range [][]string{{}, {"--json"}} {
+	for _, args := range [][]string{{}, {"--json"}, {"--version=false"}} {
 		t.Run(strings.Join(append([]string{"quarry"}, args...), " "), func(t *testing.T) {
 			exitCode, stdout, stderr := runCapture(t.Context(), args)
 

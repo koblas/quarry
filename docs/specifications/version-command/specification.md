@@ -105,6 +105,7 @@ Duplicate keys are compared as raw strings; agreement counts as one value, any d
 
 ### Changes to existing surfaces
 - `internal/cli/root.go:7-11` doc comment: add `version` and the root `--version` flag.
+- Root help Usage block becomes `Usage:\n  quarry [flags]\n  quarry [command]\n` (was only `quarry [command]`): cobra's rendering once the root has a `RunE`. Accepted consequence (orchestrator, SCENARIO-03 checkpoint); final product pass reviews it. Pinned in the root-help test.
 - `internal/cli/root.go:13-14` comment ("No Args or Run field"): now false — say root has a `RunE` for `--version` and keeps `Args` nil so unknown commands still refuse.
 - `cmd/quarry/run_status_test.go:113-139`: insert `"  version     Show quarry's version\n"` after the `sync` line; assert the `--version` line in Flags.
 - `cmd/quarry/main_process_test.go:164-179`: nil/empty-info rows change from "" to `(devel)`.
@@ -178,6 +179,6 @@ Scenario: SCENARIO-07 — the MCP server reports the same version string
 - [x] SCENARIO-04: Version needs nothing else to work — delivered by SCENARIO-01 — `internal/cli/version_test.go` `Test_version_needs_no_store_config_or_home`
 - [x] SCENARIO-05: Version refuses arguments — delivered by SCENARIO-01 — `cmd/quarry/run_version_test.go` `Test_run_version_refuses_arguments`
 - [x] SCENARIO-02: --json reports version, commit, modified and Go version — `internal/cli/version_test.go` `Test_version_json_reports_version_commit_modified_and_go`
-- [ ] SCENARIO-03: The root --version flag prints the same line
+- [ ] SCENARIO-03: The root --version flag prints the same line — `internal/cli/version_test.go` `Test_version_flag_prints_the_same_bytes_as_the_version_command`
 - [ ] SCENARIO-06: The store records the same version string
 - [ ] SCENARIO-07: The MCP server reports the same version string

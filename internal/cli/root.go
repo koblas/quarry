@@ -4,12 +4,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRootCommand builds quarry's command tree: a persistent --json flag and a
-// root-only --version flag on the root plus the sync, status, accounts,
-// holdings, acb, networth, spend, cashflow, recurring, anomalies, summary,
-// search, findings, sql, snapshots (with its prune child), mcp, claude (with
-// its install and uninstall children) and version subcommands, wired against
-// env's factories and build info.
+// newRootCommand builds quarry's command tree: the persistent --json flag, the
+// root-only --version flag and every subcommand, wired against env.
 func newRootCommand(env Env, jsonOut *bool) *cobra.Command {
 	var showVersion bool
 	// Args stays nil: cobra's legacy check then refuses an unmatched subcommand
