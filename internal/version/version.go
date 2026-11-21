@@ -26,10 +26,8 @@ type Info struct {
 }
 
 // Resolve derives Info from info, which may be nil. Version is the module
-// version when the build has one, else "(devel)" with the short revision and
-// "+dirty" when the build recorded them. Commit is the full revision and
-// Modified is set only for the literal "true" or "false". Go is always the
-// running Go version.
+// version, else "(devel)" with the short revision and "+dirty" when recorded.
+// Commit and Modified are nil unless the build recorded them readably.
 func Resolve(info *debug.BuildInfo) Info {
 	out := Info{Version: devel, Go: runtime.Version()}
 	if info == nil {
@@ -69,9 +67,8 @@ func shortRevision(revision string) string {
 	return revision[:shortRevisionLen]
 }
 
-// setting is the value settings records for key. It reports false when the key
-// is absent or recorded more than once with differing raw values; a key
-// recorded repeatedly with one value counts once.
+// setting is the value settings records for key; false when absent or recorded
+// with differing values.
 func setting(settings []debug.BuildSetting, key string) (string, bool) {
 	var value string
 	found := false

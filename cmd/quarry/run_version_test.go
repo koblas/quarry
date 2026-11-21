@@ -2,9 +2,11 @@ package main
 
 import (
 	"io"
+	"runtime/debug"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_run_version_refuses_arguments(t *testing.T) {
@@ -26,7 +28,10 @@ func Test_run_version_prints_without_a_home(t *testing.T) {
 }
 
 func Test_defaultEnv_carries_this_binarys_build_info(t *testing.T) {
+	want, ok := debug.ReadBuildInfo()
+	require.True(t, ok)
+
 	env := defaultEnv(io.Discard, io.Discard)
 
-	assert.NotNil(t, env.BuildInfo)
+	assert.Equal(t, want, env.BuildInfo)
 }

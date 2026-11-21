@@ -96,6 +96,11 @@ func Test_Resolve(t *testing.T) {
 			want: resolved(develVersion+" 260d0d29f94", new("260d0d29f94"), nil),
 		},
 		{
+			name: "a dirty revision shorter than 12 characters is shown whole with +dirty",
+			info: buildOf(develVersion, revisionKey, "260d0d29f94", modifiedKey, "true"),
+			want: resolved(develVersion+" 260d0d29f94+dirty", new("260d0d29f94"), new(true)),
+		},
+		{
 			name: "a revision of exactly 12 characters is shown whole",
 			info: buildOf(develVersion, revisionKey, shortRevision),
 			want: resolved(develVersion+" "+shortRevision, new(shortRevision), nil),

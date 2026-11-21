@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-01
-status: open
+status: done
 ---
 
 # SCENARIO-01: quarry version prints the binary's version (folds SCENARIO-04, SCENARIO-05)
@@ -9,7 +9,7 @@ Cadence: code-first (no mandatory test-first item: no write-safety guard, atomic
 Acceptance test: `internal/cli/version_test.go` `Test_version_prints_the_binarys_version`
 Acceptance test (SCENARIO-04, folded): `internal/cli/version_test.go` `Test_version_needs_no_store_config_or_home`
 Acceptance test (SCENARIO-05, folded): `cmd/quarry/run_version_test.go` `Test_run_version_refuses_arguments`
-Narrow loop: `go test ./internal/version/ ./internal/cli/ -run 'Version|Resolve|RootHelp'` then `go test ./cmd/quarry/ -run 'version|Version|help|defaultEnv'`
+Narrow loop: `go test ./internal/version/ ./internal/cli/ ./cmd/quarry/ -run 'Test_version|Test_Resolve|Test_buildVersion|Test_defaultEnv|Test_run_version|Test_run_help'`
 Mutation checks: `vcs.modified` literal-`"true"` test in `Resolve` → `Test_Resolve` malformed/absent rows; `Env.BuildInfo: info` line in `defaultEnv` → `Test_defaultEnv_carries_this_binarys_build_info` (delete the line)
 Runs: A (1-3) | B1 (4-6) | V (7-8)
 Size: OWNS A RUN — 3 batches, 1 feature package (`internal/version`); folds 04 and 05
@@ -29,10 +29,10 @@ Placement: `internal/version` imports stdlib only (`runtime/debug`, `runtime`), 
 - [x] Step 6 (batch 3): `cmd/quarry/run.go:88-93` `buildVersion` → `return version.Resolve(info).Version`; `run.go:192-209` `defaultEnv` sets `BuildInfo: info` (`info` already read :193); `main_process_test.go:164-179` nil/empty rows `""` → `(devel)` (tagged row unchanged); `run_status_test.go:126-143` insert `"  version     Show quarry's version\n"` after the `sync` line (Flags `--version` line is 03's). `run_version_test.go`: `Test_defaultEnv_carries_this_binarys_build_info` (`env.BuildInfo` non-nil; the end-to-end text is `(devel)` either way so only this pin can see a deleted wiring line), `Test_run_version_prints_without_a_home` (`t.Setenv("HOME","")`, `run(["version"])` → `quarry (devel)\n`, exit 0). Re-run `Test_newMCPServe_reports_the_build_infos_module_version` (`run_mcp_test.go:109-135`: nil row stays `(devel)` via `mcpTestServerVersion`).
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Resolve`, `Info`, `Env.BuildInfo`, `newVersionCommand`; `go doc ./internal/version` reads as the contract; confirm `Test_every_quarry_name_the_skill_uses_exists` (`run_skill_drift_test.go`) still green with no skill edit.
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `Resolve`, `Info`, `Env.BuildInfo`, `newVersionCommand`; `go doc ./internal/version` reads as the contract; confirm `Test_every_quarry_name_the_skill_uses_exists` (`run_skill_drift_test.go`) still green with no skill edit.
 
 ### Verify
-- [ ] Step 8: `.claude/scripts/verify.sh <start> ./internal/version/... ./internal/cli/... ./cmd/quarry/...`, `spec-check.py version-command`; tick SCENARIO-01 with its acceptance test, and SCENARIO-04 and SCENARIO-05 each with "delivered by SCENARIO-01" before their test reference (test ref last on the line); write `STATE.md`.
+- [x] Step 8: `.claude/scripts/verify.sh <start> ./internal/version/... ./internal/cli/... ./cmd/quarry/...`, `spec-check.py version-command`; tick SCENARIO-01 with its acceptance test, and SCENARIO-04 and SCENARIO-05 each with "delivered by SCENARIO-01" before their test reference (test ref last on the line); write `STATE.md`.
 
 ## Handoff
 
@@ -56,18 +56,8 @@ Placement: `internal/version` imports stdlib only (`runtime/debug`, `runtime`), 
 
 ## Phase report
 
-Run B1 (steps 4-6) done; narrow loops green, `golangci-lint run` on the three packages `0 issues`. Not run yet: `verify.sh`, `go build ./...`, spec tick, STATE.md (run V).
+Run V done. Pin-only checkpoint findings applied; Sweep (`go build`, `golangci-lint` 0 issues) and Verify green; spec ticked (01, 04, 05), `spec-check.py` OK, `STATE.md` written, status done.
 
-Files:
-- `internal/version/version.go` `Resolve` (+ `setting`, `shortRevision`); `version_test.go` `Test_Resolve` (27 rows, black-box, own `revisionKey`/`modifiedKey` consts).
-- `internal/cli/version.go` `newVersionCommand` (Args `noArgs`, Long verbatim, one `emit`); `root.go:7-10` doc updated (the "No Args or Run field" comment at `root.go:13-14` stays true in 01, 03 rewrites it).
-- `internal/cli/version_test.go`: `Test_version_help_prints_the_ruled_long_text` (Long verbatim, lines <= 76), `Test_version_reports_a_failed_stdout_write`; both acceptance tests green.
-- `cmd/quarry/run.go` `buildVersion` -> `version.Resolve(info).Version`, `defaultEnv` sets `BuildInfo: info`; `main_process_test.go` nil/empty rows now `(devel)` (test renamed `Test_buildVersion_resolves_the_build_infos_version`); `run_status_test.go` root help block gains the `version` line; `run_version_test.go` gains `Test_run_version_prints_without_a_home`, `Test_defaultEnv_carries_this_binarys_build_info`.
+Files: `internal/version/version_test.go` (dirty short-revision row), `internal/version/version.go` (Resolve/setting docs shortened), `cmd/quarry/run_version_test.go` (`Test_defaultEnv_...` asserts equal to `debug.ReadBuildInfo()`), `cmd/quarry/main_process_test.go` (dirty `(devel)` row).
 
-Mutations (each restored, diff-clean):
-- `switch strings.ToLower(modified)`: red `Test_Resolve/modified_'True'_is_unknown,_not_dirty`, `.../duplicate_modified_settings_that_agree_but_are_malformed_stay_unknown`.
-- non-"true"/"false" modified -> false (`case "false":` -> `default:`): red the `'True'`, `'1'`, empty-modified and malformed-duplicate rows.
-- duplicate first-wins and last-wins (each separately): red `duplicate_revisions_that_differ...`, `duplicate_modified_settings_that_differ...,_so_no_+dirty`, and both tagged-conflict rows.
-- delete `BuildInfo: info` in `defaultEnv`: red `Test_defaultEnv_carries_this_binarys_build_info` ("Expected value not to be nil").
-
-For V: `+dirty` is appended only on the `(devel) <rev>` arm (row "modified without a revision never adds +dirty"); `new(true)`/`new(x)` pointer form is used in tests (Go 1.27). `mcpTestServerVersion` rows in `run_mcp_test.go` still pass untouched. Open for V: confirm `Test_every_quarry_name_the_skill_uses_exists` green, go doc of `internal/version`, plan Sweep/Verify steps.
+Mutations (each restored, diff-clean): see STATE.md `## Open debts`. Nothing for later runs; next scenario is SCENARIO-02.
