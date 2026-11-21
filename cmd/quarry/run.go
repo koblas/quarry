@@ -24,6 +24,7 @@ import (
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store/duckstore"
+	"github.com/koblas/quarry/internal/version"
 )
 
 // These guards document that the wired types satisfy each consumer's port with no adapter.
@@ -83,13 +84,10 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 	}
 }
 
-// buildVersion is the main module's version from info, "" when info is nil
-// or carries none.
+// buildVersion is the version string info resolves to, "(devel)" when info is
+// nil or records no version.
 func buildVersion(info *debug.BuildInfo) string {
-	if info == nil {
-		return ""
-	}
-	return info.Main.Version
+	return version.Resolve(info).Version
 }
 
 // newReportFactory returns cli.Execute's ReportFactory: it resolves the home
@@ -207,6 +205,7 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		Executable:   os.Executable,
 		IsTerminal:   isTerminal,
 		Now:          time.Now,
+		BuildInfo:    info,
 	}
 }
 

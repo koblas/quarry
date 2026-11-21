@@ -141,7 +141,8 @@ quarry never writes to the Quicken file.`)
 		"  sql         Run a read-only SQL query against quarry's store\n"+
 		"  status      Show which snapshot the store was built from and what it holds\n"+
 		"  summary     Summarize a month: unusual charges, new recurring charges, net worth and findings\n"+
-		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n\n")
+		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n"+
+		"  version     Show quarry's version\n\n")
 }
 
 func Test_run_status_help_describes_the_command_without_needing_home(t *testing.T) {

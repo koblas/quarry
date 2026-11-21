@@ -3,8 +3,10 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"runtime/debug"
+	"strings"
 	"testing"
 
 	"github.com/koblas/quarry/internal/cli"
@@ -117,4 +119,41 @@ func Test_version_needs_no_store_config_or_home(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "quarry v1.0.0\n", stdout.String())
 	assert.Empty(t, calls)
+}
+
+const versionHelpLong = `Print the version of this quarry binary: the release tag, such as v1.0.0,
+for a binary installed with go install
+github.com/koblas/quarry/cmd/quarry@<version>, or Go's pseudo-version for
+one built from a checkout, which names the commit and ends in +dirty when
+the checkout had uncommitted changes.
+
+version reads only the binary itself: it needs no store, reads no config
+and never looks at Quicken.
+
+--json adds the full commit, whether the checkout had uncommitted changes,
+and the Go version quarry was built with.`
+
+const helpWrapWidth = 76
+
+var errVersionDiskFull = errors.New("no space left on device")
+
+func Test_version_help_prints_the_ruled_long_text(t *testing.T) {
+	var stdout bytes.Buffer
+
+	err := cli.Execute(t.Context(), []string{"version", "--help"}, cli.Env{Stdout: &stdout, Stderr: io.Discard})
+
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(stdout.String(), versionHelpLong), stdout.String())
+	for line := range strings.SplitSeq(versionHelpLong, "\n") {
+		assert.LessOrEqual(t, len(line), helpWrapWidth, line)
+	}
+}
+
+func Test_version_reports_a_failed_stdout_write(t *testing.T) {
+	env := cli.Env{Stdout: failingWriter{err: errVersionDiskFull}, Stderr: io.Discard, BuildInfo: buildInfoOf("v1.0.0")}
+
+	err := cli.Execute(t.Context(), []string{"version"}, env)
+
+	require.ErrorIs(t, err, errVersionDiskFull)
+	assert.EqualError(t, err, "cannot write the result to stdout: no space left on device")
 }
