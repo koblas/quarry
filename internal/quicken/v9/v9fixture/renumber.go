@@ -15,9 +15,8 @@ import (
 // renamePlaceholder parks a name for one statement, so renaming a name onto one that is still in use never collides.
 const renamePlaceholder = "__renumbering"
 
-// renumberSchema renames every entity-numbered table and column of db, which carries v9.ReferenceDDL, to the
-// numbering the Builder's DDL entities give them, resolved through v9.ResolveName. Columns are renamed first,
-// while their tables still carry reference names; each name goes through a placeholder.
+// renumberSchema renames the entity-numbered tables and columns of db, which carries v9.ReferenceDDL, to the
+// Builder's DDL numbering through v9.ResolveName.
 func (b *Builder) renumberSchema(tb testing.TB, db *sql.DB) {
 	tb.Helper()
 	ctx := context.Background()

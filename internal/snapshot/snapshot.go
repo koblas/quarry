@@ -306,9 +306,8 @@ type fileContent struct {
 	entities map[string][]int64
 }
 
-// inspectContent opens the snapshot at path read-only and returns its content, after its integrity and ZACCOUNT
-// checks pass. A lock held by another connection is retried for up to busyTimeout before Open fails with a
-// sqlite.IsBusy error.
+// inspectContent opens the snapshot at path read-only and returns its accounts, schema and entity numbers once its
+// integrity and ZACCOUNT checks pass; a lock held past busyTimeout fails with a sqlite.IsBusy error.
 func inspectContent(ctx context.Context, path string, busyTimeout time.Duration) (fileContent, error) {
 	snap, err := sqlite.OpenReadOnlyBusy(ctx, path, busyTimeout)
 	if err != nil {

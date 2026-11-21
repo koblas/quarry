@@ -133,10 +133,10 @@ Scenario: SCENARIO-07 — a snapshot refused earlier syncs with --from
 | SCENARIO-07 | FOLD into 03 — "imports" needs the real importer reading the renumbered join table. |
 
 ## BDD Acceptance Progress
-- [ ] SCENARIO-02: Renumbered file verifies
-- [ ] SCENARIO-01: File with the old numbering still verifies
-- [ ] SCENARIO-04: A genuinely missing column is still refused
-- [ ] SCENARIO-05: A number that points at a different entity is refused
-- [ ] SCENARIO-06: An entity absent from Z_PRIMARYKEY falls back to literal names
+- [x] SCENARIO-02: Renumbered file verifies — `internal/snapshot/renumbering_test.go` `Test_sync_and_import_verifies_a_file_whose_entities_were_renumbered`
+- [x] SCENARIO-01: File with the old numbering still verifies — delivered by SCENARIO-02 — `cmd/quarry/run_renumbering_test.go` `Test_run_verifies_a_file_with_the_original_entity_numbering`
+- [x] SCENARIO-04: A genuinely missing column is still refused — delivered by SCENARIO-02 — `cmd/quarry/run_renumbering_test.go` `Test_run_names_a_missing_column_of_a_renumbered_file_under_its_own_numbering`
+- [x] SCENARIO-05: A number that points at a different entity is refused — delivered by SCENARIO-02 — `cmd/quarry/run_renumbering_test.go` `Test_run_refuses_a_join_table_whose_number_belongs_to_another_entity`
+- [x] SCENARIO-06: An entity absent from Z_PRIMARYKEY falls back to literal names — delivered by SCENARIO-02 — `cmd/quarry/run_renumbering_test.go` `Test_run_names_items_of_an_entity_absent_from_z_primarykey_as_the_reference_writes_them`
 - [ ] SCENARIO-03: Split tags are imported from the renumbered join table
 - [ ] SCENARIO-07: A snapshot refused earlier syncs with --from

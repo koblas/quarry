@@ -14,8 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const renumberedLabel = "hardkoded/quicken-skills@752107b+quarry.2"
-
 // execOn runs each statement against the SQLite file at path through a connection of its own.
 func execOn(t *testing.T, path string, statements ...string) {
 	t.Helper()
@@ -85,7 +83,7 @@ func Test_run_verifies_a_file_with_the_original_entity_numbering(t *testing.T) {
 	)
 	assert.Equal(t, want, stdout.String())
 	schema := schemaOfSnapshot(t, home)
-	assert.Equal(t, renumberedLabel, schema.Reference)
+	assert.Equal(t, referenceLabel, schema.Reference)
 	assert.True(t, schema.Verified)
 	assert.Empty(t, schema.MissingTables)
 	assert.Empty(t, schema.MissingColumns)
@@ -105,7 +103,7 @@ func Test_run_names_a_missing_column_of_a_renumbered_file_under_its_own_numberin
 
 	require.Equal(t, 1, exitCode)
 	assert.Equal(t, refusedSchemaBlock(t, home, bundle.Dir,
-		"DIFFERS from reference "+renumberedLabel+": 1 column missing",
+		"DIFFERS from reference "+referenceLabel+": 1 column missing",
 		"  - column  ZATTACHMENT.Z79_TRANSACTION\n"), stdout.String())
 	assert.Equal(t, schemaRefusal(t, home, "1 column"), stderr.String())
 	schema := schemaOfSnapshot(t, home)
@@ -126,7 +124,7 @@ func Test_run_refuses_a_join_table_whose_number_belongs_to_another_entity(t *tes
 
 	require.Equal(t, 1, exitCode)
 	assert.Equal(t, refusedSchemaBlock(t, home, bundle.Dir,
-		"DIFFERS from reference "+renumberedLabel+": 1 table missing, 1 table not in reference",
+		"DIFFERS from reference "+referenceLabel+": 1 table missing, 1 table not in reference",
 		"  - table   Z_16USERTAGS\n  + table   Z_15USERTAGS\n"), stdout.String())
 	assert.Equal(t, schemaRefusal(t, home, "1 table"), stderr.String())
 	schema := schemaOfSnapshot(t, home)
@@ -147,7 +145,7 @@ func Test_run_names_items_of_an_entity_absent_from_z_primarykey_as_the_reference
 
 	require.Equal(t, 1, exitCode)
 	assert.Equal(t, refusedSchemaBlock(t, home, bundle.Dir,
-		"DIFFERS from reference "+renumberedLabel+": 2 columns missing, 2 columns not in reference",
+		"DIFFERS from reference "+referenceLabel+": 2 columns missing, 2 columns not in reference",
 		"  - column  Z_15USERTAGS.Z_76USERTAGS\n  - column  Z_55USERTAGS.Z_76USERTAGS1\n"+
 			"  + column  Z_16USERTAGS.Z_77USERTAGS\n  + column  Z_56USERTAGS.Z_77USERTAGS1\n"), stdout.String())
 	assert.Equal(t, schemaRefusal(t, home, "2 columns"), stderr.String())

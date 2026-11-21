@@ -314,11 +314,10 @@ func (b *Builder) WithEntity(name string, ent int64) *Builder {
 	return b
 }
 
-// WithInsertedEntity adds name at Z_PRIMARYKEY number ent the way Quicken
-// does: every entity numbered ent or higher moves up by one, and WriteBundle
-// renames the schema's numbered tables and columns to match. Call it before
-// adding rows, which take their entity numbers when added; WithEntity and
-// WithoutEntity afterwards change Z_PRIMARYKEY only.
+// WithInsertedEntity adds name at entity number ent as Quicken does: every
+// entity numbered ent or higher moves up by one, and WriteBundle renames the
+// schema to match. Call it before adding rows; WithEntity and WithoutEntity
+// after it change Z_PRIMARYKEY only.
 func (b *Builder) WithInsertedEntity(name string, ent int64) *Builder {
 	shiftFrom(b.entities, ent)
 	shiftFrom(b.ddl, ent)

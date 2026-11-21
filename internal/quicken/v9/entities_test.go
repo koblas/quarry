@@ -7,17 +7,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// fileEntities is the Z_PRIMARYKEY of a file that inserted an entity at Z_ENT 2.
-var fileEntities = map[string][]int64{
-	"Account":                  {1},
-	"AccountGroup":             {2},
-	"Budget":                   {10},
-	"CashFlowTransactionEntry": {16},
-	"DownloadSession":          {31},
-	"QuickFillRuleSplitEntry":  {56},
-	"UserTag":                  {77},
-	"Transaction":              {79},
-	"CashFlowTransaction":      {80},
+// fileEntities returns the Z_PRIMARYKEY of a file that inserted an entity at Z_ENT 2.
+func fileEntities() map[string][]int64 {
+	return map[string][]int64{
+		"Account":                  {1},
+		"AccountGroup":             {2},
+		"Budget":                   {10},
+		"CashFlowTransactionEntry": {16},
+		"DownloadSession":          {31},
+		"QuickFillRuleSplitEntry":  {56},
+		"UserTag":                  {77},
+		"Transaction":              {79},
+		"CashFlowTransaction":      {80},
+	}
 }
 
 func Test_resolve_name_renumbers_each_form_an_entity_number_appears_in(t *testing.T) {
@@ -37,7 +39,7 @@ func Test_resolve_name_renumbers_each_form_an_entity_number_appears_in(t *testin
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, ok := v9.ResolveName(c.in, fileEntities)
+			got, ok := v9.ResolveName(c.in, fileEntities())
 
 			assert.Equal(t, c.want, got)
 			assert.True(t, ok)
@@ -50,7 +52,7 @@ func Test_resolve_name_passes_a_name_without_an_entity_number_through(t *testing
 
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
-			got, ok := v9.ResolveName(in, fileEntities)
+			got, ok := v9.ResolveName(in, fileEntities())
 
 			assert.Equal(t, in, got)
 			assert.True(t, ok)
@@ -66,8 +68,8 @@ func Test_resolve_name_keeps_the_reference_name_when_it_cannot_resolve(t *testin
 	}{
 		{name: "entity absent from the file", in: "Z_76USERTAGS", entities: map[string][]int64{"Account": {1}}},
 		{name: "entity listed with no number", in: "Z_76USERTAGS", entities: map[string][]int64{"UserTag": {}}},
-		{name: "number the reference does not use", in: "Z_5USERTAGS", entities: fileEntities},
-		{name: "number beyond int64", in: "Z_99999999999999999999USERTAGS", entities: fileEntities},
+		{name: "number the reference does not use", in: "Z_5USERTAGS", entities: fileEntities()},
+		{name: "number beyond int64", in: "Z_99999999999999999999USERTAGS", entities: fileEntities()},
 		{name: "no entities at all", in: "Z78_TRANSACTION", entities: nil},
 	}
 

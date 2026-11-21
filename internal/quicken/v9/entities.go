@@ -5,8 +5,7 @@ import (
 	"strconv"
 )
 
-// referenceEntities maps each entity number the reference's numbered names use to the Z_NAME Core Data
-// records for it in Z_PRIMARYKEY.
+// referenceEntities maps each entity number the reference's names carry to its Z_PRIMARYKEY Z_NAME.
 var referenceEntities = map[int64]string{
 	1:  "Account",
 	9:  "Budget",
@@ -18,8 +17,7 @@ var referenceEntities = map[int64]string{
 	79: "CashFlowTransaction",
 }
 
-// numberedNames match the two forms Core Data derives a name from an entity number in: Z_<n><NAME> (a table, or
-// a column with an optional disambiguator suffix) and Z<n>_<NAME>. The number is group 2.
+// numberedNames match the two name forms that embed an entity number, Z_<n><NAME> and Z<n>_<NAME>; group 2 is the number.
 var numberedNames = []*regexp.Regexp{
 	regexp.MustCompile(`^(Z_)(\d+)([A-Z].*)$`),
 	regexp.MustCompile(`^(Z)(\d+)(_.+)$`),

@@ -37,8 +37,10 @@ func runWithFailingStdout(args []string, err error) (int, string) {
 	return run(context.Background(), args, failingWriter{err: err}, &stderr), stderr.String()
 }
 
+const referenceLabel = "hardkoded/quicken-skills@752107b+quarry.2"
+
 // referenceMatch is the Schema line's text when the snapshot matches the schema reference exactly.
-const referenceMatch = "matches reference hardkoded/quicken-skills@752107b+quarry.2 (82 tables, 1,838 columns)"
+const referenceMatch = "matches reference " + referenceLabel + " (82 tables, 1,838 columns)"
 
 // syncArtifacts are the files the one sync under a home left, and the digests read from the snapshot.
 type syncArtifacts struct {

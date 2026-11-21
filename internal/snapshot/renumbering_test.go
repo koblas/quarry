@@ -23,6 +23,19 @@ func renumberedBundle(t *testing.T) v9fixture.Bundle {
 	return b.WriteBundle(t, t.TempDir())
 }
 
+// oldNumberingReferenceFingerprint is the reference fingerprint of a sync of a file that keeps the original entity numbering.
+func oldNumberingReferenceFingerprint(t *testing.T) string {
+	t.Helper()
+	b := v9fixture.NewBuilder()
+	b.Account(v9fixture.AccountRow{Name: "Checking", Active: true})
+	srv := newImportServer(t, t.TempDir(), builtStore(), snapshot.WithEntityResolver(v9.ResolveName))
+
+	outcome, err := srv.SyncAndImport(t.Context(), b.WriteBundle(t, t.TempDir()).Dir)
+
+	require.NoError(t, err)
+	return outcome.Manifest.Schema.ReferenceFingerprint
+}
+
 func Test_sync_and_import_verifies_a_file_whose_entities_were_renumbered(t *testing.T) {
 	bundle := renumberedBundle(t)
 	db, err := sqlite.OpenReadOnly(t.Context(), bundle.DataPath)
@@ -31,17 +44,13 @@ func Test_sync_and_import_verifies_a_file_whose_entities_were_renumbered(t *test
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 	require.Contains(t, schema, "Z_16USERTAGS")
-	oldBuilder := v9fixture.NewBuilder()
-	oldBuilder.Account(v9fixture.AccountRow{Name: "Checking", Active: true})
+	oldFingerprint := oldNumberingReferenceFingerprint(t)
 	importer := builtStore()
 	srv := newImportServer(t, t.TempDir(), importer, snapshot.WithEntityResolver(v9.ResolveName))
-	oldSrv := newImportServer(t, t.TempDir(), builtStore(), snapshot.WithEntityResolver(v9.ResolveName))
 
 	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
-	oldOutcome, oldErr := oldSrv.SyncAndImport(t.Context(), oldBuilder.WriteBundle(t, t.TempDir()).Dir)
 
 	require.NoError(t, err)
-	require.NoError(t, oldErr)
 	info := outcome.Manifest.Schema
 	assert.True(t, info.Verified)
 	assert.Empty(t, info.MissingTables)
@@ -49,7 +58,7 @@ func Test_sync_and_import_verifies_a_file_whose_entities_were_renumbered(t *test
 	assert.Empty(t, outcome.Manifest.Warnings)
 	assert.Len(t, importer.calls, 1)
 	assert.NotEqual(t, info.ReferenceFingerprint, info.Fingerprint)
-	assert.Equal(t, oldOutcome.Manifest.Schema.ReferenceFingerprint, info.ReferenceFingerprint)
+	assert.Equal(t, oldFingerprint, info.ReferenceFingerprint)
 }
 
 const (
@@ -109,6 +118,23 @@ func Test_sync_reads_the_entity_numbers_of_a_z_primarykey_row_with_no_name(t *te
 
 	require.NoError(t, err)
 	assert.True(t, outcome.Manifest.Schema.Verified)
+}
+
+func Test_sync_keeps_every_z_ent_listed_for_a_duplicated_z_name(t *testing.T) {
+	bundle := renumberedBundle(t)
+	sqliteFileWith(t, bundle.DataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME) VALUES (200, 'UserTag')")
+	srv := newImportServer(t, t.TempDir(), builtStore(), snapshot.WithEntityResolver(v9.ResolveName))
+
+	outcome, err := srv.SyncAndImport(t.Context(), bundle.Dir)
+
+	require.ErrorAs(t, err, new(snapshot.MismatchError))
+	info := outcome.Manifest.Schema
+	assert.Empty(t, info.MissingTables)
+	assert.Equal(t, []snapshot.ColumnRef{
+		{Table: "Z_15USERTAGS", Column: "Z_76USERTAGS"},
+		{Table: "Z_55USERTAGS", Column: "Z_76USERTAGS1"},
+	}, info.MissingColumns)
+	assert.Contains(t, info.UnexpectedColumns, snapshot.ColumnRef{Table: "Z_16USERTAGS", Column: "Z_77USERTAGS"})
 }
 
 func Test_sync_refuses_and_discards_a_snapshot_whose_z_primarykey_cannot_be_read(t *testing.T) {

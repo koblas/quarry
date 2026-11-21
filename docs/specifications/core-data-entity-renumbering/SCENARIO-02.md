@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-02
-status: open
+status: done
 ---
 
 # SCENARIO-02: Renumbered file verifies
@@ -11,7 +11,7 @@ Acceptance test (SCENARIO-01, folded): `cmd/quarry/run_renumbering_test.go` `Tes
 Acceptance test (SCENARIO-04, folded): `cmd/quarry/run_renumbering_test.go` `Test_run_names_a_missing_column_of_a_renumbered_file_under_its_own_numbering`
 Acceptance test (SCENARIO-05, folded): `cmd/quarry/run_renumbering_test.go` `Test_run_refuses_a_join_table_whose_number_belongs_to_another_entity`
 Acceptance test (SCENARIO-06, folded): `cmd/quarry/run_renumbering_test.go` `Test_run_names_items_of_an_entity_absent_from_z_primarykey_as_the_reference_writes_them`
-Narrow loop: `go test ./internal/quicken/v9/... ./internal/snapshot/ ./cmd/quarry/ -run 'Resolve|Entit|Renumber|Inserted|Primary|Schema|Mismatch'`
+Narrow loop: `go test ./internal/quicken/v9/... ./internal/snapshot/ ./cmd/quarry/ -run 'resolve|entit|renumber|inserted|primary|schema|mismatch'`
 Mutation checks: duplicate-`Z_NAME` arm in `v9.ResolveName` → `Test_resolve_name_keeps_the_reference_name_when_z_name_is_duplicated`; `snapshot.WithEntityResolver` line in `cmd/quarry/run.go` → `Test_run_refuses_a_join_table_whose_number_belongs_to_another_entity`; mixed-item display arm in snapshot → `Test_run_names_items_of_an_entity_absent_from_z_primarykey_as_the_reference_writes_them`
 Runs: A (1-3) | B1 (4-5) | B2 (6) | V (7-8)
 Size: OWNS A RUN — 5 batches (v9 resolver, fixture, snapshot read, snapshot compare, wiring+folds); 1 feature package (`snapshot`) plus the `v9` reference library and its `v9fixture`
@@ -35,10 +35,10 @@ Steps 1-2 are real code, not stubs: the fixture builds renumbered names through 
   06: inserted entity + `WithoutEntity("UserTag")` → `- column  Z_15USERTAGS.Z_76USERTAGS`, `- column  Z_55USERTAGS.Z_76USERTAGS1`, `+ column  Z_16USERTAGS.Z_77USERTAGS`, `+ column  Z_56USERTAGS.Z_77USERTAGS1`, exit 1
 
 ### Sweep
-- [ ] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ResolveName`, `WithInsertedEntity`, `WithEntityResolver`, `inspectContent`, `compareSchema`; `docs/specifications/phase0-snapshot/specification.md:26-28` BR-5/6/7 edits verbatim from *Changes to existing surfaces*
+- [x] Step 7: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; doc comments on `ResolveName`, `WithInsertedEntity`, `WithEntityResolver`, `inspectContent`, `compareSchema`; `docs/specifications/phase0-snapshot/specification.md:26-28` BR-5/6/7 edits verbatim from *Changes to existing surfaces*
 
 ### Verify
-- [ ] Step 8: full verification + `spec-check.py core-data-entity-renumbering` → tick SCENARIO-02 and, each with a "delivered by SCENARIO-02" note before its test, SCENARIO-01/04/05/06
+- [x] Step 8: full verification + `spec-check.py core-data-entity-renumbering` → tick SCENARIO-02 and, each with a "delivered by SCENARIO-02" note before its test, SCENARIO-01/04/05/06
 
 ## Handoff
 
@@ -63,21 +63,12 @@ Steps 1-2 are real code, not stubs: the fixture builds renumbered names through 
 
 ## Phase report
 
-Run B2 — step 6 done. Narrow loop green (`go test ./internal/quicken/v9/... ./internal/snapshot/ ./cmd/quarry/ -run ...`), plus unfiltered `go test` of `cmd/quarry`, `internal/snapshot`, `internal/quicken/...` all ok. `golangci-lint run ./...` 0 issues (also fixed a testifylint argument-order finding at `internal/quicken/v9/entities_internal_test.go:41`). Steps 7-8 (run V) not started.
+Run V — steps 7-8 done; scenario complete.
 
-Files changed:
-- `internal/quicken/v9/reference.go`: `ReferenceLabel` -> `+quarry.2`; `reference.sql` header: `+quarry.2` correction line naming the Z_PRIMARYKEY resolution and `entities.go`.
-- `cmd/quarry/run.go`: `snapshot.WithEntityResolver(v9.ResolveName)` in `newServerFactory`.
-- `cmd/quarry/run_renumbering_test.go` (new): the four folded tests (01, 04, 05, 06). Each asserts full stdout, stderr and exit code from `runCapture`, then the `schema` object of `sync --from <id> --json` (the --json document is printed on refusal too) through `snapshot.SchemaInfo`.
-- Label bump `+quarry.1` -> `+quarry.2` in `run_sync_result_test.go:41,432`, `run_transfers_test.go:41`, `run_import_test.go:96`.
+Checkpoint pin and folds:
+- New `internal/snapshot/renumbering_test.go` `Test_sync_keeps_every_z_ent_listed_for_a_duplicated_z_name` (renumbered bundle plus a second `UserTag` row at Z_ENT 200; exact `MissingColumns` pair, empty `MissingTables`). Mutation `snapshot.go` `readEntities`: `entities[name] = append(entities[name], number)` -> `entities[name] = []int64{number}` reddened it: `Not equal` on `MissingColumns` (got `Z_16USERTAGS.Z_200USERTAGS`, `Z_56USERTAGS.Z_200USERTAGS1`); restored, diff clean.
+- Comments shortened: `referenceEntities`, `numberedNames`, `renumberSchema`, `WithInsertedEntity`, `inspectContent` (keeps the `sqlite.IsBusy` refusal).
+- Folds: old-numbering baseline sync moved into `oldNumberingReferenceFingerprint`; `fileEntities` is a func; `renumberedLabel` replaced by `referenceLabel`, from which `referenceMatch` is built (`run_sync_result_test.go`); Narrow loop pattern lowercased.
+- phase0-snapshot BR-5/6/7 edited per *Changes to existing surfaces*.
 
-Evidence:
-- Refusal rows match the plan: 04 `- column  ZATTACHMENT.Z79_TRANSACTION` (plain `DROP COLUMN` works, no index drop needed); 05 `- table   Z_16USERTAGS` / `+ table   Z_15USERTAGS`; 06 four column rows as planned. Refusal copy is the existing mismatch copy, snapshot kept, exit 1.
-- The four cmd tests were green on first run: the wiring and the resolver already existed when they were written (code-first), so no red was observable; mutations below stand in for it.
-- Mutations, each restored: delete the `WithEntityResolver` line in `run.go` -> 04, 05, 06 red (01 stays green: old numbering resolves to itself); `resolved: tableOK && columnOK` -> `tableOK && (columnOK || true)` -> 06 red (mixed-item arm); `(tableOK || true) && (columnOK || true)` -> 06 red; `(tableOK || true) && columnOK` stays green at cmd level (table-unresolved arm is held by the snapshot test from B1).
-- `v9.ResolveName` duplicate-`Z_NAME` arm was mutated in run A.
-
-Notes for V (steps 7-8):
-- Step 7 still owes the `phase0-snapshot/specification.md` BR-5/6/7 edits, and doc comments on `ResolveName`, `WithInsertedEntity`, `WithEntityResolver`, `inspectContent`, `compareSchema` (check what exists).
-- `docs/prior-art/README.md:60` still names `+quarry.1` as the label of the 2026-09-28 correction: historical, left as is.
-- Left unbuilt for SCENARIO-03: importer split-tags query (`importer/splits.go:113,115`), `Builder.LinkUserTag` and `Seed` insert (`builder.go`, still `Z_15USERTAGS`), end-to-end renumbered success through `cmd/quarry`.
+Verify (`verify.sh c578cdeb3450 ./internal/snapshot/... ./internal/quicken/... ./cmd/quarry/...`): go build rc=0; go test rc=0; uncovered-diff rc=0 (0 uncovered, 2 declared unreachable, both pre-existing in `inspectContent`); go test -race rc=0; golangci-lint rc=0 (0 issues). test-stats: cmd/quarry 978 (+4); internal/quicken/v9 7 (+5); v9fixture 15 (+5); internal/snapshot 346 (+10); TOTAL 1346 (+24), tempdir 425 (+17), disk 387 (+11). Two post-verify edits (dup test assertion tightened to `assert.Equal`, `inspectContent` doc clause): build, lint 0 issues and snapshot, v9 and v9fixture tests re-run green.
