@@ -21,6 +21,9 @@ import (
 // snapshotNameLayout is the UTC, colon-free timestamp each snapshot pair is named with.
 const snapshotNameLayout = "20060102T150405Z"
 
+// primaryKeyTable is the Core Data table that records each entity's number.
+const primaryKeyTable = "Z_PRIMARYKEY"
+
 // DefaultBusyTimeout is how long Sync waits for a busy or locked source before refusing.
 const DefaultBusyTimeout = 5 * time.Second
 
@@ -43,6 +46,7 @@ type Server struct {
 	autoKeep    int
 	ignore      []string
 	readTime    func(store.FindingList) []finding.State
+	resolver    EntityResolver
 }
 
 // Option configures a Server built by NewServer.
@@ -68,8 +72,8 @@ func WithReference(label string, schema sqlschema.Schema) Option {
 type EntityResolver func(name string, entities map[string][]int64) (resolved string, ok bool)
 
 // WithEntityResolver sets the EntityResolver the schema comparison renames reference names through.
-func WithEntityResolver(EntityResolver) Option {
-	return func(*Server) {}
+func WithEntityResolver(resolver EntityResolver) Option {
+	return func(s *Server) { s.resolver = resolver }
 }
 
 // WithSource overrides the Source Sync opens the bundle with. Production
@@ -270,7 +274,7 @@ func (s *Server) commit(ctx context.Context, destination Destination, manifestPa
 // assembles the manifest: integrity check, account count, hash, and schema
 // diff against the configured reference.
 func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string, takenAt time.Time) (Manifest, error) {
-	accounts, actual, err := inspectContent(ctx, snapshotPath, s.busyTimeout)
+	content, err := inspectContent(ctx, snapshotPath, s.busyTimeout)
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -287,51 +291,85 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 			TakenAt:  takenAt.Format(time.RFC3339),
 			Bytes:    size,
 			SHA256:   sum,
-			Accounts: accounts,
+			Accounts: content.accounts,
 		},
-		Schema:   s.compareSchema(actual),
+		Schema:   s.compareSchema(content.schema, content.entities),
 		Warnings: []string{},
 	}, nil
 }
 
-// inspectContent opens the snapshot at path read-only and returns its
-// account count and schema, after its integrity and ZACCOUNT checks pass. A
-// lock held by another connection is retried for up to busyTimeout before
-// Open fails with a sqlite.IsBusy error.
-func inspectContent(ctx context.Context, path string, busyTimeout time.Duration) (int, sqlschema.Schema, error) {
+// fileContent is what inspectContent reads from a snapshot: its account count, its schema, and each Z_NAME of
+// its Z_PRIMARYKEY with the Z_ENT numbers listed for it.
+type fileContent struct {
+	accounts int
+	schema   sqlschema.Schema
+	entities map[string][]int64
+}
+
+// inspectContent opens the snapshot at path read-only and returns its content, after its integrity and ZACCOUNT
+// checks pass. A lock held by another connection is retried for up to busyTimeout before Open fails with a
+// sqlite.IsBusy error.
+func inspectContent(ctx context.Context, path string, busyTimeout time.Duration) (fileContent, error) {
 	snap, err := sqlite.OpenReadOnlyBusy(ctx, path, busyTimeout)
 	if err != nil {
-		return 0, nil, fmt.Errorf("open snapshot: %w", err)
+		return fileContent{}, fmt.Errorf("open snapshot: %w", err)
 	}
 	defer func() { _ = snap.Close() }()
 
 	if err := snap.IntegrityCheck(ctx); err != nil {
-		return 0, nil, fmt.Errorf("integrity check: %w", err)
+		return fileContent{}, fmt.Errorf("integrity check: %w", err)
 	}
 
 	exists, err := snap.QueryInt(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ZACCOUNT'")
 	if err != nil {
 		// unreachable: only a ctx cancelled between IntegrityCheck and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
-		return 0, nil, fmt.Errorf("check accounts table: %w", err)
+		return fileContent{}, fmt.Errorf("check accounts table: %w", err)
 	}
 	if exists == 0 {
-		return 0, nil, errNoAccountsTable
+		return fileContent{}, errNoAccountsTable
 	}
 
 	accounts, err := snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
 	if err != nil {
 		// unreachable: only a ctx cancelled between the existence check and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
-		return 0, nil, fmt.Errorf("count accounts: %w", err)
+		return fileContent{}, fmt.Errorf("count accounts: %w", err)
 	}
 	if accounts == 0 {
-		return 0, nil, errNoAccounts
+		return fileContent{}, errNoAccounts
 	}
 
 	actual, err := snap.Schema(ctx)
 	if err != nil {
-		return 0, nil, fmt.Errorf("read snapshot schema: %w", err)
+		return fileContent{}, fmt.Errorf("read snapshot schema: %w", err)
 	}
-	return accounts, actual, nil
+	entities, err := readEntities(ctx, snap, actual)
+	if err != nil {
+		return fileContent{}, err
+	}
+	return fileContent{accounts: accounts, schema: actual, entities: entities}, nil
+}
+
+// readEntities returns each Z_NAME of snap's Z_PRIMARYKEY with every Z_ENT listed for it, leaving out rows
+// with no Z_NAME. A file without the table has no entity numbers, so the result is empty.
+func readEntities(ctx context.Context, snap *sqlite.DB, schema sqlschema.Schema) (map[string][]int64, error) {
+	entities := map[string][]int64{}
+	if _, ok := schema[primaryKeyTable]; !ok {
+		return entities, nil
+	}
+	query := "SELECT Z_ENT, Z_NAME FROM " + primaryKeyTable + " WHERE Z_NAME IS NOT NULL"
+	err := snap.QueryRows(ctx, query, nil, func(scan func(dest ...any) error) error {
+		var number int64
+		var name string
+		if err := scan(&number, &name); err != nil {
+			return err
+		}
+		entities[name] = append(entities[name], number)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read entity numbers: %w", err)
+	}
+	return entities, nil
 }
 
 // hashFile streams the file at path through SHA-256, returning its size
@@ -351,9 +389,12 @@ func hashFile(path string) (int64, string, error) {
 	return size, hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// compareSchema diffs actual against the configured reference.
-func (s *Server) compareSchema(actual sqlschema.Schema) SchemaInfo {
-	diff := sqlschema.Compare(scopeSchema(s.reference), scopeSchema(actual))
+// compareSchema diffs actual against the configured reference renamed to the numbering entities gives the
+// file; the counts and the reference fingerprint stay those of the reference as written.
+func (s *Server) compareSchema(actual sqlschema.Schema, entities map[string][]int64) SchemaInfo {
+	resolved := resolveReference(scopeSchema(s.reference), s.nameResolver(entities))
+	diff := sqlschema.Compare(resolved.schema, scopeSchema(actual))
+	diff.MissingColumns = resolved.asWritten(diff.MissingColumns)
 	return schemaInfoFromDiff(s.referenceLabel, s.reference, actual, diff)
 }
 
