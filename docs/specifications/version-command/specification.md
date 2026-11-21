@@ -82,6 +82,15 @@ and the Go version quarry was built with.
 | empty `Main.Version` | as `(devel)` | as `(devel)` |
 | `(devel)`, no vcs; or nil build info | `quarry (devel)` | `(devel)` / null / null |
 | HOME unset, no store, no Quicken | as above, exit 0 | — |
+| `(devel)` + `vcs.revision` = "" (any modified) | `quarry (devel)` | `(devel)` / null / per modified |
+| `(devel)`, revision unknown, modified=true | `quarry (devel)` | `(devel)` / null / true |
+| `(devel)` + duplicate `vcs.revision`, values differ | `quarry (devel)` | `(devel)` / null / per modified |
+| `(devel)` + duplicate `vcs.revision`, values equal | as single revision | as single revision |
+| duplicate `vcs.modified`, values differ | text as modified absent (no `+dirty`) | per revision / per revision / null |
+| duplicate `vcs.modified`, values equal | as single value (equal `"TRUE"` is still malformed) | as single value |
+| tagged `Main.Version` + duplicate/empty vcs keys | `quarry <tag>` | `<tag>` / per rules above / per rules above |
+
+Duplicate keys are compared as raw strings; agreement counts as one value, any disagreement makes that key unknown. None of these is an error: `quarry version` exits 0. (Mid-feature ruling, product-vision 2026-11-21: for `vcs.revision`, "absent" in BR-V2/BR-V3 also covers an empty value and conflicting duplicates; for `vcs.modified`, "absent or malformed" also covers conflicting duplicates; `+dirty` is appended only to the `<rev>` arm. Pins affected: SCENARIO-01 `Resolve` table test gains these rows plus a first-wins/last-wins mutation arm; SCENARIO-02 JSON pins gain a `commit: null` empty-revision row.)
 
 **Refusals (existing copy, stderr, exit 2)**
 - `quarry version foo` → existing `noArgs` copy as siblings render it.
