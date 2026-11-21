@@ -1,6 +1,6 @@
 ---
 id: SCENARIO-03
-status: open
+status: done
 ---
 
 # SCENARIO-03: Split tags are imported from the renumbered join table (folds SCENARIO-07)
@@ -29,10 +29,10 @@ Success line: the fixture adds no table or column outside the reference (Account
 - [x] Step 5: `cmd/quarry/run_renumbering_test.go` `Test_run_sync_from_imports_a_snapshot_whose_manifest_recorded_a_refusal_under_the_old_label` — batch 3: sync the Step 2 file, rewrite the manifest's `schema` as a `+quarry.1` refusal (decode `snapshot.Manifest`, set Schema, `Encode`, write; sha untouched), delete the store, `sync --from <id>`; asserts exit 0, empty stderr, Schema line `referenceMatch`, `split_tags` rebuilt in the new store. Green on arrival (re-comparison already works); the `recorded.Schema` mutation proves it can fail
 
 ### Sweep
-- [ ] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/importer` reads right for `WithEntityResolver`/`EntityResolver`
+- [x] Step 6: fix what `go build ./... && golangci-lint run ./...` reports, down to `0 issues`; `go doc ./internal/importer` reads right for `WithEntityResolver`/`EntityResolver`
 
 ### Verify
-- [ ] Step 7: `.claude/scripts/verify.sh <start> ./internal/importer/... ./internal/quicken/... ./cmd/quarry/...` + `.claude/scripts/spec-check.py core-data-entity-renumbering`; tick SCENARIO-03 and SCENARIO-07 (`delivered by SCENARIO-03`, test last on the line); rewrite STATE.md; `status: done`
+- [x] Step 7: `.claude/scripts/verify.sh <start> ./internal/importer/... ./internal/quicken/... ./cmd/quarry/...` + `.claude/scripts/spec-check.py core-data-entity-renumbering`; tick SCENARIO-03 and SCENARIO-07 (`delivered by SCENARIO-03`, test last on the line); rewrite STATE.md; `status: done`
 
 ## Handoff
 
@@ -52,15 +52,5 @@ Success line: the fixture adds no table or column outside the reference (Account
 
 ## Phase report
 
-Runs A and B1 done (steps 1-5); Narrow loop green, `go build ./... && golangci-lint run ./...` at `0 issues`. Run V remains: Sweep doc check, `verify.sh`, `spec-check.py`, ticks, STATE.md.
-
-- `internal/importer/importer.go`: `EntityResolver` type, `WithEntityResolver` option, `Server.resolve` (default `keepName` identity); `Import` passes `srv.splitTagsQuery(entityNumbers)` to `mapSplitTags`.
-- `internal/importer/entities.go`: `CashFlowTransactionEntry` is optional (`splitEntryEntity`, no refusal); `resolveEntities` also returns every Z_ENT per Z_NAME it read (`map[string][]int64`, duplicate visible).
-- `internal/importer/splits.go`: `(*Server).splitTagsQuery` resolves table `Z_15USERTAGS` and columns `Z_15CASHFLOWTRANSACTIONENTRIES`, `Z_76USERTAGS`; `mapSplitTags` takes the query; doc names the join table, not `Z_15USERTAGS`.
-- `cmd/quarry/run.go:77`: `importer.WithEntityResolver(v9.ResolveName)` wired.
-- Tests: `internal/importer/splits_test.go` (end): `Test_import_reads_split_tags_from_the_renumbered_join_table`, `..._cannot_read_the_renumbered_join_table_without_an_entity_resolver` (control), `..._literally_when_cashflowtransactionentry_is_absent`, `..._is_listed_twice`, `Test_import_propagates_a_fault_reading_the_renumbered_join_table`; helper `importResolvingEntities` in `helpers_test.go` (shared `importInto` untouched). `cmd/quarry/run_renumbering_test.go`: helper `renumberedTaggedSplit`, acceptance test and the SCENARIO-07 test `Test_run_sync_from_imports_a_snapshot_whose_manifest_recorded_a_refusal_under_the_old_label`.
-- Run A's acceptance fixture had no `PostedDate`, so once the join resolved it was refused ("a transaction ... has no date"); fixed by adding `PostedDate` (it had been red for the join table first, masking this).
-- SCENARIO-07 test was green on arrival (re-comparison already worked); its mutation proves it can fail.
-- Mutations, each restored (all verified red): delete `WithEntityResolver` in run.go -> both cmd acceptance tests; literal names in `splitTagsQuery` -> `..._from_the_renumbered_join_table` and the renumbered fault test; CashFlowTransactionEntry required -> `..._literally_when_cashflowtransactionentry_is_absent`; `Schema: recorded.Schema` in `snapshot/from.go:62` -> the SCENARIO-07 test; `numbers[name] = []int64{ent}` (last wins) -> `..._is_listed_twice`.
-- Existing `everySourceQuery` `Z_15USERTAGS` fault rows still pass with no resolver (unchanged). UserTag-absent refusal covered by the existing `entities_test.go` table.
-- Run V: Step 6 doc check done (`go doc` reads right); `verify.sh`, `spec-check.py`, spec ticks (SCENARIO-03, SCENARIO-07 folded), STATE.md, `status: done` outstanding.
+Run V done. Checkpoint pins applied: `splits_test.go` `..._when_the_renumbered_cashflowtransactionentry_is_listed_twice` (renumbered builder plus Z_ENT 99 row; reddens under first-wins in `entities.go:51`, quoted "An error is expected but got nil"); docs trimmed (`splits.go` `mapSplitTags`, `v9fixture/builder.go` `LinkUserTag`); decoy comment removed in `run_renumbering_test.go`.
+`verify.sh` all rc=0, `0 issues`, 0 uncovered added lines; test-stats TOTAL 1227 (+9). Spec ticked (SCENARIO-03, folded SCENARIO-07), STATE.md rewritten, `status: done`.

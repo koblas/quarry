@@ -194,7 +194,6 @@ func Test_run_imports_the_split_tags_of_a_file_whose_entities_were_renumbered(t 
 	}, stringMap(t, openStoreReadOnly(t, home), "SELECT split_id, tag_id FROM split_tags"))
 }
 
-// The manifest is a decoy: sync --from compares the snapshot itself, never the schema the manifest recorded.
 func Test_run_sync_from_imports_a_snapshot_whose_manifest_recorded_a_refusal_under_the_old_label(t *testing.T) {
 	home := newHome(t)
 	bundle, splitPK, tagPK := renumberedTaggedSplit(t, home)

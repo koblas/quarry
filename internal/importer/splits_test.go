@@ -299,6 +299,18 @@ func Test_import_reads_split_tags_literally_when_cashflowtransactionentry_is_lis
 	assert.Equal(t, []store.SplitTag{want}, fake.Rows.SplitTags)
 }
 
+func Test_import_reads_split_tags_literally_when_the_renumbered_cashflowtransactionentry_is_listed_twice(t *testing.T) {
+	t.Parallel()
+	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)
+	taggedSplit(b)
+	dataPath := snapshotPath(t, b)
+	execOn(t, dataPath, "INSERT INTO Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER, Z_MAX) VALUES (99, 'CashFlowTransactionEntry', 0, 0)")
+
+	_, err := importResolvingEntities(t, &fakeStore{}, dataPath)
+
+	require.ErrorContains(t, err, "read split tags")
+}
+
 func Test_import_propagates_a_fault_reading_the_renumbered_join_table(t *testing.T) {
 	t.Parallel()
 	b := v9fixture.NewBuilder().WithInsertedEntity("AccountGroup", 2)

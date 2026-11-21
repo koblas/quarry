@@ -119,9 +119,8 @@ func (srv *Server) splitTagsQuery(entities map[string][]int64) string {
 	return "SELECT " + entry + ", " + tag + " FROM " + table
 }
 
-// mapSplitTags reads the CashFlowTransaction-UserTag join table through query, keeping only links whose split is in
-// splitIDs (an entry whose transaction was skipped has no split to link)
-// and whose tag exists (non-deleted); a link missing either end is dropped.
+// mapSplitTags reads split-to-tag links through query, dropping any whose split is not in splitIDs or whose tag
+// is not in existingTags.
 func mapSplitTags(ctx context.Context, src Source, query string, splitIDs map[int64]string, existingTags map[int64]bool) ([]store.SplitTag, error) {
 	var rows []store.SplitTag
 	err := src.QueryRows(ctx, query, nil, func(scan func(dest ...any) error) error {

@@ -439,10 +439,8 @@ func (b *Builder) UserTag(row TagRow) int64 {
 	return pk
 }
 
-// LinkUserTag adds a UserTag join-table row (Z_15USERTAGS in the reference)
-// pairing entryPK (an EntryRow's Z_PK) with tagPK (a UserTag's Z_PK); either
-// as 0 writes NULL. The table and its two columns follow the schema's DDL
-// numbering (WithInsertedEntity), not a WithEntity("UserTag", ...) override.
+// LinkUserTag adds a UserTag join-table row pairing entryPK (an EntryRow's Z_PK) with tagPK (a UserTag's Z_PK);
+// either as 0 writes NULL. The table and columns follow the DDL numbering (WithInsertedEntity), not WithEntity.
 func (b *Builder) LinkUserTag(entryPK, tagPK int64) {
 	b.userTagLinks = append(b.userTagLinks, userTagLink{entryPK: entryPK, tagPK: tagPK})
 }
