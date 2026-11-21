@@ -110,23 +110,29 @@ func Test_run_root_refuses_an_unknown_command_naming_it(t *testing.T) {
 	assert.Equal(t, "quarry: unknown command \"bogus\" for \"quarry\"; Run 'quarry --help' for usage.\n", stderr.String())
 }
 
-func Test_run_sync_records_the_resolved_version_in_the_store(t *testing.T) {
-	const want = "(devel) 260d0d29f940+dirty"
-	home := newHome(t)
-	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), day(2026, time.March, 1))
-	info := &debug.BuildInfo{
+// dirtyDevelVersion is the version string of a binary built from dirtyDevelInfo.
+const dirtyDevelVersion = "(devel) 260d0d29f940+dirty"
+
+// dirtyDevelInfo is the build info of a checkout at revision 260d0d29f940… with uncommitted changes.
+func dirtyDevelInfo() *debug.BuildInfo {
+	return &debug.BuildInfo{
 		Main: debug.Module{Version: "(devel)"},
 		Settings: []debug.BuildSetting{
 			{Key: "vcs.revision", Value: "260d0d29f9401c3a5e7b8d6f4a2c9e1b3d5f7a80"},
 			{Key: "vcs.modified", Value: "true"},
 		},
 	}
+}
+
+func Test_run_sync_records_the_resolved_version_in_the_store(t *testing.T) {
+	home := newHome(t)
+	bundle := writeChequingBundle(t, filepath.Join(home, "Documents"), day(2026, time.March, 1))
 	var syncOut, syncErr bytes.Buffer
 
-	syncCode := runWith(t.Context(), []string{"sync", "--quicken", bundle.Dir}, envFor(info, &syncOut, &syncErr, fixedRates()))
+	syncCode := runWith(t.Context(), []string{"sync", "--quicken", bundle.Dir}, envFor(dirtyDevelInfo(), &syncOut, &syncErr, fixedRates()))
 
 	require.Equal(t, 0, syncCode, syncErr.String())
-	assert.Equal(t, "quarry_version\n"+want+"\n", sqlCSV(t, "SELECT quarry_version FROM store_info"))
+	assert.Equal(t, "quarry_version\n"+dirtyDevelVersion+"\n", sqlCSV(t, "SELECT quarry_version FROM store_info"))
 	statusCode, statusOut, statusErr := runCapture(t.Context(), []string{"status", "--json"})
 	require.Equal(t, 0, statusCode, statusErr.String())
 	var status struct {
@@ -135,5 +141,5 @@ func Test_run_sync_records_the_resolved_version_in_the_store(t *testing.T) {
 		} `json:"store"`
 	}
 	require.NoError(t, json.Unmarshal(statusOut.Bytes(), &status))
-	assert.Equal(t, want, status.Store.QuarryVersion)
+	assert.Equal(t, dirtyDevelVersion, status.Store.QuarryVersion)
 }
