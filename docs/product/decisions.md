@@ -32,7 +32,7 @@ Carried unchanged from the PRD's Decisions list (docs/initial-prd.md, Sep 27, 20
 ## Rulings
 
 Rulings made while building a feature, folded here from the feature-spec folders under
-`docs/specifications/`. Each is dated and names the folder it came from; where a ruling quotes
+`docs/specifications/` (removed; kept at tag `pre-product-spec`). Each is dated and names the folder it came from; where a ruling quotes
 copy, the copy is the contract.
 
 ### 2026-10-05 · ACB refusals and currency (phase4de-acb, RULING-S17)

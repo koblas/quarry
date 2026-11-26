@@ -24,8 +24,8 @@ otherwise is a bug — fix it, do not work around it.
   plugin (skill, references, MCP config). Not program code.
 - `docs/product/` — the product authority (index `README.md`, settled rules in `decisions.md`). `docs/adr/` — decisions.
 - Specs: new features under `docs/specs/<slug>.md` (the plugin's layout). Features built before
-  the plugin are under `docs/specifications/<slug>/` (spec, `SCENARIO-XX.md`, `REVIEW-NN.md`,
-  `STATE.md`, `METRICS.md`, `REFERENCE-CHECK.md`) — read-only history, prior art for scoping.
+  the plugin were under `docs/specifications/<slug>/`, removed after their rules moved to
+  `docs/product/` and their debts to issues; read them at tag `pre-product-spec` as prior art.
 
 **Where commands run:** every Go command from the repo root.
 

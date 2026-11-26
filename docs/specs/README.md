@@ -16,5 +16,5 @@ A feature spec has four parts:
 The kickoff is three lines: what Claude understood, the open questions, and whether the feature
 runs here or unattended.
 
-Features built before this layout are under `docs/specifications/<slug>/` and use Gherkin; they
-are not converted.
+Features built before this layout used Gherkin under `docs/specifications/<slug>/`; that folder
+was removed and is kept at tag `pre-product-spec`. Those specs are not converted.
