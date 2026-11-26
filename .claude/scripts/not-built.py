@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-# Vendored copy of plugins/pipeline/scripts/not-built.py from koblas/content_buddy at
-# 2a176bfdc771f9ca8a744cde30823615d7ce57cc. content_buddy is private, so CI here cannot check the
-# plugin out; update this copy when that script changes.
+# Vendored copy of plugins/pipeline/scripts/not-built.py from koblas/throughline at
+# 40cb78205ff33235bb2a2456dad94a2dffe4f46b; update this copy when that script changes.
 """not-built — every requirement the product spec marks unbuilt has an open issue.
 
 A requirement in docs/product/*.md that is written but not built carries its issue inline:
