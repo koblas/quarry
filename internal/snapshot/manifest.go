@@ -64,7 +64,7 @@ func (m Manifest) Encode() ([]byte, error) {
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(m); err != nil {
-		// unreachable: every Manifest field is a string, bool, int, int64, slice or struct of those; none can fail JSON encoding.
+		// uncovered: every Manifest field is a string, bool, int, int64, slice or struct of those; none can fail JSON encoding.
 		return nil, fmt.Errorf("encode manifest: %w", err)
 	}
 	return buf.Bytes(), nil

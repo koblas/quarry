@@ -35,7 +35,7 @@ func (s *sqliteSource) Open(ctx context.Context, path string) error {
 
 func (s *sqliteSource) Probe(ctx context.Context) error {
 	if _, err := s.db.QueryInt(ctx, "SELECT count(*) FROM sqlite_master"); err != nil {
-		// unreachable: Open already runs this identical probe query as part of sqlite.OpenReadOnly; it fails only if the connection breaks between the two calls.
+		// uncovered: Open already runs this identical probe query as part of sqlite.OpenReadOnly; it fails only if the connection breaks between the two calls.
 		return fmt.Errorf("probe: %w", err)
 	}
 	return nil
@@ -53,7 +53,7 @@ func (s *sqliteSource) Close() error {
 		return nil
 	}
 	if err := s.db.Close(); err != nil {
-		// unreachable: database/sql.DB.Close of a read-only connection with no open rows returns only sqlite3_close_v2's result, which is SQLITE_OK for a live connection with no unfinalized statements.
+		// uncovered: database/sql.DB.Close of a read-only connection with no open rows returns only sqlite3_close_v2's result, which is SQLITE_OK for a live connection with no unfinalized statements.
 		return fmt.Errorf("close source: %w", err)
 	}
 	return nil

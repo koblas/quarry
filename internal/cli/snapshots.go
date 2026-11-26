@@ -61,7 +61,7 @@ quarry sync --from <ID>.`,
 				},
 				func() string { return renderSnapshots(listing) })
 			if err != nil {
-				// unreachable: renderResult fails only via marshalDocument, and the snapshots document holds strings, ints, bools and slices; see marshalDocument.
+				// uncovered: renderResult fails only via marshalDocument, and the snapshots document holds strings, ints, bools and slices; see marshalDocument.
 				return err
 			}
 			if err := writeResult(cmd, out); err != nil {

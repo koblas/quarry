@@ -97,7 +97,7 @@ var discoveredRefusals = originRefusals{
 func resolveBundlePath(home, path string, origin originRefusals) (string, error) {
 	abs, err := filepath.Abs(homepath.Expand(home, path))
 	if err != nil {
-		// unreachable: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_ResolveBundlePath_returns_an_error_when_the_working_directory_no_longer_exists
+		// uncovered: on darwin os.Getwd succeeds after the working directory is removed; Linux exercises it via Test_ResolveBundlePath_returns_an_error_when_the_working_directory_no_longer_exists
 		return "", fmt.Errorf("resolve bundle path %s: %w", path, err)
 	}
 

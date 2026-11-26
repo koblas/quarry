@@ -92,8 +92,8 @@ cite them.
 - Lint is a gate, not advice: `golangci-lint run ./...` must exit 0. Run `golangci-lint fmt`
   first (gofumpt, gci, goimports are on). `//nolint` only as `//nolint:<linter> // <reason>`.
   Never edit `.golangci.yaml` to silence a finding — stop and report the change you would make.
-- Every added production line is executed by a test; a defensive branch that cannot be reached
-  carries `// unreachable: <reason>` stating how that was established.
+- Every changed production block is executed by a test; a defensive branch that cannot be reached
+  carries `// uncovered: <reason>` stating how that was established.
 - `testing/synctest` for concurrency tests, not sleeps and polling.
 
 ## For product-vision

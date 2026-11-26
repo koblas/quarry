@@ -93,7 +93,7 @@ func reportPruned(cmd *cobra.Command, srv *snapshot.Server, pruned snapshot.Prun
 		func() ([]byte, error) { return renderPrunedJSON(pruned, warnings) },
 		func() string { return renderPruned(pruned, srv.Home()) })
 	if err != nil {
-		// unreachable: renderResult fails only via marshalDocument, and the prune document holds strings, ints, bools and slices; see marshalDocument.
+		// uncovered: renderResult fails only via marshalDocument, and the prune document holds strings, ints, bools and slices; see marshalDocument.
 		return err
 	}
 	if err := writeResult(cmd, out); err != nil {

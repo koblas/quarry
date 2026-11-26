@@ -143,7 +143,7 @@ func isAcquisition(action string) bool {
 // splitShares multiplies count by newShares over oldShares.
 func splitShares(count *big.Rat, newShares, oldShares *int64) {
 	if newShares == nil || oldShares == nil || *newShares <= 0 || *oldShares <= 0 {
-		// unreachable: the importer's splitSides refuses a split with a nil or non-positive side, so none is stored
+		// uncovered: the importer's splitSides refuses a split with a nil or non-positive side, so none is stored
 		return
 	}
 	count.Mul(count, big.NewRat(*newShares, *oldShares))

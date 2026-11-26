@@ -39,6 +39,6 @@ func windowWording(refusal report.WindowError) string {
 	case report.WindowUntilBeforeDefault:
 		return bound + " " + refusal.Value + " is before the default since " + refusal.DefaultSince + "; pass since too"
 	}
-	// unreachable: every WindowErrorKind has a case above and the exhaustive linter fails the build when one is added
+	// uncovered: every WindowErrorKind has a case above and the exhaustive linter fails the build when one is added
 	return bound + " " + refusal.Value + " is refused"
 }

@@ -83,7 +83,7 @@ func parseAmountBound(bound string, value *string) (*int64, error) {
 	fraction = (fraction + "00")[:2]
 	cents, err := strconv.ParseInt(whole+fraction, 10, 64)
 	if err != nil {
-		// unreachable: amountGrammar bounds whole+fraction to 18 digits and int64 holds 19; the 16-digit row of Test_ParseSearchAmounts parses
+		// uncovered: amountGrammar bounds whole+fraction to 18 digits and int64 holds 19; the 16-digit row of Test_ParseSearchAmounts parses
 		return nil, AmountError{Kind: AmountNotAnAmount, Bound: bound, Value: *value}
 	}
 	return &cents, nil

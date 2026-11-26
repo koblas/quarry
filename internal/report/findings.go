@@ -182,7 +182,7 @@ func findingOrder(typ finding.Type) func(a, b store.Finding) int {
 			return cmp.Or(cmp.Compare(strings.ToLower(accountOf(a)), strings.ToLower(accountOf(b))), cmp.Compare(a.ID, b.ID))
 		}
 	}
-	// unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and knownFindings drops rows of any other type.
+	// uncovered: the exhaustive linter fails a switch missing a finding.Types() entry, and knownFindings drops rows of any other type.
 	return func(a, b store.Finding) int { return cmp.Compare(a.ID, b.ID) }
 }
 
@@ -218,7 +218,7 @@ func latestDate(f store.Finding) time.Time {
 // categoryOf is the path of f's first item, the unused category itself; "" when f has none.
 func categoryOf(f store.Finding) string {
 	if len(f.Items) == 0 || f.Items[0].Category == nil {
-		// unreachable: only a fixed finding lacks items (mergeFindings writes them for detected ones, each >= 1) and listedOrder sends it to fixed_at; full_path is NOT NULL (schema.go:30)
+		// uncovered: only a fixed finding lacks items (mergeFindings writes them for detected ones, each >= 1) and listedOrder sends it to fixed_at; full_path is NOT NULL (schema.go:30)
 		return ""
 	}
 	return *f.Items[0].Category
@@ -227,7 +227,7 @@ func categoryOf(f store.Finding) string {
 // accountOf is the name of f's first item's account; "" when f has none.
 func accountOf(f store.Finding) string {
 	if len(f.Items) == 0 {
-		// unreachable: only a fixed finding lacks items and listedOrder sends it to fixed_at; unclassifiedFindings gives each finding one item
+		// uncovered: only a fixed finding lacks items and listedOrder sends it to fixed_at; unclassifiedFindings gives each finding one item
 		return ""
 	}
 	return f.Items[0].Account

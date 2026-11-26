@@ -19,3 +19,6 @@ devenv.local.yaml
 
 # Pipeline plugin run state
 /.runs/
+
+# koblas/throughline checkout the diff-coverage check reads (verify.sh)
+/.throughline/

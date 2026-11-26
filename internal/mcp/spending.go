@@ -27,7 +27,7 @@ func (s *Server) spending(ctx context.Context, in spendingInput) (any, error) {
 	}
 	by, ok := store.ParseSpendingGroup(in.By)
 	if !ok {
-		// unreachable: the schema's enum admits only the String of a SpendingGroup, and its default supplies category
+		// uncovered: the schema's enum admits only the String of a SpendingGroup, and its default supplies category
 		return nil, fmt.Errorf("%w: %q", errUnknownBy, in.By)
 	}
 	srv, err := s.newReport(ctx, commandName)

@@ -137,7 +137,7 @@ func (f file) tree() (map[string]any, error) {
 	}
 	decodeErr, ok := errors.AsType[*toml.DecodeError](err)
 	if !ok {
-		// unreachable: go-toml v2.4.3 decode_fused.go raises only parser and tracker errors and wrapError makes them *toml.DecodeError; 23 malformed scalars, keys and strings probed, all *toml.DecodeError.
+		// uncovered: go-toml v2.4.3 decode_fused.go raises only parser and tracker errors and wrapError makes them *toml.DecodeError; 23 malformed scalars, keys and strings probed, all *toml.DecodeError.
 		return nil, f.cannotRead(err.Error(), err)
 	}
 	line, _ := decodeErr.Position()
