@@ -22,7 +22,7 @@ otherwise is a bug — fix it, do not work around it.
   `accountmask`, `duckdb`, `sqlite`, …).
 - `plugin/` and `.claude-plugin/marketplace.json` — static files of quarry's own Claude Code
   plugin (skill, references, MCP config). Not program code.
-- `docs/initial-prd.md` — the product authority. `docs/adr/` — decisions.
+- `docs/product/` — the product authority (index `README.md`, settled rules in `decisions.md`). `docs/adr/` — decisions.
 - Specs: new features under `docs/specs/<slug>.md` (the plugin's layout). Features built before
   the plugin are under `docs/specifications/<slug>/` (spec, `SCENARIO-XX.md`, `REVIEW-NN.md`,
   `STATE.md`, `METRICS.md`, `REFERENCE-CHECK.md`) — read-only history, prior art for scoping.
@@ -108,11 +108,11 @@ plugin agent speaks of a UI or a generated client, quarry's consumers are those 
 
 - **Reference check before the gate.** A spec that compares against an outside reference
   (Quicken's own reports, a copy of the real store) lists that comparison as its last scenario —
-  Gherkin only, no acceptance test. The orchestrator runs it itself after the other scenarios,
-  before the gate; results go in the feature's `REFERENCE-CHECK.md`. A rule gap it finds is a
+  a case-table row only, no acceptance test. The orchestrator runs it itself after the other scenarios,
+  before the gate; results (counts only, never names or amounts from the user's file) go in the pull request description. A rule gap it finds is a
   new scenario, announced in one line and built before the gate. After each such fix, re-run
   the **whole** comparison against the old binary and the new one.
 - **Rule copy when a new failure mode appears.** A scenario, plan or finding that introduces an
   outcome the spec has no copy for (new refusal, exit code, hint) gets a scoped product-vision
   copy ruling before the developer implements it. A ruling that changes a shared format lists
-  the earlier pins it affects, recorded as open debts.
+  the earlier pins it affects, each filed as a `debt` issue.

@@ -79,7 +79,7 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		},
 		{
 			"prd lists the shipped references and defers the Phase 4 ones",
-			"docs/initial-prd.md",
+			"docs/product/components.md",
 			"`spending.md`, `cash-flow.md`, `recurring-and-anomalies.md`, `search.md`, `findings.md` " +
 				"(walking David through the findings worklist) and `monthly-summary.md` (the launchd job " +
 				"that runs sync and summary each month), with `.sql` recipes where no command answers " +
@@ -87,34 +87,34 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		},
 		{
 			"prd limits the generated schema reference to tables, views and conventions",
-			"docs/initial-prd.md",
+			"docs/product/components.md",
 			"(generated from the store, so it can't drift; it lists tables, views and conventions only, " +
 				"never accounts or categories)",
 		},
 		{
 			"prd places the plugin manifest and the marketplace listing",
-			"docs/initial-prd.md",
+			"docs/product/components.md",
 			"bundles the skill and the MCP server config (in `plugin.json`), in `plugin/`, " +
 				"listed by `.claude-plugin/marketplace.json` at the repo root",
 		},
 		{
 			"prd records that the category tax line is not imported",
-			"docs/initial-prd.md",
+			"docs/product/milestones-risks.md",
 			"Quicken's category tax line is not imported; tax totals are by user-named category until it is.",
 		},
 		{
 			"prd notes the securities type and currency conventions",
-			"docs/initial-prd.md",
+			"docs/product/architecture.md",
 			"(type deferred: Quicken's type codes are unlabelled; currency as recorded, NULL when Quicken has none)",
 		},
 		{
 			"prd names v_holdings as built from holding_shares",
-			"docs/initial-prd.md",
+			"docs/product/architecture.md",
 			"`v_holdings` (shares and value by day, from `holding_shares`; Phase 4b)",
 		},
 		{
 			"prd lists the holdings command beside accounts",
-			"docs/initial-prd.md",
+			"docs/product/components.md",
 			"| `quarry accounts` | Accounts with current balances, closed ones on request | " +
 				"| `quarry holdings` | Securities held in each investment account on one day " +
 				"(`--as-of`, default today) with share count, latest price and its date, and value; " +
@@ -122,7 +122,7 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		},
 		{
 			"prd lists the holdings MCP tool beside search_transactions",
-			"docs/initial-prd.md",
+			"docs/product/components.md",
 			"transfers and report-excluded transactions included and flagged | " +
 				"| `holdings` | Securities held on one day (as_of, default today) with share count, " +
 				"latest price and its date, and value, with accounts and currency parameters; " +
@@ -130,7 +130,7 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		},
 		{
 			"prd describes the Claude install on both targets",
-			"docs/initial-prd.md",
+			"docs/product/decisions.md",
 			"- Claude install: quarry claude install / uninstall act on Claude Code and Claude Desktop, " +
 				"whichever is on the Mac. Claude Code gets the plugin by running the claude command (user scope); " +
 				"quarry never edits Claude Code's files, and the download is Claude Code's, not quarry's. " +
@@ -140,13 +140,13 @@ func Test_notices_and_prd_carry_the_ruled_plugin_edits(t *testing.T) {
 		},
 		{
 			"prd security bullet limits the Claude Desktop change to the quarry entry",
-			"docs/initial-prd.md",
+			"docs/product/security-privacy.md",
 			"- **Claude Desktop config.** quarry claude install and uninstall change only the quarry entry " +
 				"in Claude Desktop's config file, never another key, and save the file they replace beside it.",
 		},
 		{
 			"prd names the investment transactions table and its cash side in transactions",
-			"docs/initial-prd.md",
+			"docs/product/architecture.md",
 			"| `investment_transactions` (commission DECIMAL(18,4)) | Action (buy, sell, dividend, reinvest, share transfer, split), security, shares, price, fees, amount " +
 				"| Cash side also appears in `transactions` |",
 		},

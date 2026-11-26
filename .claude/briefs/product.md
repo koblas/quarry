@@ -14,7 +14,7 @@ Quicken Classic for Mac (v9) hold decades of categorized transactions, balances,
 
 Normalized store is product. Quicken quirks resolved once, in importer. Core library own every analysis rule. CLI, MCP server, skill stay thin.
 
-**`docs/initial-prd.md` is the authority**, plus any later PRD in `docs/` (later one wins on conflict) — goals/non-goals, data model, conventions, CLI + MCP surface, cleanup findings, reporting currency, ACB, security, validation, milestones, risks, decisions. Feature specs (`docs/specs/<slug>.md`; older ones `docs/specifications/<slug>/specification.md`) refine it per feature. Read sections bearing on what you judge, not this summary. Its `Decisions` section record what settled — check there before re-opening anything.
+**`docs/product/` is the authority** (index `docs/product/README.md`) — goals/non-goals, data model, conventions, CLI + MCP surface, cleanup findings, reporting currency, ACB, security, validation, milestones, risks, decisions. Feature specs (`docs/specs/<slug>.md`; older ones `docs/specifications/<slug>/specification.md`) refine it per feature. Read sections bearing on what you judge, not this summary. `docs/product/decisions.md` record what settled — check there before re-opening anything.
 
 ## Invariants you defend
 
@@ -60,7 +60,7 @@ What none of them do, why quarry exist: reconcile against Quicken on every impor
 
 Rejected substrates: hand-exported CSV/QIF (lossy on splits, transfers, lots), querying live database (encrypted when closed, never safe to hold open), floats for money. DuckDB settled (exact DECIMAL, ASOF joins against FX and prices); tables use standard types so move to SQLite stays a port.
 
-Settled (`docs/initial-prd.md` → `Decisions`): Quicken Classic for Mac v9; CAD and USD accounts; full history including closed accounts; `sync` takes own snapshot; CLI + MCP + skill, skill primary; CAD/USD reporting, CAD default; ACB in CAD per security across non-registered accounts at trade-date FX; Bank of Canada daily FX series; findings as Quicken worklist; Go, one binary, duckdb-go and official MCP Go SDK; `sync` fetches Bank of Canada rates incrementally (only outbound call, no user data; failed fetch warns, never fails the sync); exit codes `0` success (warnings included), `1` failure, `2` usage.
+Settled (`docs/product/decisions.md`): Quicken Classic for Mac v9; CAD and USD accounts; full history including closed accounts; `sync` takes own snapshot; CLI + MCP + skill, skill primary; CAD/USD reporting, CAD default; ACB in CAD per security across non-registered accounts at trade-date FX; Bank of Canada daily FX series; findings as Quicken worklist; Go, one binary, duckdb-go and official MCP Go SDK; `sync` fetches Bank of Canada rates incrementally (only outbound call, no user data; failed fetch warns, never fails the sync); exit codes `0` success (warnings included), `1` failure, `2` usage.
 
 ## The consumers
 
@@ -113,7 +113,7 @@ At final pass, copy already ruled is settled — re-open only if implementation 
 
 ## Reading the surface
 
-Read the actual surface before judging: `docs/initial-prd.md`, the specs and their
+Read the actual surface before judging: `docs/product/`, the specs and their
 `SCENARIO-XX.md` plans, the commands under `internal/cli`, feature packages under `internal/`,
 wiring in `cmd/quarry`, and the skill under `plugin/skills/quarry/`. quarry has no HTTP
 surface; if one appears, conformance goes to `api-reviewer`.

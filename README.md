@@ -1,6 +1,6 @@
 # quarry
 
-`quarry` turns a Quicken Classic for Mac data file into a clean, local, queryable financial database. See `docs/initial-prd.md`.
+`quarry` turns a Quicken Classic for Mac data file into a clean, local, queryable financial database. See the product spec in [`docs/product/`](docs/product/README.md).
 
 ## Use quarry with Claude Code or Claude Desktop
 

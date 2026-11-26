@@ -721,7 +721,7 @@ const (
 func Test_monthly_summary_job_is_documented_where_a_reader_looks(t *testing.T) {
 	skill := repoFile(t, skillPath)
 	readme := repoFile(t, "README.md")
-	prd := repoFile(t, "docs/initial-prd.md")
+	prd := repoFile(t, "docs/product/decisions.md")
 
 	cell, rowErr := skillRunCell(skill, monthlySummaryQuestion)
 
