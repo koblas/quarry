@@ -107,10 +107,46 @@ copy, the copy is the contract.
 
 ### 2026-10-01 to 2026-10-06 · Reference checks (REFERENCE-CHECK files)
 
-- Phases that report on real money (phase2d-findings, phase2e-recurring-anomalies, phase2f-fx,
-  phase4a-investments, phase4b-holdings, phase4c-networth, phase4de-acb, phase4f-summary) ship
-  only after a reference check: the branch's binary runs on copies of the user's snapshot and
-  store in a scratch `HOME`, so the user's own store, snapshots and config are never touched.
-- A reference check records counts and outcomes only, never account, payee or security names or
-  amounts from the user's file. A difference from Quicken that it cannot explain becomes a new
-  scenario (or now, an issue), not a note.
+- A phase that reports on real money ships only after a reference check: the branch's binary runs
+  on copies of the user's snapshot and store in a scratch `HOME`, never on the user's own store,
+  snapshots or config. It records counts and outcomes only, never names or amounts from the
+  user's file. A difference from Quicken it cannot explain becomes an issue, not a note.
+- The verdicts those checks recorded are RC-1 to RC-6 below. The rule gaps they found are rulings
+  of their own (the commission scale in `architecture.md`, RULING-S22 above, the recurring "new" rule
+  in the Monthly summary decision). A check left to the user by hand is open work for an issue,
+  not a decision.
+
+### 2026-10-01 · Findings and recurring verdicts (phase2d-findings, phase2e-recurring-anomalies)
+
+- RC-1. The findings heuristics were accepted on a sample of up to 20 per type. A reimbursement
+  deposit that mirrors an expense's amount is an accepted false-positive shape: the user ignores it
+  with `findings.ignore`, and the heuristic is not narrowed for it.
+  (`pre-product-spec:docs/specifications/phase2d-findings/REFERENCE-CHECK.md`)
+- RC-2. Anomaly volume (about 9% of charges since 2024 on the real file) and recurring series with
+  many price changes (6 and 8 on the real file) are accepted as shipped; neither is a reason to
+  tighten the rules. (`pre-product-spec:docs/specifications/phase2e-recurring-anomalies/REFERENCE-CHECK.md`)
+
+### 2026-10-04 · Past holdings across a split, unverified (phase4b-holdings, phase4c-networth)
+
+- RC-3. Whether past holdings values match Quicken's Portfolio view on dates that cross a
+  `ZSECURITYSPLIT` date was not checked: it depends on whether Quicken's price history is
+  split-adjusted, and the owner declined the manual comparison. It is unknown, not verified; 4c
+  left it as 4b did. (`pre-product-spec:docs/specifications/phase4b-holdings/REFERENCE-CHECK.md`,
+  `pre-product-spec:docs/specifications/phase4c-networth/REFERENCE-CHECK.md`)
+
+### 2026-10-05 · Investment cash and ACB against Quicken (phase4c-networth, phase4de-acb)
+
+- RC-4. An FI statement's cash can differ from quarry's cash on its as-of day by settlement
+  timing, since the broker's figure already includes the next day's cash moves. That is accepted,
+  not a rule gap. (`pre-product-spec:docs/specifications/phase4c-networth/REFERENCE-CHECK.md`)
+- RC-5. Per-sale ACB removed differs from Quicken's lot cost by design: quarry pools and averages,
+  as the CRA requires, where Quicken removes specific lots. Only each security's total CAD cost is
+  conserved, so a per-sale difference from Quicken is not a bug.
+  (`pre-product-spec:docs/specifications/phase4de-acb/REFERENCE-CHECK.md`)
+
+### 2026-10-06 · Summary and today's recurring (phase4f-summary)
+
+- RC-6. `quarry summary` can report as new a series that today's `quarry recurring` does not list:
+  one steady at its month end that broke later. That is accepted, since summary judges as of the
+  month's last day and plain `recurring` judges only the latest run as of today.
+  (`pre-product-spec:docs/specifications/phase4f-summary/REFERENCE-CHECK.md`)
