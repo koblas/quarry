@@ -16,3 +16,6 @@ devenv.local.yaml
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+
+# Pipeline plugin run state
+/.runs/

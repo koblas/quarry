@@ -1,0 +1,54 @@
+{
+  "pass_conditions": [
+    "gate_rounds <= 2",
+    "dev_runs_max <= 8",
+    "stops <= 1",
+    "cost_per_scenario_usd <= 5"
+  ],
+  "feature_budget_usd": 75,
+  "security_paths": "^internal/(platform/(atomicfile|replacefile|lockfile|accountmask)/|snapshot/|claudedesktop/)",
+  "build_definitions": "^devenv\\.|^\\.envrc$|^\\.golangci\\.ya?ml$",
+  "requests": {},
+  "generated_roots": [],
+  "top_dirs": ["cmd", "internal", "plugin", "docs", ".claude"],
+  "copy_sources": {
+    "roots": [{"path": "cmd"}, {"path": "internal"}, {"path": "plugin"}],
+    "suffixes": [".go", ".md", ".json"],
+    "skip_dirs": [".devenv", ".direnv"]
+  },
+  "runner": {
+    "required_tools": ["go", "golangci-lint", "git"],
+    "worktree_gomodcache": true,
+    "resume_prefix": ["direnv", "exec", "."]
+  },
+  "surfaces": {
+    "go": {
+      "language": "go",
+      "root": ".",
+      "changes": ["."],
+      "production": {"include": ["**/*.go"], "exclude": ["**/*_test.go"]},
+      "tests": {"include": ["**/*_test.go"]},
+      "reviewers": {"correctness": "correctness-reviewer", "test": "pipeline:test-reviewer"},
+      "covers": {"correctness": "production Go logic", "test": "Go tests"},
+      "lint": {"include": ["**/*.go"], "command": ["golangci-lint", "run", "{package}"], "only_file": true},
+      "format": {
+        "include": ["**/*.go"],
+        "tool": "golangci-lint",
+        "steps": [
+          {"label": "golangci-lint fmt {file}", "command": ["golangci-lint", "fmt", "{abs}"], "cwd": ".", "timeout": 60},
+          {"label": "go vet {package}", "command": ["go", "vet", "{package}"], "timeout": 120}
+        ]
+      },
+      "phase": [
+        {"name": "build", "command": ["go", "build", "./..."]},
+        {"name": "tidy", "command": ["go", "mod", "tidy", "-diff"]},
+        {"name": "lint", "command": ["golangci-lint", "run", "{packages/...}"]},
+        {"name": "test", "command": ["go", "test", "-count=1", "-v", "{cover}", "{packages}", "{run}"]}
+      ],
+      "full_gates": [
+        {"name": "go test", "command": ["go", "test", "-count=1", "./..."]},
+        {"name": "golangci-lint", "command": ["golangci-lint", "run", "./..."]}
+      ]
+    }
+  }
+}
