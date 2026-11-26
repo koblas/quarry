@@ -5,8 +5,9 @@ invariants it defends, its surface and consumers, and the copy a scoping pass ow
 reaches this file from `.claude/briefs/repo.md` → *For product-vision*. Its verdict format and
 evaluation questions are the plugin agent's own and are not repeated here.
 
-Specs written before the plugin live under `docs/specifications/<slug>/`; new ones under
-`docs/specs/<slug>.md`. Read both when judging a surface.
+Feature specs live under `docs/specs/<slug>.md`. Specs written before the plugin were removed;
+their rules are in `docs/product/`, and the originals are at tag `pre-product-spec`
+(`git show pre-product-spec:docs/specifications/<slug>/specification.md`).
 
 ## What quarry is
 
@@ -14,7 +15,7 @@ Quicken Classic for Mac (v9) hold decades of categorized transactions, balances,
 
 Normalized store is product. Quicken quirks resolved once, in importer. Core library own every analysis rule. CLI, MCP server, skill stay thin.
 
-**`docs/product/` is the authority** (index `docs/product/README.md`) — goals/non-goals, data model, conventions, CLI + MCP surface, cleanup findings, reporting currency, ACB, security, validation, milestones, risks, decisions. Feature specs (`docs/specs/<slug>.md`; older ones `docs/specifications/<slug>/specification.md`) refine it per feature. Read sections bearing on what you judge, not this summary. `docs/product/decisions.md` record what settled — check there before re-opening anything.
+**`docs/product/` is the authority** (index `docs/product/README.md`) — goals/non-goals, data model, conventions, CLI + MCP surface, cleanup findings, reporting currency, ACB, security, validation, milestones, risks, decisions. Feature specs (`docs/specs/<slug>.md`) refine it per feature. Read sections bearing on what you judge, not this summary. `docs/product/decisions.md` record what settled — check there before re-opening anything.
 
 ## Invariants you defend
 
