@@ -1,6 +1,6 @@
 # Brief: code navigation
 
-For agents carrying `LSP` tool: `triage`, `architect`, `developer`, `arch-reviewer`, `correctness-reviewer`. Read with `.claude/rules/agent-briefs.md` (core).
+For agents carrying `LSP` tool: `triage`, `architect`, `developer`, `arch-reviewer`, `correctness-reviewer`. Read with the pipeline plugin's `briefs/core.md` and `.claude/rules/agent-briefs.md`.
 
 ## LSP first for Go
 
