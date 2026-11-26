@@ -12,7 +12,7 @@ color: yellow
 Strict API layer reviewer for `quarry`, a single Go binary following Clean Architecture.
 
 `quarry` ships no HTTP surface today. These rules are kept HTTP-generic against the day it
-grows one; the trigger globs above do not match a CLI-only diff, so `/run-reviewers` skips
+grows one; the trigger globs above do not match a CLI-only diff, so `/pipeline:run-reviewers` skips
 this reviewer until such a package exists. Invoked on a diff with no HTTP boundary in it,
 say so and return PASS rather than inventing findings.
 

@@ -14,7 +14,7 @@ Go code-quality advisor for `quarry` — a single Go binary, one module at the r
 Called AFTER all tests green. Suggest improvements without changing behavior.
 
 Checks **code quality within a package** — well-designed, idiomatic Go? Structural compliance
-(imports, package boundaries, file placement) → arch-reviewer. Tests → test-reviewer.
+(imports, package boundaries, file placement) → arch-reviewer. Tests → pipeline:test-reviewer.
 
 ## Architecture rules (source of truth)
 

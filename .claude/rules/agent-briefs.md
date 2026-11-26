@@ -1,20 +1,9 @@
-# Standing brief for pipeline agents — core
+# quarry verification rules for pipeline agents
 
-Standing brief every `architect`/`developer`/reviewer prompt would otherwise retype. This file = what **every** agent needs; it auto-loads. Rest split by audience under `.claude/briefs/` — read only what your prompt or agent file cites:
-
-| File | Read by |
-| --- | --- |
-| `.claude/briefs/build.md` — build cadence (double loop), edit hook, scenario traceability, step-file format, developer runs and light lane, planning coverage, fix passes | architect, developer, checkpoint reviewers, orchestrator writing fix-pass brief |
-| `.claude/briefs/proof.md` — mutation verification, assertions that prove nothing | developer, test / correctness reviewers; architect when plan names mutation check |
-| `.claude/briefs/navigation.md` — Go navigation with `LSP` tool (gopls) | triage, architect, developer, arch / correctness reviewers |
-| `.claude/briefs/review.md` — reviewing: scope and completeness | every reviewer |
-| `.claude/briefs/metrics.md` — feature cost ledger | orchestrator only |
-
-Read once; no ask for repeat. New standing rule goes in brief its readers already open, not here.
-
-## Batch tool calls
-
-Turn count × context size is agent's wall-clock; each extra turn re-reads whole context. Independent reads, greps and `LSP` queries go in **one turn** as parallel tool calls. Read whole relevant range once with `Read` `offset`/`limit` — not successive `sed -n`/`grep` probes widening by few lines. One multi-pattern grep (`-e A -e B`) beats several.
+This repo's half of the standing brief: how to verify quarry by hand. The generic half — batching,
+IDE diagnostics, verification greps, reporting — is the pipeline plugin's `briefs/core.md`; read
+it first. quarry's layout, conventions and role notes are in `.claude/briefs/repo.md`; its surface
+and gate commands in `.claude/pipeline.json`.
 
 ## Verification
 
@@ -30,7 +19,7 @@ One plain call: `go build`, full suite once with coverage into a unique `$TMPDIR
 
 **Lint gate before handing off.** `golangci-lint run ./...` reads repo-root `.golangci.yaml` and must exit 0 and print `0 issues` with no `level=error` line — part of the linting step, same standing as `go build`; judge exit code, not grepped text (a typecheck/config error can still end in `0 issues`). Run `golangci-lint fmt ./...` (and `golangci-lint run --fix ./...` for mechanical rewrites) first, then fix rest by hand; review `--fix` output — it can rewrite asserted copy. Default output caps repeats per linter, so hidden findings surface once visible ones fixed: rerun until zero, or pass `--max-issues-per-linter=0 --max-same-issues=0` to see all at once. `//nolint` only when fixing would change behaviour or user-visible copy, always as `//nolint:<linter> // <reason>` naming one linter. Never edit `.golangci.yaml` to silence a finding — stop and report the config change you would make.
 
-**Coverage gate before handing off.** Every production line you added must be executed by test. `uncovered-diff.py` lists each added non-test line no test executes, grouped into runs with enclosing function, exits 1 if any left. Reach zero, or mark genuinely unreachable defensive branch in code with `// unreachable: <reason>` (reason states how unreachability was established — `proof.md` → *Unreachable claims*) on the line, or anywhere in the contiguous `//` comment block directly above the run — then it move to "declared unreachable" section reviewer judge, and stop failing gate every later pass. Untested branch added by fix pass becomes next round's test-reviewer MAJOR.
+**Coverage gate before handing off.** Every production line you added must be executed by test. `uncovered-diff.py` lists each added non-test line no test executes, grouped into runs with enclosing function, exits 1 if any left. Reach zero, or mark genuinely unreachable defensive branch in code with `// unreachable: <reason>` (reason states how unreachability was established — *Unreachable claims* below) on the line, or anywhere in the contiguous `//` comment block directly above the run — then it move to "declared unreachable" section reviewer judge, and stop failing gate every later pass. Untested branch added by fix pass becomes next round's pipeline:test-reviewer MAJOR.
 
 **Counts come from `test-stats.py --base <start> --changed`**: every package whose tests changed, with `now (±delta)` for top-level tests, `t.TempDir()` sites and disk-touching tests, read from git at `<start>` — never from archive or checkout you build yourself.
 
@@ -42,24 +31,19 @@ Rules:
 - Write scratch files only under `$TMPDIR` or session scratchpad — never `/tmp`, never path outside worktree you got.
 - **Sandbox denies reads of worktree too**, not only writes: this repo's worktrees sit under read-denied home dir. So first Bash call that reads worktree goes with `dangerouslyDisableSandbox: true` — known denial, no probe-then-retry. Other `operation not permitted` (e.g. write to `.claude/settings.json`) = diagnose before escaping.
 
-## IDE diagnostics are advisory
 
-IDE indexes mid-edit, and during mutation windows. Routinely reports compile errors `go build` does not, and indexes deleted files.
+## Unreachable claims
 
-No chase them. No re-verify on their account. Authority is `go build`. One exception: diagnostic that **contradicts claim you just made** worth single targeted check — it can be live mutation left behind by crashed run.
+`// unreachable: <reason>` (*Coverage gate* above) is a claim like any other. The reason, on one
+line (`uncovered-diff.py` captures only that line), states **how** unreachability was
+established — a caller that validates first (`file:line`), a type that cannot hold the value, an
+`LSP` `findReferences` showing no other entry — not just why the branch exists. "Defensive" alone
+is no reason; `pipeline:test-reviewer` judges it.
 
-## Verification greps
+## Fault tests
 
-Grep is evidence only if it can see what it looks for.
-
-- **Comment sweeps must be multiline-aware.** `//` blocks wrap, so phrase splits across lines and line-based `grep` silently reports zero. Flatten continuations first (strip leading `//`) before matching. "0 hits" from line-based grep over prose = untested claim, not clean sweep.
-- **Run positive control before believing zero.** Grep for symbol you KNOW is present with same flags and scope. Control not found → sweep cannot see target, its zero means nothing.
-- State what grep would MISS, not just what it found.
-
-## Reporting
-
-- Step comes out **green on arrival** → say so and say why. No manufacture red.
-- Disagree with instruction or finding → say so **with evidence**, no silent skip.
-- Control arm not behave as its plan predicts → **stop and report** — no proceed to green on claim whose control proved nothing.
-- Deferred items stay deferred. No opportunistic fix outside brief; list them instead.
-- Never write `/nix/store/...` path into plan, prompt, or command. They go stale every rebuild.
+A fault test injects the error chain the real adapter returns — the driver's own error type
+included, wrapped as the adapter wraps it — not a convenient stdlib stand-in; one row per shape
+the adapter can surface. A disk-full test injecting `*fs.PathError{Err: ENOSPC}` passed while the
+real SQLite backup returned `sqlite3.Error{Code: SQLITE_FULL}` with no errno, so the classifier
+sent a real disk-full to the wrong refusal. Read the adapter's wrap sites before writing the fake.

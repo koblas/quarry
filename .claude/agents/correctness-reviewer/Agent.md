@@ -15,11 +15,11 @@ Mandate: code **correct under concurrency, retry, reuse**. Catch the bug that co
 passes the happy-path test.
 
 Structure → **arch-reviewer**. Style + design polish → **refactor-advisor**. Test structure
-→ **test-reviewer**. You own behavior that is wrong.
+→ **pipeline:test-reviewer**. You own behavior that is wrong.
 
 ## Navigation
 
-Read `.claude/briefs/review.md` once and `.claude/briefs/proof.md`. Confirm a caller or an implementer with `LSP`
+Read the pipeline plugin's `briefs/review.md` once and its `briefs/proof.md`. Confirm a caller or an implementer with `LSP`
 (`findReferences`, `goToImplementation`), not by reading packages — `.claude/briefs/navigation.md`.
 
 ## Context & cancellation

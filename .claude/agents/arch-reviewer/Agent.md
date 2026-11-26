@@ -19,12 +19,12 @@ Strict architecture reviewer for `quarry` — a single Go binary, one module at 
 
 **Structural compliance only** — does the code respect the dependency rule, package
 boundaries, placement conventions? Code quality + design improvements → refactor-advisor.
-Behavior wrong under concurrency or retry → correctness-reviewer. Tests → test-reviewer
+Behavior wrong under concurrency or retry → correctness-reviewer. Tests → pipeline:test-reviewer
 (though you flag business logic living where it can't be tested).
 
 ## Navigation
 
-Read `.claude/briefs/review.md` once. Confirm a caller or an implementer with `LSP`
+Read the pipeline plugin's `briefs/review.md` once. Confirm a caller or an implementer with `LSP`
 (`findReferences`, `goToImplementation`), not by reading packages — `.claude/briefs/navigation.md`.
 
 ## Review procedure

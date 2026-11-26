@@ -5,7 +5,7 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 paths: *.go
 ---
 
-Go, `testing` + **testify** (`assert`/`require`; `suite` optional). Tests declarative; a table where cases share one assertion, separate functions otherwise. Project conventions enforced by `test-reviewer` agent.
+Go, `testing` + **testify** (`assert`/`require`; `suite` optional). Tests declarative; a table where cases share one assertion, separate functions otherwise. Project conventions enforced by the `pipeline:test-reviewer` agent.
 
 ## Black-box package by default (MANDATORY)
 
@@ -119,7 +119,7 @@ func Test_returns_expected_section_count_when_the_document_has_headings(t *testi
 
 ## Mandatory Review
 
-**Every new or modified test must be reviewed by the `test-reviewer` agent.**
+**Every new or modified test must be reviewed by the `pipeline:test-reviewer` agent.**
 
 ## Naming
 
@@ -173,7 +173,7 @@ Rules:
 - **No logic in the case struct.** No `wantErr bool` driving an `if` in the loop body, no optional-field branching. Two assertion shapes means two tables, or two functions.
 - **Every case must discriminate on its own.** This is the failure mode that makes a table worse than what it replaced: cases that all pass for one reason, so the table proves one thing while claiming to prove seven. Verify by mutation — break the rule one case exists for, and **exactly that subtest** must redden. If breaking one guard reddens four cases, they were never independent; if it reddens none, the case was decorative. Drop decorative cases rather than keeping them for symmetry.
 
-  Unlike the three rules above it, this one **cannot be checked by reading a diff** — it needs production code broken and the suite run. It is discharged the way `.claude/briefs/proof.md` already requires of any mutation claim: the author states which mutation was run and which subtest it reddened, and the reviewer checks that report. A table arriving with no such statement has not satisfied this rule; it has skipped it.
+  Unlike the three rules above it, this one **cannot be checked by reading a diff** — it needs production code broken and the suite run. It is discharged the way the pipeline plugin's `briefs/proof.md` already requires of any mutation claim: the author states which mutation was run and which subtest it reddened, and the reviewer checks that report. A table arriving with no such statement has not satisfied this rule; it has skipped it.
 
 **Do not table** setup-heavy scenarios, cases needing different fakes or fixtures, or anything where the "table" becomes a config object with a branch per field. When the struct grows a field only some cases use, the table has stopped reducing boilerplate and started hiding it.
 
