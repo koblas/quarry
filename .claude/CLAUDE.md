@@ -17,7 +17,7 @@ own notes for pipeline agents are `.claude/briefs/repo.md`.
 - **Brief whole target, name what may stay behind.** Brief letting agent "descope for budget" turns one pass into several. Say which tests must move and which stay (and why) up front; ask for green, committed checkpoint only as fallback.
 - **Parallel agents only through Agent tool's `isolation: "worktree"`.** Never create worktree yourself and hand path to agent: session can only write to own worktree, and agent told to work elsewhere is blocked by harness hook. Independent packages (no shared seam) can run parallel this way; merge after.
 - **Model per call.** `architect` defaults to Opus; for scenario whose plan small (one package, roughly ≤15 steps) pass `model: "sonnet"` on Agent call. Keep Opus for multi-package or design-heavy scenarios.
-- **Measure with repo's scripts, not ad hoc.** Counts come from `.claude/scripts/test-stats.py`; untested additions from `.claude/scripts/uncovered-diff.py` (see `.claude/rules/agent-briefs.md` → *Verification*).
+- **Measure with repo's scripts, not ad hoc.** Counts come from `.claude/scripts/test-stats.py`; untested changes from the pipeline plugin's diff-coverage check, which `.claude/scripts/verify.sh` runs (see `.claude/rules/agent-briefs.md` → *Verification*).
 
 ## Tests
 

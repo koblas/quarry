@@ -93,6 +93,6 @@ func acbYearRefusal(err error) error {
 	if ok && refusal.Kind == report.ACBYearAfterThisYear {
 		return withLog(yearRefusedError("year "+refusal.Value+" is after this year; pass this year or an earlier one"), yearRefusedLog)
 	}
-	// unreachable: the schema bounds year to 1..9999 and "%04d" always yields four digits, so a year after this one is the only refusal
+	// uncovered: the schema bounds year to 1..9999 and "%04d" always yields four digits, so a year after this one is the only refusal
 	return err
 }

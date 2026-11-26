@@ -23,7 +23,7 @@ func renderResult(asJSON bool, renderJSON func() ([]byte, error), renderText fun
 	}
 	out, err := renderJSON()
 	if err != nil {
-		// unreachable: every read command's JSON renderer returns marshalDocument, whose own error path is unreachable; see there.
+		// uncovered: every read command's JSON renderer returns marshalDocument, whose own error path is unreachable; see there.
 		return nil, &runtimeError{err: err}
 	}
 	return out, nil
@@ -33,7 +33,7 @@ func renderResult(asJSON bool, renderJSON func() ([]byte, error), renderText fun
 func emitReport(cmd *cobra.Command, asJSON bool, warnings []string, renderJSON func() ([]byte, error), renderText func() string) error {
 	out, err := renderResult(asJSON, renderJSON, renderText)
 	if err != nil {
-		// unreachable: renderResult fails only via marshalDocument, whose encode error is unreachable; see there.
+		// uncovered: renderResult fails only via marshalDocument, whose encode error is unreachable; see there.
 		return err
 	}
 	return emit(cmd, out, "quarry: warning: ", warnings)

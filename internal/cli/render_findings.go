@@ -140,7 +140,7 @@ func liveFindingLines(typ finding.Type, findings []report.ListedFinding, view fi
 	case finding.SharesWithoutCost:
 		return sharesWithoutCostRows(findings, view)
 	}
-	return nil // unreachable: the exhaustive linter fails a switch missing a finding.Types() entry, and report.Findings groups only those
+	return nil // uncovered: the exhaustive linter fails a switch missing a finding.Types() entry, and report.Findings groups only those
 }
 
 // pairRows is each finding's id line, with the ignored marker, then one four-space row per item as rowsOf lays them out.
@@ -324,7 +324,7 @@ func similarCategoryRows(findings []report.ListedFinding, view findingsView) []s
 		paths := make([]string, len(f.Items))
 		counts := make([]string, len(f.Items))
 		for j, item := range f.Items {
-			// unreachable: items come from categories rows in one Replace and full_path is NOT NULL (duckstore/schema.go:30), so the join never yields nil
+			// uncovered: items come from categories rows in one Replace and full_path is NOT NULL (duckstore/schema.go:30), so the join never yields nil
 			paths[j] = escapeCell(*cmp.Or(item.Category, new(string)))
 			counts[j] = humanize.Count(item.Splits, "split", "splits")
 		}
@@ -408,7 +408,7 @@ func sharesCount(millionths int64) string {
 // accountItem is the one item of an unclassified-account or shares-without-cost finding, the zero item for a finding without one.
 func accountItem(f report.ListedFinding) store.FindingItem {
 	if len(f.Items) == 0 {
-		// unreachable: report.unclassifiedFindings and sharesWithoutCostFindings give each such finding exactly one item; a fixed one never reaches here
+		// uncovered: report.unclassifiedFindings and sharesWithoutCostFindings give each such finding exactly one item; a fixed one never reaches here
 		return store.FindingItem{}
 	}
 	return f.Items[0]
@@ -417,7 +417,7 @@ func accountItem(f report.ListedFinding) store.FindingItem {
 // topCategory is the path of the first of items, the unused category itself.
 func topCategory(items []store.FindingItem) string {
 	if len(items) == 0 || items[0].Category == nil {
-		// unreachable: only a fixed finding lacks items (mergeFindings writes them for detected ones, each >= 1) and findingLines routes it away; full_path is NOT NULL (schema.go:30)
+		// uncovered: only a fixed finding lacks items (mergeFindings writes them for detected ones, each >= 1) and findingLines routes it away; full_path is NOT NULL (schema.go:30)
 		return ""
 	}
 	return escapeCell(*items[0].Category)

@@ -124,7 +124,7 @@ func handler[In any](timeout time.Duration, stopped stoppedFunc, run toolFunc[In
 		}
 		body, err := json.Marshal(document)
 		if err != nil {
-			// unreachable: documents hold only strings, bools, ints, finite floats and nil (document.NewSQL's cells are the only values of other kinds)
+			// uncovered: documents hold only strings, bools, ints, finite floats and nil (document.NewSQL's cells are the only values of other kinds)
 			return refuse(ctx, fmt.Errorf("encode result: %w", err))
 		}
 		return &sdk.CallToolResult{

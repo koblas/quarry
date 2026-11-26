@@ -46,7 +46,7 @@ func queryRefusal(err error) error {
 	case report.QueryFailureOther:
 		return err
 	}
-	// unreachable: every QueryFailureKind has a case above and the exhaustive linter fails the build when one is added
+	// uncovered: every QueryFailureKind has a case above and the exhaustive linter fails the build when one is added
 	return err
 }
 

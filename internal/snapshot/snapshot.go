@@ -225,7 +225,7 @@ func (s *Server) Sync(ctx context.Context, bundlePath string) (Manifest, error) 
 
 	manifestBytes, err := manifest.Encode()
 	if err != nil {
-		// unreachable: Manifest.Encode's own error path is unreachable for any value this package builds; see there.
+		// uncovered: Manifest.Encode's own error path is unreachable for any value this package builds; see there.
 		_ = destination.Discard(ctx, snapshotPartial)
 		return Manifest{}, FailureOutcome(ctx, contentRefusal(s.home, bundlePath, fmt.Errorf("encode manifest: %w", err)))
 	}
@@ -281,7 +281,7 @@ func (s *Server) buildManifest(ctx context.Context, snapshotPath, source string,
 
 	size, sum, err := hashFile(snapshotPath)
 	if err != nil {
-		// unreachable: inspectContent already opened this same path above; a plain read cannot fail where SQLite's own read just succeeded.
+		// uncovered: inspectContent already opened this same path above; a plain read cannot fail where SQLite's own read just succeeded.
 		return Manifest{}, err
 	}
 
@@ -321,7 +321,7 @@ func inspectContent(ctx context.Context, path string, busyTimeout time.Duration)
 
 	exists, err := snap.QueryInt(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ZACCOUNT'")
 	if err != nil {
-		// unreachable: only a ctx cancelled between IntegrityCheck and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
+		// uncovered: only a ctx cancelled between IntegrityCheck and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
 		return fileContent{}, fmt.Errorf("check accounts table: %w", err)
 	}
 	if exists == 0 {
@@ -330,7 +330,7 @@ func inspectContent(ctx context.Context, path string, busyTimeout time.Duration)
 
 	accounts, err := snap.QueryInt(ctx, "SELECT count(*) FROM ZACCOUNT")
 	if err != nil {
-		// unreachable: only a ctx cancelled between the existence check and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
+		// uncovered: only a ctx cancelled between the existence check and this query reaches here, a race no test can pin; the caller's FailureOutcome classifies it as interrupted.
 		return fileContent{}, fmt.Errorf("count accounts: %w", err)
 	}
 	if accounts == 0 {

@@ -53,7 +53,7 @@ func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, 
 
 	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
-		// unreachable: Rows.ColumnTypes errs only once rows is closed, which only a ctx cancel racing this call does; callers check ctx first and report an interrupt.
+		// uncovered: Rows.ColumnTypes errs only once rows is closed, which only a ctx cancel racing this call does; callers check ctx first and report an interrupt.
 		return Table{}, err //nolint:wrapcheck // callers classify the driver's own error
 	}
 	table := Table{Columns: make([]Column, len(columnTypes)), Rows: [][]Value{}}
@@ -74,7 +74,7 @@ func (d *DB) QueryTable(ctx context.Context, query string, maxRows int) (Table, 
 			return Table{}, err //nolint:wrapcheck // callers classify ctx's own error
 		}
 		if err := rows.Scan(dest...); err != nil {
-			// unreachable: Scan into one *any per column errs only on closed rows, which only a ctx cancel racing this call does; callers check ctx first and report an interrupt.
+			// uncovered: Scan into one *any per column errs only on closed rows, which only a ctx cancel racing this call does; callers check ctx first and report an interrupt.
 			return Table{}, err //nolint:wrapcheck // callers classify the driver's own error
 		}
 		row := make([]Value, len(raw))

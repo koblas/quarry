@@ -40,7 +40,7 @@ func referenceTemplate(tb testing.TB) []byte {
 func buildReferenceTemplate() ([]byte, error) {
 	dir, err := os.MkdirTemp("", "v9fixture-template")
 	if err != nil {
-		// unreachable: MkdirTemp fails only when TMPDIR itself is unwritable or full, a machine-level fault no test induces.
+		// uncovered: MkdirTemp fails only when TMPDIR itself is unwritable or full, a machine-level fault no test induces.
 		return nil, fmt.Errorf("create template dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
@@ -48,23 +48,23 @@ func buildReferenceTemplate() ([]byte, error) {
 	path := filepath.Join(dir, "template")
 	conn, err := sql.Open("sqlite3", path)
 	if err != nil {
-		// unreachable: sql.Open only validates the driver name, which the sqlite3 import always registers.
+		// uncovered: sql.Open only validates the driver name, which the sqlite3 import always registers.
 		return nil, fmt.Errorf("open template: %w", err)
 	}
 
 	if _, err := conn.ExecContext(context.Background(), v9.ReferenceDDL); err != nil {
-		// unreachable: ReferenceDDL is a fixed, valid schema every fixture test exercises; a syntax fault would fail the whole suite, not one path.
+		// uncovered: ReferenceDDL is a fixed, valid schema every fixture test exercises; a syntax fault would fail the whole suite, not one path.
 		_ = conn.Close()
-		return nil, fmt.Errorf("execute reference ddl: %w", err) // unreachable: same fixed, valid ReferenceDDL as above
+		return nil, fmt.Errorf("execute reference ddl: %w", err) // uncovered: same fixed, valid ReferenceDDL as above
 	}
 	if err := conn.Close(); err != nil {
-		// unreachable: closing a connection with no pending writes and no locks held by another connection cannot fail.
+		// uncovered: closing a connection with no pending writes and no locks held by another connection cannot fail.
 		return nil, fmt.Errorf("close template: %w", err)
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// unreachable: the file was just written and closed inside a directory only this function knows.
+		// uncovered: the file was just written and closed inside a directory only this function knows.
 		return nil, fmt.Errorf("read template: %w", err)
 	}
 	return data, nil

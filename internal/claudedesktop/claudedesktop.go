@@ -46,7 +46,7 @@ func stopped(ctx context.Context) error {
 // notObjectError is why a value cannot be merged into: it is valid JSON, but of another kind.
 type notObjectError struct{ kind string }
 
-// unreachable: merge turns it into *TopLevelError or *ServersError and parseOurs drops it, so nothing formats it
+// uncovered: merge turns it into *TopLevelError or *ServersError and parseOurs drops it, so nothing formats it
 func (e *notObjectError) Error() string { return "a JSON " + e.kind + ", not an object" }
 
 // ForeignEntryError is returned by Install and Uninstall when mcpServers.quarry is not an entry that starts
@@ -370,7 +370,7 @@ func (s *Server) Uninstall(ctx context.Context) (UninstallResult, error) {
 	}
 	doc, err := encodeConfig(top, serverValues(servers))
 	if err != nil {
-		return res, err // unreachable: encodeConfig only fails on a value json cannot encode, and every value is a RawMessage from a successful decode
+		return res, err // uncovered: encodeConfig only fails on a value json cannot encode, and every value is a RawMessage from a successful decode
 	}
 	if err := saveReplacing(ctx, config, current, doc); err != nil {
 		return res, err
@@ -569,7 +569,7 @@ func encodeConfig(top map[string]json.RawMessage, servers map[string]any) ([]byt
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		return nil, fmt.Errorf("encode the config: %w", err) // unreachable: every value is a RawMessage from a successful decode, or a string or string slice built here
+		return nil, fmt.Errorf("encode the config: %w", err) // uncovered: every value is a RawMessage from a successful decode, or a string or string slice built here
 	}
 	return buf.Bytes(), nil
 }
