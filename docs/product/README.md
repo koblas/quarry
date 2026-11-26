@@ -19,6 +19,6 @@ unchanged, so `## <heading>` anchors survive the move.
 | [milestones-risks.md](milestones-risks.md) | Milestones, Risks and open questions |
 | [decisions.md](decisions.md) | Decisions, and the rulings folded from feature specs |
 
-A requirement that is written but not built carries its issue inline, `(not built: #N)`;
-`.claude/scripts/not-built.py` fails CI when a mark names an issue that is not open.
+A requirement that is written but not built carries its open issue inline, as the marks in
+[testing.md](testing.md) do; `.claude/scripts/not-built.py` fails CI when a mark names an issue that is not open.
 Issues for this spec carry the label `area:components`.
