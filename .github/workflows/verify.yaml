@@ -3,9 +3,10 @@ name: verify
 # The same check script sessions run, on every pull request.
 #
 # - verify: .claude/scripts/verify.sh against the pull request's base commit: go build, the full
-#   covered test suite, the untested-diff check, go test -race, golangci-lint and test counts.
+#   covered test suite, the diff-coverage check, go test -race, golangci-lint and test counts.
 #   macOS, because quarry targets macOS 14+ and links DuckDB through cgo. Versions follow the
-#   pins: Go from go.mod, golangci-lint matching devenv.
+#   pins: Go from go.mod, golangci-lint matching devenv. The diff-coverage check is the pipeline
+#   plugin's, from koblas/throughline checked out into .throughline at the commit pinned below.
 # - not-built: every `(not built: #N)` mark in docs/product/ names an OPEN issue. It runs on every
 #   pull request, not only ones touching docs/product/: an issue closed elsewhere leaves its mark
 #   wrong, and the next pull request is where that shows. The script is a vendored copy of the
@@ -33,6 +34,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: koblas/throughline
+          ref: 40cb78205ff33235bb2a2456dad94a2dffe4f46b
+          path: .throughline
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

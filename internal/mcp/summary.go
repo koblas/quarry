@@ -103,7 +103,7 @@ func (e monthRefusedError) Error() string { return string(e) }
 func monthRefusal(err error) error {
 	refusal, ok := errors.AsType[report.MonthError](err)
 	if !ok {
-		// unreachable: report.ParseMonth returns only MonthError.
+		// uncovered: report.ParseMonth returns only MonthError.
 		return err
 	}
 	return withLog(monthRefusedError(monthWording(refusal)), monthRefusedLog)

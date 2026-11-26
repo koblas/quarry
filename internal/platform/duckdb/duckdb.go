@@ -55,10 +55,10 @@ func Create(ctx context.Context, path string) (*DB, error) {
 	}
 
 	if err := os.Chmod(path, 0o600); err != nil {
-		// unreachable: chmod on the path PingContext just validated fails only for an
+		// uncovered: chmod on the path PingContext just validated fails only for an
 		// ownership or permission-flag change this single-user test process cannot
 		// construct without a race, and not portably across CI.
-		_ = db.release()
+		_ = db.release() // uncovered: see the reason above
 		return nil, fmt.Errorf("create %s: %w", path, err)
 	}
 
@@ -155,7 +155,7 @@ func (d *DB) AppendRows(ctx context.Context, table string, rows [][]any) error {
 	return conn.Raw(func(driverConn any) error { //nolint:wrapcheck // Raw returns the callback's error, already wrapped below
 		dc, ok := driverConn.(driver.Conn)
 		if !ok {
-			// unreachable: this package only ever opens connections through the duckdb driver.
+			// uncovered: this package only ever opens connections through the duckdb driver.
 			return fmt.Errorf("append rows to %s: %w", table, errNotDuckDBConn)
 		}
 		app, err := duckdbdriver.NewAppenderFromConn(dc, "", table)
@@ -219,14 +219,13 @@ func (d *DB) CheckpointClose(ctx context.Context) error {
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
 	if err := d.release(); err != nil {
-		// unreachable: database/sql.DB.Close returns only the driver's own Close error
+		// uncovered: database/sql.DB.Close returns only the driver's own Close error
 		// for the one pooled connection, which CHECKPOINT just used successfully, and
 		// the duckdb driver's Close of a live connection does not fail.
-		return fmt.Errorf("checkpoint %s: %w", d.path, err)
+		return fmt.Errorf("checkpoint %s: %w", d.path, err) // uncovered: see the reason above
 	}
 	if err := checkNoWAL(d.path); err != nil {
-		// unreachable: CHECKPOINT removes the .wal file itself before Close can
-		// observe one (see checkpoint_internal_test.go for checkNoWAL's own coverage).
+		// uncovered: CHECKPOINT removes the .wal file itself before Close can observe one (see checkpoint_internal_test.go for checkNoWAL's own coverage).
 		return fmt.Errorf("checkpoint %s: %w", d.path, err)
 	}
 	return nil

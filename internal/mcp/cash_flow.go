@@ -24,7 +24,7 @@ func (s *Server) cashFlow(ctx context.Context, in cashFlowInput) (any, error) {
 	}
 	by, ok := store.ParseCashFlowPeriod(in.By)
 	if !ok {
-		// unreachable: the schema's enum admits only the String of a CashFlowPeriod, and its default supplies month
+		// uncovered: the schema's enum admits only the String of a CashFlowPeriod, and its default supplies month
 		return nil, fmt.Errorf("%w: %q", errUnknownBy, in.By)
 	}
 	srv, err := s.newReport(ctx, commandName)

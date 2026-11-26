@@ -38,7 +38,7 @@ func OpenReadOnlyBusy(ctx context.Context, path string, busyTimeout time.Duratio
 func openReadOnly(ctx context.Context, path, dsn string) (*DB, error) {
 	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
-		// unreachable: sql.Open only validates the driver name, which the sqlite3 import always registers.
+		// uncovered: sql.Open only validates the driver name, which the sqlite3 import always registers.
 		return nil, fmt.Errorf("open %s read-only: %w", path, err)
 	}
 	conn.SetMaxOpenConns(1)
@@ -103,7 +103,7 @@ func (d *DB) Exec(ctx context.Context, query string, args ...any) (sql.Result, e
 func OpenMemory(ctx context.Context) (*DB, error) {
 	conn, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
-		// unreachable: sql.Open only validates the driver name, which the sqlite3 import always registers.
+		// uncovered: sql.Open only validates the driver name, which the sqlite3 import always registers.
 		return nil, fmt.Errorf("open in-memory database: %w", err)
 	}
 	conn.SetMaxOpenConns(1)
@@ -189,13 +189,13 @@ func (d *DB) Schema(ctx context.Context) (sqlschema.Schema, error) {
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			// unreachable: sqlite_master.name is a non-null text column; Scan fails only if the driver is broken.
+			// uncovered: sqlite_master.name is a non-null text column; Scan fails only if the driver is broken.
 			return nil, fmt.Errorf("list tables: %w", err)
 		}
 		tables = append(tables, name)
 	}
 	if err := rows.Err(); err != nil {
-		// unreachable: the same connection just succeeded above; a cursor error appearing only now is not constructible.
+		// uncovered: the same connection just succeeded above; a cursor error appearing only now is not constructible.
 		return nil, fmt.Errorf("list tables: %w", err)
 	}
 
@@ -213,7 +213,7 @@ func (d *DB) Schema(ctx context.Context) (sqlschema.Schema, error) {
 func (d *DB) tableColumns(ctx context.Context, table string) ([]string, error) {
 	rows, err := d.conn.QueryContext(ctx, "SELECT name FROM pragma_table_info(?)", table)
 	if err != nil {
-		// unreachable: the same connection just listed tables above; it cannot break only for this second query.
+		// uncovered: the same connection just listed tables above; it cannot break only for this second query.
 		return nil, fmt.Errorf("columns of %s: %w", table, err)
 	}
 	defer func() { _ = rows.Close() }()
@@ -222,7 +222,7 @@ func (d *DB) tableColumns(ctx context.Context, table string) ([]string, error) {
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			// unreachable: pragma_table_info's name column is a non-null text column; Scan fails only if the driver is broken.
+			// uncovered: pragma_table_info's name column is a non-null text column; Scan fails only if the driver is broken.
 			return nil, fmt.Errorf("columns of %s: %w", table, err)
 		}
 		cols = append(cols, name)
@@ -243,7 +243,7 @@ const backupRetryInterval = 10 * time.Millisecond
 func Backup(ctx context.Context, src *DB, destPath string, busyTimeout time.Duration) error {
 	destDB, err := sql.Open("sqlite3", "file:"+escapePath(destPath))
 	if err != nil {
-		// unreachable: sql.Open only validates the driver name, which the sqlite3 import always registers.
+		// uncovered: sql.Open only validates the driver name, which the sqlite3 import always registers.
 		return fmt.Errorf("backup to %s: open destination: %w", destPath, err)
 	}
 	defer func() { _ = destDB.Close() }()
@@ -274,7 +274,7 @@ func Backup(ctx context.Context, src *DB, destPath string, busyTimeout time.Dura
 	// so a query through destDB here would block waiting for destConn to be
 	// released.
 	if _, err := destConn.ExecContext(ctx, "PRAGMA journal_mode = DELETE"); err != nil {
-		// unreachable: reachable via a real ENOSPC while switching the destination off WAL mode; this repo has no portable disk-full fixture to trigger it.
+		// uncovered: reachable via a real ENOSPC while switching the destination off WAL mode; this repo has no portable disk-full fixture to trigger it.
 		return fmt.Errorf("backup to %s: set journal_mode delete: %w", destPath, err)
 	}
 	return nil
@@ -288,18 +288,18 @@ var errNotSQLite3Conn = errors.New("connection is not a sqlite3 connection")
 func runBackup(ctx context.Context, destDriverConn, srcDriverConn any, busyTimeout time.Duration) error {
 	dc, ok := destDriverConn.(*sqlite3.SQLiteConn)
 	if !ok {
-		// unreachable: this package only ever opens connections through the sqlite3 driver.
+		// uncovered: this package only ever opens connections through the sqlite3 driver.
 		return fmt.Errorf("destination %w", errNotSQLite3Conn)
 	}
 	sc, ok := srcDriverConn.(*sqlite3.SQLiteConn)
 	if !ok {
-		// unreachable: this package only ever opens connections through the sqlite3 driver.
+		// uncovered: this package only ever opens connections through the sqlite3 driver.
 		return fmt.Errorf("source %w", errNotSQLite3Conn)
 	}
 
 	bk, err := dc.Backup("main", sc, "main")
 	if err != nil {
-		// unreachable: sqlite3_backup_init fails only for a same-connection or concurrent-backup misuse this package's callers never construct; Step's own fault path below exercises the failure contract.
+		// uncovered: sqlite3_backup_init fails only for a same-connection or concurrent-backup misuse this package's callers never construct; Step's own fault path below exercises the failure contract.
 		return fmt.Errorf("start backup: %w", err)
 	}
 	defer func() { _ = bk.Close() }()

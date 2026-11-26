@@ -152,7 +152,7 @@ func (srv *Server) Import(ctx context.Context, snap store.SnapshotRef) (store.Re
 
 	transfers, transferCheck := pairTransfers(splits, links, transactions, accounts)
 	if err := checkTransferTotals(transfers, transferCheck); err != nil {
-		// unreachable: pairTransfers (transfers.go) has three rows appends (name-form leg, unmatched numeric link, paired legs), each with one OneSided append or one Paired++, so counts equal rows
+		// uncovered: pairTransfers (transfers.go) has three rows appends (name-form leg, unmatched numeric link, paired legs), each with one OneSided append or one Paired++, so counts equal rows
 		return store.Result{}, err
 	}
 

@@ -95,7 +95,6 @@ func run(ctx context.Context, delay time.Duration, name string, args ...string) 
 			return stdout.Bytes(), output.Bytes(), noStatus, &SignalError{Signal: status.Signal()}
 		}
 	}
-	// unreachable: on unix ExitCode() < 0 means signalled, returned above; the only other way here
-	// is a nil ProcessState (wait4 failing with ECHILD), which no test can provoke.
+	// uncovered: on unix ExitCode() < 0 means signalled, returned above; the only other way here is a nil ProcessState (wait4 failing with ECHILD), which no test can provoke.
 	return stdout.Bytes(), output.Bytes(), noStatus, err
 }

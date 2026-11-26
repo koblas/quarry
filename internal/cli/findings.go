@@ -135,7 +135,7 @@ prints one row per item, for a spreadsheet.`,
 				},
 				render)
 			if err != nil {
-				// unreachable: renderResult fails only via marshalDocument, and the findings document holds strings, ints and slices; see marshalDocument.
+				// uncovered: renderResult fails only via marshalDocument, and the findings document holds strings, ints and slices; see marshalDocument.
 				return err
 			}
 			return writeResult(cmd, out)

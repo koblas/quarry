@@ -1,6 +1,12 @@
 #!/bin/sh
 # The Verify block as one command: build, the full covered suite once, the
 # coverage gate, race on the touched packages, lint, and test counts.
+# The coverage gate is the pipeline plugin's diff-coverage check, judged on this
+# script's own profile: every Go block changed since <start> runs in a test, or
+# says why it cannot with `// uncovered: <reason>`. It is read from a
+# koblas/throughline checkout: $THROUGHLINE, else .throughline (CI checks it out
+# there at the pinned commit), else the marketplace copy Claude Code keeps at
+# ~/.claude/plugins/marketplaces/throughline. With none, the step fails (rc=2).
 # One plain call: the coverage profile is made, read and named in the same
 # process, so no shell variable has to survive between tool calls.
 #
@@ -29,12 +35,44 @@ tests=$?
 grep -E '^(FAIL|--- FAIL|panic:)' "$log"
 echo "go test rc=$tests (log: $log)"
 
-uncovered=skipped
-if [ "$tests" -eq 0 ]; then
-	python3 .claude/scripts/uncovered-diff.py --profile "$cover" "$start"
-	uncovered=$?
+throughline=${THROUGHLINE:-}
+if [ -z "$throughline" ]; then
+	for candidate in "$root/.throughline" "${HOME:-}/.claude/plugins/marketplaces/throughline"; do
+		if [ -f "$candidate/plugins/pipeline/scripts/check.py" ]; then
+			throughline=$candidate
+			break
+		fi
+	done
 fi
-echo "uncovered-diff rc=$uncovered"
+scripts="$throughline/plugins/pipeline/scripts"
+coverage=skipped
+if [ "$tests" -eq 0 ]; then
+	if [ -f "$scripts/check.py" ]; then
+		# check.diff_coverage is what the plugin's `check.py phase` runs: diff-coverage.py's
+		# uncovered() on a profile already made, so the suite does not run a second time.
+		python3 -I - "$scripts" "$root" "$cover" "$start" <<'EOF'
+import importlib.util
+import sys
+from pathlib import Path
+
+scripts, root, cover, start = sys.argv[1:]
+spec = importlib.util.spec_from_file_location("check", Path(scripts) / "check.py")
+check = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(check)
+root = Path(root)
+found = check.diff_coverage(root, ["./..."], Path(cover), start, check.snapshot(root))
+for line in found:
+    print(line)
+print(f"diff-coverage: {len(found)} changed block(s) uncovered" if found else "diff-coverage: ok", file=sys.stderr)
+sys.exit(1 if found else 0)
+EOF
+		coverage=$?
+	else
+		echo "diff-coverage: no koblas/throughline checkout found; set THROUGHLINE to one" >&2
+		coverage=2
+	fi
+fi
+echo "diff-coverage rc=$coverage"
 
 race=skipped
 if [ $# -gt 0 ]; then
@@ -49,7 +87,7 @@ echo "golangci-lint rc=$lint"
 
 python3 .claude/scripts/test-stats.py --base "$start" --changed
 
-for rc in "$build" "$tests" "$uncovered" "$race" "$lint"; do
+for rc in "$build" "$tests" "$coverage" "$race" "$lint"; do
 	case $rc in
 	0 | skipped) ;;
 	*) exit 1 ;;

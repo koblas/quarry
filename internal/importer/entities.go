@@ -102,7 +102,7 @@ func repeatedReason(names []string) string {
 func joinNames(names []string, conjunction string) string {
 	switch len(names) {
 	case 0:
-		// unreachable: both callers check len(names) > 0 first.
+		// uncovered: both callers check len(names) > 0 first.
 		return ""
 	case 1:
 		return names[0]

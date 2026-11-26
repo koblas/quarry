@@ -133,19 +133,19 @@ func (d *dirDestination) WriteManifest(_ context.Context, name string, data []by
 	}
 
 	if _, err := f.Write(data); err != nil {
-		// unreachable: reachable via a real ENOSPC mid-write; this repo has no portable disk-full fixture to trigger it.
+		// uncovered: reachable via a real ENOSPC mid-write; this repo has no portable disk-full fixture to trigger it.
 		_ = f.Close()
 		_ = os.Remove(partial)
 		return "", fmt.Errorf("write manifest partial: %w", err)
 	}
 	if err := f.Sync(); err != nil {
-		// unreachable: reachable via a real ENOSPC on fsync; this repo has no portable disk-full fixture to trigger it.
+		// uncovered: reachable via a real ENOSPC on fsync; this repo has no portable disk-full fixture to trigger it.
 		_ = f.Close()
 		_ = os.Remove(partial)
 		return "", fmt.Errorf("sync manifest partial: %w", err)
 	}
 	if err := f.Close(); err != nil {
-		// unreachable: reachable via a delayed write-back failure on close; this repo has no portable fixture to trigger it.
+		// uncovered: reachable via a delayed write-back failure on close; this repo has no portable fixture to trigger it.
 		_ = os.Remove(partial)
 		return "", fmt.Errorf("close manifest partial: %w", err)
 	}

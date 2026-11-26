@@ -18,7 +18,7 @@ type runtimeError struct {
 	err error
 }
 
-// unreachable: Execute always matches *runtimeError with errors.As and returns e.err directly, so nothing calls Error() on the wrapper itself.
+// uncovered: Execute always matches *runtimeError with errors.As and returns e.err directly, so nothing calls Error() on the wrapper itself.
 func (e *runtimeError) Error() string { return e.err.Error() }
 func (e *runtimeError) Unwrap() error { return e.err }
 
@@ -142,7 +142,7 @@ does not read Quicken at all.`,
 			if *jsonOut {
 				data, encErr := renderJSON(outcome, cfg.WarningsAbsolute)
 				if encErr != nil {
-					// unreachable: renderJSON's own error path is unreachable for any value SyncAndImport builds; see there.
+					// uncovered: renderJSON's own error path is unreachable for any value SyncAndImport builds; see there.
 					return &runtimeError{err: encErr}
 				}
 				output = string(data)
