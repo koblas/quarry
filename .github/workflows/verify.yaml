@@ -10,6 +10,9 @@ name: verify
 #   pull request, not only ones touching docs/product/: an issue closed elsewhere leaves its mark
 #   wrong, and the next pull request is where that shows. The script is a vendored copy of the
 #   pipeline plugin's (see its header).
+# - commit-lint: every non-merge commit in the pull request has a Conventional Commits subject
+#   (.claude/scripts/commit-lint.sh). Pull requests land as merge commits, so each commit
+#   subject reaches main as written.
 
 on:
   pull_request:
@@ -50,3 +53,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .claude/scripts/not-built.py
+
+  commit-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Commit subjects follow Conventional Commits
+        run: .claude/scripts/commit-lint.sh "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
