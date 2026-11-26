@@ -4,7 +4,7 @@
 
 ## Workflow rules
 
-The pipeline plugin (`pipeline@content-buddy`, enabled in `.claude/settings.json`) loads its
+The pipeline plugin (`pipeline@throughline`, enabled in `.claude/settings.json`) loads its
 workflow rules — the implicit trigger, the three lanes, the two pauses, the agent-spawn authority —
 into every session through its SessionStart hook. They are not restated here. No line from that
 hook in this session's context (it starts `Pipeline plugin root:`) → the hook did not run: read the
