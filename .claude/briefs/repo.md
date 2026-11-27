@@ -44,7 +44,7 @@ before the first agent spawns (needs network, outside the sandbox).
 | `.claude/skills/go-testing/SKILL.md` | Go tests (the repo's Go test skill): structure, naming, fakes, testify |
 | `.claude/rules/go-code.md` | any `.go` edit: doc-comment budget, testify, synctest, toolchain |
 | `.claude/refactor-catalog.md` | `refactor-advisor` |
-| `.claude/scripts/verify.sh <start> [race-pkg …]` | a hand-run Verify: build, covered full suite, coverage gate, lint, counts |
+| `.claude/scripts/verify.sh <start> [race-pkg …]` | a hand-run Verify: build, covered full suite, coverage gate, lint, not-built marks, counts |
 | `.claude/scripts/test-stats.py --base <start> --changed` | test counts and deltas per changed package |
 
 The repo's own reviewers: `arch-reviewer`, `correctness-reviewer`, `refactor-advisor`,

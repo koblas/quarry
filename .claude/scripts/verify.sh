@@ -1,6 +1,7 @@
 #!/bin/sh
 # The Verify block as one command: build, the full covered suite once, the
-# coverage gate, race on the touched packages, lint, and test counts.
+# coverage gate, race on the touched packages, lint, the not-built marks, and
+# test counts. The not-built step reads open issues with gh (needs gh auth).
 # The coverage gate is the pipeline plugin's diff-coverage check, judged on this
 # script's own profile: every Go block changed since <start> runs in a test, or
 # says why it cannot with `// uncovered: <reason>`. It is read from a
@@ -85,9 +86,13 @@ golangci-lint run ./...
 lint=$?
 echo "golangci-lint rc=$lint"
 
+python3 .claude/scripts/not-built.py
+notbuilt=$?
+echo "not-built rc=$notbuilt"
+
 python3 .claude/scripts/test-stats.py --base "$start" --changed
 
-for rc in "$build" "$tests" "$coverage" "$race" "$lint"; do
+for rc in "$build" "$tests" "$coverage" "$race" "$lint" "$notbuilt"; do
 	case $rc in
 	0 | skipped) ;;
 	*) exit 1 ;;
