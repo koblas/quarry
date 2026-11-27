@@ -8,6 +8,11 @@
   "feature_budget_usd": 75,
   "security_paths": "^internal/(platform/(atomicfile|replacefile|lockfile|accountmask)/|snapshot/|claudedesktop/)",
   "build_definitions": "^devenv\\.|^\\.envrc$|^\\.golangci\\.ya?ml$",
+  "briefs": {
+    "correctness-reviewer": ["proof.md", "navigation.md"],
+    "arch-reviewer": ["navigation.md"],
+    "architect": ["navigation.md"]
+  },
   "requests": {},
   "generated_roots": [],
   "top_dirs": ["cmd", "internal", "plugin", "docs", ".claude"],

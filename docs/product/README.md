@@ -20,5 +20,5 @@ unchanged, so `## <heading>` anchors survive the move.
 | [decisions.md](decisions.md) | Decisions, and the rulings folded from feature specs |
 
 A requirement that is written but not built carries its open issue inline, as the marks in
-[testing.md](testing.md) do; `.claude/scripts/not-built.py` fails CI when a mark names an issue that is not open.
+[testing.md](testing.md) do; the pipeline plugin's `not-built.py` fails CI when a mark names an issue that is not open.
 Issues for this spec carry the label `area:components`.
