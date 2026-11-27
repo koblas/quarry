@@ -7,11 +7,12 @@ name: verify
 #   marks and test counts.
 #   macOS, because quarry targets macOS 14+ and links DuckDB through cgo. Versions follow the
 #   pins: Go from go.mod, golangci-lint matching devenv. The diff-coverage check is the pipeline
-#   plugin's, from koblas/throughline checked out into .throughline at the commit pinned below.
+#   plugin's, from koblas/throughline checked out into .throughline at the release tag pinned
+#   below; bump every `ref: v…` together when the plugin releases.
 # - not-built: every `(not built: #N)` mark in docs/product/ names an OPEN issue. It runs on every
 #   pull request, not only ones touching docs/product/: an issue closed elsewhere leaves its mark
-#   wrong, and the next pull request is where that shows. The script is a vendored copy of the
-#   pipeline plugin's (see its header).
+#   wrong, and the next pull request is where that shows. The script is the pipeline plugin's,
+#   from the same pinned checkout.
 # - commit-lint: every non-merge commit in the pull request has a Conventional Commits subject
 #   (.claude/scripts/commit-lint.sh). Pull requests land as merge commits, so each commit
 #   subject reaches main as written.
@@ -38,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: koblas/throughline
-          ref: 40cb78205ff33235bb2a2456dad94a2dffe4f46b
+          ref: v0.5.0
           path: .throughline
       - uses: actions/setup-go@v5
         with:
@@ -57,10 +58,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: koblas/throughline
+          ref: v0.5.0
+          path: .throughline
       - name: Not-built marks match open issues
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .claude/scripts/not-built.py
+        run: python3 .throughline/plugins/pipeline/scripts/not-built.py
 
   commit-lint:
     runs-on: ubuntu-latest

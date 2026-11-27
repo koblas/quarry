@@ -4,10 +4,11 @@
 # test counts. The not-built step reads open issues with gh (needs gh auth).
 # The coverage gate is the pipeline plugin's diff-coverage check, judged on this
 # script's own profile: every Go block changed since <start> runs in a test, or
-# says why it cannot with `// uncovered: <reason>`. It is read from a
-# koblas/throughline checkout: $THROUGHLINE, else .throughline (CI checks it out
-# there at the pinned commit), else the marketplace copy Claude Code keeps at
-# ~/.claude/plugins/marketplaces/throughline. With none, the step fails (rc=2).
+# says why it cannot with `// uncovered: <reason>`. It and the not-built check
+# are read from a koblas/throughline checkout: $THROUGHLINE, else .throughline
+# (CI checks it out there at the pinned release tag), else the marketplace copy
+# Claude Code keeps at ~/.claude/plugins/marketplaces/throughline. With none,
+# both steps fail (rc=2).
 # One plain call: the coverage profile is made, read and named in the same
 # process, so no shell variable has to survive between tool calls.
 #
@@ -86,8 +87,13 @@ golangci-lint run ./...
 lint=$?
 echo "golangci-lint rc=$lint"
 
-python3 .claude/scripts/not-built.py
-notbuilt=$?
+if [ -f "$scripts/not-built.py" ]; then
+	python3 "$scripts/not-built.py"
+	notbuilt=$?
+else
+	echo "not-built: no koblas/throughline checkout found; set THROUGHLINE to one" >&2
+	notbuilt=2
+fi
 echo "not-built rc=$notbuilt"
 
 python3 .claude/scripts/test-stats.py --base "$start" --changed

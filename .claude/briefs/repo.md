@@ -47,6 +47,10 @@ before the first agent spawns (needs network, outside the sandbox).
 | `.claude/scripts/verify.sh <start> [race-pkg …]` | a hand-run Verify: build, covered full suite, coverage gate, lint, not-built marks, counts |
 | `.claude/scripts/test-stats.py --base <start> --changed` | test counts and deltas per changed package |
 
+The pipeline hands `navigation.md` (and the plugin's `proof.md`) to the architect and the
+gate's reviewers through the `briefs` map in `.claude/pipeline.json`; the other roles above read
+it because this table names them.
+
 The repo's own reviewers: `arch-reviewer`, `correctness-reviewer`, `refactor-advisor`,
 `api-reviewer` (dormant: quarry has no HTTP surface; its triggers do not match a CLI diff).
 
