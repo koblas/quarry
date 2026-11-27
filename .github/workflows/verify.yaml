@@ -3,7 +3,8 @@ name: verify
 # The same check script sessions run, on every pull request.
 #
 # - verify: .claude/scripts/verify.sh against the pull request's base commit: go build, the full
-#   covered test suite, the diff-coverage check, go test -race, golangci-lint and test counts.
+#   covered test suite, the diff-coverage check, go test -race, golangci-lint, the not-built
+#   marks and test counts.
 #   macOS, because quarry targets macOS 14+ and links DuckDB through cgo. Versions follow the
 #   pins: Go from go.mod, golangci-lint matching devenv. The diff-coverage check is the pipeline
 #   plugin's, from koblas/throughline checked out into .throughline at the commit pinned below.
@@ -49,6 +50,7 @@ jobs:
       - name: verify.sh
         env:
           TMPDIR: ${{ runner.temp }}
+          GH_TOKEN: ${{ github.token }}
         run: .claude/scripts/verify.sh "${{ github.event.pull_request.base.sha }}" ./...
 
   not-built:
