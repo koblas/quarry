@@ -1,0 +1,45 @@
+name: release-please
+
+# Cuts releases from the Conventional Commits on main. Every push to main updates one open
+# release PR that bumps .release-please-manifest.json and the "version" in
+# plugin/.claude-plugin/plugin.json, and prepends the new CHANGELOG.md entry. Merging that PR
+# tags v<version> and creates its GitHub release, whose notes are the changelog entry.
+#
+# - The tag is what `go install github.com/koblas/quarry/cmd/quarry@v<version>` resolves, and
+#   the version the binary reports (runtime/debug.BuildInfo, cmd/quarry/run.go buildVersion).
+# - The plugin version is what Claude Code compares to offer installed users the update.
+#
+# Config: release-please-config.json (one root component, `go` release type;
+# refactor/chore/build/test/ci/docs/style are hidden from the notes).
+#
+# Token: release-please signs in with the RELEASE_PLEASE_TOKEN secret (a fine-grained token with
+# Contents and Pull requests read/write on this repository). A PR opened with GITHUB_TOKEN starts
+# no workflows, so the required checks (verify, not-built, commit-lint) would never report on the
+# release PR. Through the secret they run on it like any other PR; verify then also checks the
+# bumped plugin.json against run_plugin_test.go.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

@@ -22,21 +22,39 @@ const wantMarketplaceJSON = `{
 }
 `
 
-const wantPluginJSON = `{
+// wantPluginJSON is plugin.json as release-please writes it: its json extra-file updater
+// re-serializes the file with a two-space indent and sets "version" to the released one, which
+// .release-please-manifest.json records.
+func wantPluginJSON(t *testing.T) string {
+	t.Helper()
+	var manifest map[string]string
+	require.NoError(t, json.Unmarshal([]byte(repoFile(t, ".release-please-manifest.json")), &manifest))
+	require.NotEmpty(t, manifest["."], "release-please manifest version")
+	return `{
   "name": "quarry",
   "description": "Answer questions about your money from your Quicken Classic for Mac data with quarry. Requires the quarry binary on your PATH.",
-  "version": "0.1.0",
-  "author": { "name": "David Koblas" },
-  "mcpServers": { "quarry": { "command": "quarry", "args": ["mcp"] } }
+  "version": "` + manifest["."] + `",
+  "author": {
+    "name": "David Koblas"
+  },
+  "mcpServers": {
+    "quarry": {
+      "command": "quarry",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
 }
 `
+}
 
 func Test_plugin_manifests_list_quarry_and_start_its_mcp_server(t *testing.T) {
 	marketplace := repoFile(t, ".claude-plugin/marketplace.json")
 	plugin := repoFile(t, "plugin/.claude-plugin/plugin.json")
 
 	assert.Equal(t, wantMarketplaceJSON, marketplace) //nolint:testifylint // byte-equal is the contract, not JSON-equivalence
-	assert.Equal(t, wantPluginJSON, plugin)           //nolint:testifylint // byte-equal is the contract, not JSON-equivalence
+	assert.Equal(t, wantPluginJSON(t), plugin)
 	assert.NoFileExists(t, repoRoot+"plugin/.mcp.json")
 }
 

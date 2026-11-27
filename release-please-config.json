@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "cc1d480ea0f2309336d8e83a08f49e43efbbd1ff",
+  "include-v-in-tag": true,
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "initial-version": "0.1.0",
+      "bump-minor-pre-major": true,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "plugin/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "pull-request-header": "Merging this PR cuts the release below: it bumps the `version` in `plugin/.claude-plugin/plugin.json`, tags the version and publishes the GitHub release with these notes.\n\n**Before merging**\n- Read the notes. Every `feat`, `fix`, `perf`, `deps` and `revert` commit on `main` since the last release is listed, and the version follows from them (breaking changes bump the minor version while below 1.0).\n- Remove or reword an entry by editing `CHANGELOG.md` in this PR, as the last step: release-please rewrites this PR on every push to `main`.",
+      "pull-request-footer": "Maintained by [release-please](https://github.com/googleapis/release-please) from the Conventional Commits on `main`; see `.github/workflows/release-please.yaml`.",
+      "changelog-sections": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Bug Fixes"},
+        {"type": "perf", "section": "Performance"},
+        {"type": "deps", "section": "Dependencies"},
+        {"type": "revert", "section": "Reverts"},
+        {"type": "docs", "section": "Documentation", "hidden": true},
+        {"type": "refactor", "section": "Refactoring", "hidden": true},
+        {"type": "test", "section": "Tests", "hidden": true},
+        {"type": "build", "section": "Build", "hidden": true},
+        {"type": "ci", "section": "CI", "hidden": true},
+        {"type": "chore", "section": "Chores", "hidden": true},
+        {"type": "style", "section": "Style", "hidden": true}
+      ]
+    }
+  }
+}
