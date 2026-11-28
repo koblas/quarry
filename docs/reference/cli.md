@@ -7,6 +7,13 @@ Every `quarry` command, with its flags as `quarry <command> --help` prints them.
 | Flag | Description |
 |---|---|
 | `--json` | Print the result as JSON on stdout. Every command takes it. |
+| `--version` | Print quarry's version, as `quarry version` does. |
+
+## Version
+
+### `quarry version`
+
+Prints the version of this quarry binary: the release tag, such as `v1.0.0`, for a binary installed with `go install github.com/koblas/quarry/cmd/quarry@<version>`, or Go's pseudo-version for one built from a checkout, which names the commit and ends in `+dirty` when the checkout had uncommitted changes. It reads only the binary: no store, no config, no Quicken. With `--json` it adds the full commit, whether the checkout had uncommitted changes, and the Go version quarry was built with. No flags of its own.
 
 ## Sync and snapshots
 

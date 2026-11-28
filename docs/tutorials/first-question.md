@@ -11,10 +11,10 @@ go install github.com/koblas/quarry/cmd/quarry@latest
 Check that your shell finds it:
 
 ```bash
-command -v quarry
+quarry version
 ```
 
-If that prints nothing, add `$(go env GOPATH)/bin` to your `PATH` and open a new terminal.
+prints the installed release, such as `quarry v1.0.0`. If your shell does not find `quarry`, add `$(go env GOPATH)/bin` to your `PATH` and open a new terminal.
 
 ## 2. Take a snapshot
 
