@@ -14,9 +14,6 @@ import (
 // serverName is the name quarry reports to MCP clients at initialize.
 const serverName = "quarry"
 
-// develVersion is reported when the build carries no module version.
-const develVersion = "(devel)"
-
 // commandName is the command the report factory is asked for, as in the home-directory refusal's "run quarry mcp again".
 const commandName = "mcp"
 
@@ -44,14 +41,9 @@ type Server struct {
 // Option configures a Server.
 type Option func(*Server)
 
-// WithVersion sets the version the server reports to clients; "" keeps the
-// "(devel)" default.
+// WithVersion sets the version the server reports to clients.
 func WithVersion(version string) Option {
-	return func(s *Server) {
-		if version != "" {
-			s.version = version
-		}
-	}
+	return func(s *Server) { s.version = version }
 }
 
 // WithReport sets the factory the tools read the store through; Serve requires it.
@@ -76,7 +68,7 @@ func WithClock(now func() time.Time) Option {
 
 // NewServer builds a Server from opts.
 func NewServer(opts ...Option) *Server {
-	s := &Server{version: develVersion, timeout: callTimeout, now: time.Now}
+	s := &Server{timeout: callTimeout, now: time.Now}
 	for _, opt := range opts {
 		opt(s)
 	}

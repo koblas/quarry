@@ -75,26 +75,12 @@ func (r running) result(t *testing.T) error {
 	}
 }
 
-func Test_serve_identifies_an_unversioned_build_as_devel(t *testing.T) {
-	cases := []struct {
-		name    string
-		options []mcp.Option
-		want    string
-	}{
-		{name: "no version option", want: "(devel)"},
-		{name: "empty version", options: []mcp.Option{mcp.WithVersion("")}, want: "(devel)"},
-		{name: "a release version", options: []mcp.Option{mcp.WithVersion("v1.2.3")}, want: "v1.2.3"},
-	}
+func Test_serve_reports_the_version_it_is_given(t *testing.T) {
+	r := startServer(t, newServer(mcp.WithVersion("v1.2.3")))
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			r := startServer(t, newServer(c.options...))
+	got := r.session.InitializeResult().ServerInfo
 
-			got := r.session.InitializeResult().ServerInfo
-
-			assert.Equal(t, &sdk.Implementation{Name: "quarry", Version: c.want}, got)
-		})
-	}
+	assert.Equal(t, &sdk.Implementation{Name: "quarry", Version: "v1.2.3"}, got)
 }
 
 func Test_serve_refuses_a_server_built_without_its_report_factory_or_config_loader(t *testing.T) {
