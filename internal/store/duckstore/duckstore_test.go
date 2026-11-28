@@ -218,30 +218,6 @@ func Test_replace_records_the_quarry_version_it_is_given(t *testing.T) {
 	assertScalar(t, db, "SELECT quarry_version FROM store_info", "v1.2.3")
 }
 
-func Test_replace_records_devel_when_no_quarry_version_is_given(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name string
-		opts []duckstore.Option
-	}{
-		{name: "no option", opts: nil},
-		{name: "an empty version", opts: []duckstore.Option{duckstore.WithQuarryVersion("")}},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-
-			replaced, err := duckstore.New(t.TempDir(), c.opts...).Replace(t.Context(), minimalRows())
-
-			require.NoError(t, err)
-			path := replaced.Path
-			db := openReadOnly(t, path)
-			assertScalar(t, db, "SELECT quarry_version FROM store_info", "(devel)")
-		})
-	}
-}
-
 func Test_replace_stores_null_when_the_snapshot_has_no_taken_at_or_source(t *testing.T) {
 	t.Parallel()
 	rows := minimalRows()

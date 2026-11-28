@@ -24,9 +24,6 @@ const FileName = "quarry.duckdb"
 // FormatVersion is the store format this build of quarry writes and reads.
 const FormatVersion = 9
 
-// develVersion is the quarry_version recorded when no build version is known.
-const develVersion = "(devel)"
-
 // leftoverMaxAge is how old a store partial must be before Replace's sweep removes it.
 const leftoverMaxAge = time.Hour
 
@@ -139,19 +136,14 @@ func WithRates(src RatesSource) Option {
 	return func(s *Store) { s.rates = src }
 }
 
-// WithQuarryVersion sets the quarry_version Replace records; an empty v keeps
-// the default "(devel)", so the column is never stored empty.
+// WithQuarryVersion sets the quarry_version Replace records.
 func WithQuarryVersion(v string) Option {
-	return func(s *Store) {
-		if v != "" {
-			s.quarryVersion = v
-		}
-	}
+	return func(s *Store) { s.quarryVersion = v }
 }
 
 // New returns a Store that builds quarry.duckdb inside dir.
 func New(dir string, opts ...Option) *Store {
-	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, scratch: createScratch, quarryVersion: develVersion}
+	s := &Store{dir: dir, create: createDuckDB, openReadOnly: openDuckDBReadOnly, scratch: createScratch}
 	for _, opt := range opts {
 		opt(s)
 	}
