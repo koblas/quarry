@@ -24,6 +24,7 @@ import (
 	"github.com/koblas/quarry/internal/report"
 	"github.com/koblas/quarry/internal/snapshot"
 	"github.com/koblas/quarry/internal/store/duckstore"
+	"github.com/koblas/quarry/internal/version"
 )
 
 // These guards document that the wired types satisfy each consumer's port with no adapter.
@@ -49,11 +50,9 @@ func signalContext(parent context.Context) (context.Context, context.CancelFunc)
 	return ctx, stop
 }
 
-// newServerFactory returns cli.Execute's ServerFactory: it resolves the
-// home directory and the embedded reference schema, then builds the Server
-// against them, passing storeOpts to the store it builds and appending the
-// Server options the caller passes.
-func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
+// newServerFactory returns cli.Execute's ServerFactory: a Server over the
+// resolved home, its store stamped with the version info resolves to.
+func newServerFactory(info *debug.BuildInfo, storeOpts ...duckstore.Option) cli.ServerFactory {
 	return func(ctx context.Context, opts ...snapshot.Option) (*snapshot.Server, error) {
 		home, err := resolveHome("sync")
 		if err != nil {
@@ -66,7 +65,6 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 		}
 
 		storeDir := storeDirUnder(home)
-		info, _ := debug.ReadBuildInfo()
 		st := duckstore.New(storeDir, append([]duckstore.Option{
 			duckstore.WithQuarryVersion(buildVersion(info)), duckstore.WithRates(fx.NewServer()),
 		}, storeOpts...)...)
@@ -83,13 +81,10 @@ func newServerFactory(storeOpts ...duckstore.Option) cli.ServerFactory {
 	}
 }
 
-// buildVersion is the main module's version from info, "" when info is nil
-// or carries none.
+// buildVersion is the version string info resolves to, "(devel)" when info is
+// nil or records no version.
 func buildVersion(info *debug.BuildInfo) string {
-	if info == nil {
-		return ""
-	}
-	return info.Main.Version
+	return version.Resolve(info).Version
 }
 
 // newReportFactory returns cli.Execute's ReportFactory: it resolves the home
@@ -187,16 +182,21 @@ func resolveHome(command string) (string, error) {
 	return home, nil
 }
 
-// defaultEnv is the process's wiring: the real stdin, the given output
-// streams, and the factories over the default store.
+// defaultEnv is the process's wiring: envFor this binary's build info, with the real rates source.
 func defaultEnv(stdout, stderr io.Writer) cli.Env {
 	info, _ := debug.ReadBuildInfo()
+	return envFor(info, stdout, stderr)
+}
+
+// envFor is the wiring for a binary built as info (nil when unknown): the real stdin, the given output
+// streams, and the factories over the default store, whose sync appends storeOpts.
+func envFor(info *debug.BuildInfo, stdout, stderr io.Writer, storeOpts ...duckstore.Option) cli.Env {
 	home, _ := os.UserHomeDir() // "" on error: claude's path then prints raw
 	return cli.Env{
 		Stdin:        os.Stdin,
 		Stdout:       stdout,
 		Stderr:       stderr,
-		NewServer:    newServerFactory(),
+		NewServer:    newServerFactory(info, storeOpts...),
 		NewReport:    newReportFactory(),
 		NewSnapshots: newSnapshotsFactory(),
 		LoadConfig:   newConfigLoader(),
@@ -207,6 +207,7 @@ func defaultEnv(stdout, stderr io.Writer) cli.Env {
 		Executable:   os.Executable,
 		IsTerminal:   isTerminal,
 		Now:          time.Now,
+		BuildInfo:    info,
 	}
 }
 

@@ -6,10 +6,12 @@ User documentation: <https://koblas.github.io/quarry/>, built from [`docs/`](doc
 
 ## Use quarry with Claude Code or Claude Desktop
 
-quarry ships a Claude Code plugin: a skill that teaches Claude to answer questions from your Quicken data with quarry, and the config for quarry's MCP server. The plugin runs the `quarry` binary from your PATH, so install quarry first and check it works in a terminal:
+quarry ships a Claude Code plugin: a skill that teaches Claude to answer questions from your Quicken data with quarry, and the config for quarry's MCP server. The plugin runs the `quarry` binary from your PATH, so install quarry first and check it works in a terminal. quarry links DuckDB through cgo, so it needs the Xcode Command Line Tools (`xcode-select --install`):
 
 ```
+go install github.com/koblas/quarry/cmd/quarry@latest
 command -v quarry      # prints the path; if empty, add $(go env GOPATH)/bin to your PATH
+quarry version         # prints the installed release, e.g. quarry v1.0.0
 quarry status          # if there is no store yet, open your Quicken file and run: quarry sync
 ```
 
