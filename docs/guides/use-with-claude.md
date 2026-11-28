@@ -61,7 +61,7 @@ Ask Claude a question such as "How did our grocery spending change since 2022?" 
 
 ## Get a monthly summary
 
-`quarry summary` prints last month's unusual charges, new recurring charges, net worth change and findings. To get it every month, follow [the monthly summary recipe](https://github.com/koblas/quarry/blob/main/plugin/skills/quarry/references/monthly-summary.md).
+`quarry summary` prints last month's unusual charges, new recurring charges, net worth change and findings. To get it every month, follow [How to get a monthly summary](monthly-summary.md).
 
 ## Update
 

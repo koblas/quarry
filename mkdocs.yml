@@ -16,13 +16,15 @@ repo_name: koblas/quarry
 edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: out/site
+extra_css:
+  - stylesheets/landing.css # the landing page only (docs/index.md)
 exclude_docs: |
   adr/
   prior-art/
   product/
   security/
   specs/
-  docs_test.go
+  *_test.go
 
 theme:
   name: material
@@ -48,6 +50,10 @@ theme:
 markdown_extensions:
   - admonition
   - footnotes
+  # Material's icon shortcodes (:material-…:) on the landing cards.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:zensical.extensions.emoji.twemoji
+      emoji_generator: !!python/name:zensical.extensions.emoji.to_svg
   - attr_list
   - md_in_html
   - tables
@@ -78,11 +84,26 @@ nav:
       - index.md
       - Your first question: tutorials/first-question.md
   - Concepts:
+      - concepts/index.md
+      - Why quarry: concepts/why.md
       - How quarry works: concepts/how-quarry-works.md
+      - How quarry counts money: concepts/counting-rules.md
+      - Findings and the cleanup loop: concepts/findings.md
   - Guides:
-      - How to use quarry with Claude: guides/use-with-claude.md
-      - How to configure quarry: guides/configure.md
-      - How to write documentation: guides/develop/docs.md
+      - guides/index.md
+      - Ask:
+          - How to use quarry with Claude: guides/use-with-claude.md
+          - How to query the store with SQL: guides/query-with-sql.md
+          - How to get a monthly summary: guides/monthly-summary.md
+      - Maintain:
+          - How to clean up your Quicken data: guides/clean-up-quicken.md
+          - How to work out capital gains: guides/capital-gains.md
+          - How to manage snapshots: guides/snapshots.md
+          - How to configure quarry: guides/configure.md
+      - Develop:
+          - How to write documentation: guides/develop/docs.md
   - Reference:
+      - reference/index.md
       - The CLI: reference/cli.md
+      - MCP tools: reference/mcp-tools.md
       - config.toml: reference/config.md

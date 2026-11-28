@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "docs",
+      "runtimeExecutable": "uvx",
+      "runtimeArgs": ["zensical==0.0.70", "serve"],
+      "port": 8000
+    }
+  ]
+}
