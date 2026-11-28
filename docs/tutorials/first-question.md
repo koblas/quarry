@@ -45,5 +45,6 @@ prints this year's spending by category. Try `--by payee` or `--by month` for ot
 ## Next
 
 - Ask Claude instead of typing commands: [How to use quarry with Claude](../guides/use-with-claude.md).
-- See what to tidy up in Quicken: `quarry findings`.
+- See what to tidy up in Quicken: [How to clean up your Quicken data](../guides/clean-up-quicken.md).
+- Understand what a total includes: [How quarry counts money](../concepts/counting-rules.md).
 - Every command and flag: [The CLI](../reference/cli.md).

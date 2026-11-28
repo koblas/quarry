@@ -11,6 +11,8 @@ This site is built by [Zensical](https://zensical.org) from `mkdocs.yml` (Zensic
 | Understand why or how | Concept | `docs/concepts/` | Prose and diagrams; no steps, no flag or key tables. |
 | Look something up | Reference | `docs/reference/` | Tables; every command, flag and config key; describes, never instructs. |
 
+The landing page, `docs/index.md`, is the one page outside the quadrants: it sells the product in a few screens, is styled by `docs/stylesheets/landing.css`, and links into the quadrants for everything else. Its claims follow the same rule as every other page: each traces to code.
+
 One audience per page. No internal references — spec or scenario ids, ADR numbers, `(not built: #N)` marks: say what quarry does, and link the design document on GitHub only where a reader needs the rationale.
 
 ## 2. Write it
@@ -40,7 +42,7 @@ builds strictly: a broken link or anchor fails. It needs [uv](https://docs.astra
 go test ./docs ./internal/config
 ```
 
-fails when a command or flag in `quarry --help` has no entry on [The CLI](../../reference/cli.md), a config key has none on [config.toml](../../reference/config.md), a page is missing from the nav, or a public page cites an internal reference.
+fails when a command or flag in `quarry --help` has no entry on [The CLI](../../reference/cli.md), an MCP tool or parameter has none on [MCP tools](../../reference/mcp-tools.md), a config key has none on [config.toml](../../reference/config.md), a page is missing from the nav, or a public page cites an internal reference.
 
 ```bash
 make docs-serve

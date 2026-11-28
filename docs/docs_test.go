@@ -1,6 +1,7 @@
 // Package docs_test checks the documentation site against the code without
 // building it: every quarry command and flag that --help prints has an entry
-// on reference/cli.md, the Claude guide carries every `claude plugin` line
+// on reference/cli.md, every MCP tool and parameter one on
+// reference/mcp-tools.md, the Claude guide carries every `claude plugin` line
 // quarry claude install and uninstall run, every public page is in mkdocs.yml's nav, no public page
 // cites an internal reference, and no page is named so that macOS's
 // case-insensitive filesystem reads it as a CLAUDE.md. internal/config checks

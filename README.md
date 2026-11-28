@@ -2,7 +2,7 @@
 
 `quarry` turns a Quicken Classic for Mac data file into a clean, local, queryable financial database. See the product spec in [`docs/product/`](docs/product/README.md).
 
-User documentation: <https://koblas.github.io/quarry/>, built from [`docs/`](docs/index.md) and [`mkdocs.yml`](mkdocs.yml) (`make docs`). Every command and flag is in [the CLI reference](docs/reference/cli.md), every config key in [the `config.toml` reference](docs/reference/config.md).
+User documentation: <https://koblas.github.io/quarry/>, starting with [why quarry exists](docs/concepts/why.md) and what it adds to the two projects it builds on. The site is built from [`docs/`](docs/index.md) and [`mkdocs.yml`](mkdocs.yml) (`make docs`). Every command and flag is in [the CLI reference](docs/reference/cli.md), every config key in [the `config.toml` reference](docs/reference/config.md).
 
 ## Use quarry with Claude Code or Claude Desktop
 
@@ -61,4 +61,4 @@ claude mcp add --scope user quarry -- quarry mcp
 
 ## Credits
 
-`quarry` builds on the schema knowledge and SQL of two MIT-licensed projects, [dweekly/quicken-mac-mcp](https://github.com/dweekly/quicken-mac-mcp) and [hardkoded/quicken-skills](https://github.com/hardkoded/quicken-skills). Frozen copies live in `docs/prior-art/`; license text is in `THIRD_PARTY_NOTICES`.
+`quarry` builds on the schema knowledge and SQL of two MIT-licensed projects, [dweekly/quicken-mac-mcp](https://github.com/dweekly/quicken-mac-mcp) and [hardkoded/quicken-skills](https://github.com/hardkoded/quicken-skills). Frozen copies live in `docs/prior-art/`; license text is in `THIRD_PARTY_NOTICES`. [Why quarry](docs/concepts/why.md) compares the three.
