@@ -6,8 +6,7 @@
   "packages": {
     ".": {
       "release-type": "go",
-      "initial-version": "0.1.0",
-      "bump-minor-pre-major": true,
+      "release-as": "1.0.0",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {
@@ -16,7 +15,7 @@
           "jsonpath": "$.version"
         }
       ],
-      "pull-request-header": "Merging this PR cuts the release below: it bumps the `version` in `plugin/.claude-plugin/plugin.json`, tags the version and publishes the GitHub release with these notes.\n\n**Before merging**\n- Read the notes. Every `feat`, `fix`, `perf`, `deps` and `revert` commit on `main` since the last release is listed, and the version follows from them (breaking changes bump the minor version while below 1.0).\n- Remove or reword an entry by editing `CHANGELOG.md` in this PR, as the last step: release-please rewrites this PR on every push to `main`.",
+      "pull-request-header": "Merging this PR cuts the release below: it bumps the `version` in `plugin/.claude-plugin/plugin.json`, tags the version and publishes the GitHub release with these notes.\n\n**Before merging**\n- Read the notes. Every `feat`, `fix`, `perf`, `deps` and `revert` commit on `main` since the last release is listed, and the version follows from them: `fix` bumps the patch version, `feat` the minor version, and a breaking change the major version.\n- Remove or reword an entry by editing `CHANGELOG.md` in this PR, as the last step: release-please rewrites this PR on every push to `main`.",
       "pull-request-footer": "Maintained by [release-please](https://github.com/googleapis/release-please) from the Conventional Commits on `main`; see `.github/workflows/release-please.yaml`.",
       "changelog-sections": [
         {"type": "feat", "section": "Features"},

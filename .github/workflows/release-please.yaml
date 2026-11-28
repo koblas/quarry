@@ -12,6 +12,10 @@ name: release-please
 # Config: release-please-config.json (one root component, `go` release type;
 # refactor/chore/build/test/ci/docs/style are hidden from the notes).
 #
+# First release: "release-as": "1.0.0" in the config makes the release PR cut v1.0.0 whatever the
+# commits say. Remove it in the first commit after v1.0.0 is tagged; while it stays, every
+# release PR proposes 1.0.0 again.
+#
 # Token: release-please signs in with the RELEASE_PLEASE_TOKEN secret (a fine-grained token with
 # Contents and Pull requests read/write on this repository). A PR opened with GITHUB_TOKEN starts
 # no workflows, so the required checks (verify, not-built, commit-lint) would never report on the
