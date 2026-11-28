@@ -22,6 +22,10 @@ otherwise is a bug — fix it, do not work around it.
   `accountmask`, `duckdb`, `sqlite`, …).
 - `plugin/` and `.claude-plugin/marketplace.json` — static files of quarry's own Claude Code
   plugin (skill, references, MCP config). Not program code.
+- `mkdocs.yml` + `docs/{index.md,tutorials,concepts,guides,reference}` — the user documentation
+  site (Zensical, static, not program code; `make docs`). A new or changed command, flag or
+  `config.toml` key updates `docs/reference/` in the same change: `go test ./docs
+  ./internal/config` fails otherwise. Rules: `docs/guides/develop/docs.md`.
 - `docs/product/` — the product authority (index `README.md`, settled rules in `decisions.md`). `docs/adr/` — decisions.
 - Specs: new features under `docs/specs/<slug>.md` (the plugin's layout). Features built before
   the plugin were under `docs/specifications/<slug>/`, removed after their rules moved to

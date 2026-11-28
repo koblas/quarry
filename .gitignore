@@ -22,3 +22,7 @@ devenv.local.yaml
 
 # koblas/throughline checkout the diff-coverage check reads (verify.sh)
 /.throughline/
+
+# Documentation site build (make docs) and Zensical cache
+/out/
+/.cache/

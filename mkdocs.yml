@@ -1,0 +1,88 @@
+# The user documentation, built by Zensical (https://zensical.org), which reads
+# this MkDocs-format file, and published to GitHub Pages by
+# .github/workflows/docs.yml. Build locally: make docs (or make docs-serve).
+# docs/adr, docs/prior-art, docs/product, docs/security and docs/specs are
+# internal design documents, kept in the repository only.
+#
+# The site follows the Divio documentation system (https://docs.divio.com/documentation-system/):
+# Start here (tutorials), Concepts (explanation), Guides (how-to) and Reference.
+# docs/guides/develop/docs.md says which quadrant a change belongs in;
+# go test ./docs and go test ./internal/config check the reference pages against the code.
+site_name: quarry
+site_description: Your Quicken Classic for Mac data as a clean, local, queryable database.
+site_url: https://koblas.github.io/quarry/
+repo_url: https://github.com/koblas/quarry
+repo_name: koblas/quarry
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: out/site
+exclude_docs: |
+  adr/
+  prior-art/
+  product/
+  security/
+  specs/
+  docs_test.go
+
+theme:
+  name: material
+  variant: modern
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.tabs.link
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: {icon: material/brightness-7, name: Dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: {icon: material/brightness-4, name: Light mode}
+
+markdown_extensions:
+  - admonition
+  - footnotes
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
+nav:
+  - Start here:
+      - index.md
+      - Your first question: tutorials/first-question.md
+  - Concepts:
+      - How quarry works: concepts/how-quarry-works.md
+  - Guides:
+      - How to use quarry with Claude: guides/use-with-claude.md
+      - How to configure quarry: guides/configure.md
+      - How to write documentation: guides/develop/docs.md
+  - Reference:
+      - The CLI: reference/cli.md
+      - config.toml: reference/config.md
