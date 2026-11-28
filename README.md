@@ -2,6 +2,8 @@
 
 `quarry` turns a Quicken Classic for Mac data file into a clean, local, queryable financial database. See the product spec in [`docs/product/`](docs/product/README.md).
 
+User documentation: <https://koblas.github.io/quarry/>, built from [`docs/`](docs/index.md) and [`mkdocs.yml`](mkdocs.yml) (`make docs`). Every command and flag is in [the CLI reference](docs/reference/cli.md), every config key in [the `config.toml` reference](docs/reference/config.md).
+
 ## Use quarry with Claude Code or Claude Desktop
 
 quarry ships a Claude Code plugin: a skill that teaches Claude to answer questions from your Quicken data with quarry, and the config for quarry's MCP server. The plugin runs the `quarry` binary from your PATH, so install quarry first and check it works in a terminal:
