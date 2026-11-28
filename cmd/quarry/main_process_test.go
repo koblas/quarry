@@ -161,15 +161,26 @@ func Test_exitCode_is_1_and_prints_only_an_error_not_already_reported(t *testing
 	}
 }
 
-func Test_buildVersion_reads_the_main_module_version(t *testing.T) {
+func Test_buildVersion_resolves_the_build_infos_version(t *testing.T) {
 	cases := []struct {
 		name string
 		info *debug.BuildInfo
 		want string
 	}{
-		{name: "no build info", info: nil, want: ""},
-		{name: "a build with no module version", info: &debug.BuildInfo{}, want: ""},
+		{name: "no build info", info: nil, want: "(devel)"},
+		{name: "a build with no module version", info: &debug.BuildInfo{}, want: "(devel)"},
 		{name: "a tagged build", info: &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}}, want: "v1.2.3"},
+		{
+			name: "a dirty checkout with no module version shows its short revision and +dirty",
+			info: &debug.BuildInfo{
+				Main: debug.Module{Version: "(devel)"},
+				Settings: []debug.BuildSetting{
+					{Key: "vcs.revision", Value: "260d0d29f940c1a7e0b5d3c8a1f2e4b6d8a0c2e4"},
+					{Key: "vcs.modified", Value: "true"},
+				},
+			},
+			want: "(devel) 260d0d29f940+dirty",
+		},
 	}
 
 	for _, c := range cases {

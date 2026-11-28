@@ -66,6 +66,21 @@ func Test_run_mcp_lists_quarrys_tools_over_json_rpc(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
+func Test_run_mcp_initialize_reports_the_resolved_version(t *testing.T) {
+	newHome(t)
+	ctx, cancel := context.WithTimeout(t.Context(), mcpTestDeadline)
+	defer cancel()
+	peer := startMCP(ctx, t, func(env *cli.Env) {
+		env.ServeMCP = envFor(dirtyDevelInfo(), env.Stdout, env.Stderr).ServeMCP
+	})
+
+	serverInfo := peer.session.InitializeResult().ServerInfo
+
+	require.NoError(t, peer.session.Close())
+	peer.waitForExit(ctx, t)
+	assert.Equal(t, &sdk.Implementation{Name: "quarry", Version: dirtyDevelVersion}, serverInfo)
+}
+
 func Test_newMCPServe_refuses_without_a_home_before_reporting_ready(t *testing.T) {
 	t.Setenv("HOME", "")
 	var ready bool
@@ -114,6 +129,7 @@ func Test_newMCPServe_reports_the_build_infos_module_version(t *testing.T) {
 	}{
 		{name: "a release build", info: &debug.BuildInfo{Main: debug.Module{Version: "v9.9.9"}}, want: "v9.9.9"},
 		{name: "no build info", info: nil, want: mcpTestServerVersion},
+		{name: "a dirty development checkout", info: dirtyDevelInfo(), want: dirtyDevelVersion},
 	}
 
 	for _, c := range cases {

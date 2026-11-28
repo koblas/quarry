@@ -4,14 +4,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRootCommand builds quarry's command tree: a persistent --json flag on
-// the root plus the sync, status, accounts, holdings, acb, networth, spend, cashflow,
-// recurring, anomalies, summary, search, findings, sql, snapshots (with its
-// prune child), mcp and claude (with its install and uninstall children) subcommands, wired against
-// env's factories.
+// newRootCommand builds quarry's command tree: the persistent --json flag, the
+// root-only --version flag and every subcommand, wired against env.
 func newRootCommand(env Env, jsonOut *bool) *cobra.Command {
-	// No Args or Run field: an unmatched subcommand fails through cobra's
-	// own dispatch rather than being accepted as a positional argument.
+	var showVersion bool
+	// Args stays nil: cobra's legacy check then refuses an unmatched subcommand
+	// instead of letting the RunE below accept it as a positional argument.
 	root := &cobra.Command{
 		Use:   "quarry",
 		Short: "Snapshot and query Quicken Classic for Mac data locally",
@@ -22,9 +20,16 @@ quarry never writes to the Quicken file.`,
 		SilenceUsage:       true,
 		SilenceErrors:      true,
 		DisableSuggestions: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if showVersion {
+				return printVersion(cmd, env.BuildInfo, *jsonOut)
+			}
+			return cmd.Help()
+		},
 	}
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.PersistentFlags().BoolVar(jsonOut, "json", false, "print the result as JSON on stdout")
+	root.Flags().BoolVar(&showVersion, "version", false, "print quarry's version")
 
 	root.AddCommand(newSyncCommand(env.NewServer, env.LoadConfig, jsonOut))
 	root.AddCommand(newStatusCommand(env.NewReport, env.LoadConfig, env.Now, jsonOut))
@@ -43,5 +48,6 @@ quarry never writes to the Quicken file.`,
 	root.AddCommand(newSnapshotsCommand(env.NewSnapshots, env.LoadConfig, jsonOut))
 	root.AddCommand(newMCPCommand(env.ServeMCP, env.IsTerminal, jsonOut))
 	root.AddCommand(newClaudeCommand(env.RunTool, env.LookPath, env.Home, env.Executable, jsonOut))
+	root.AddCommand(newVersionCommand(env.BuildInfo, jsonOut))
 	return root
 }

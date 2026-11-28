@@ -122,6 +122,7 @@ func Test_run_help_prints_quarrys_description(t *testing.T) {
 read-only snapshot, rebuilds its own store from that snapshot, and checks the
 store against Quicken's balances. Every other command reads that store;
 quarry never writes to the Quicken file.`)
+	assert.Contains(t, stdout.String(), "Usage:\n  quarry [flags]\n  quarry [command]\n")
 	assert.Contains(t, stdout.String(), ""+
 		"Available Commands:\n"+
 		"  acb         Show adjusted cost base and realized capital gains per tax year, in CAD\n"+
@@ -141,7 +142,13 @@ quarry never writes to the Quicken file.`)
 		"  sql         Run a read-only SQL query against quarry's store\n"+
 		"  status      Show which snapshot the store was built from and what it holds\n"+
 		"  summary     Summarize a month: unusual charges, new recurring charges, net worth and findings\n"+
-		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n\n")
+		"  sync        Snapshot the open Quicken file and rebuild quarry's store from it\n"+
+		"  version     Show quarry's version\n\n")
+	assert.Contains(t, stdout.String(), ""+
+		"Flags:\n"+
+		"  -h, --help      help for quarry\n"+
+		"      --json      print the result as JSON on stdout\n"+
+		"      --version   print quarry's version\n")
 }
 
 func Test_run_status_help_describes_the_command_without_needing_home(t *testing.T) {

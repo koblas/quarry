@@ -37,7 +37,7 @@ const testQuarryBinary = "/opt/quarry-test/bin/quarry"
 // testEnv is defaultEnv with its sync fetching through fixedRates and no way to find or start a child.
 func testEnv(stdout, stderr io.Writer) cli.Env {
 	env := defaultEnv(stdout, stderr)
-	env.NewServer = newServerFactory(fixedRates())
+	env.NewServer = newServerFactory(env.BuildInfo, fixedRates())
 	env.RunTool = func(context.Context, string, ...string) ([]byte, []byte, int, error) {
 		return nil, nil, -1, errNoChildren
 	}
